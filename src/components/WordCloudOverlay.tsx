@@ -1,7 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { StyleSheet, Text, View, Pressable, Image, useWindowDimensions } from 'react-native';
-import { router } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -12,14 +10,10 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import { coverRect } from '../riverPath';
 import { CATEGORY_COLOR, LEGEND, SAMPLE_STATS, SPARKLE_GROUPS, layoutWords, type Placed } from '../wordCloud';
 import type { Category } from '../words';
 
-// 川が流れ続ける4秒ループ（ブルーアワー＋地平線の残照）。最初のコマは川からの遷移動画の最後のコマと同じ絵
-const CLOUD_VIDEO = require('../../assets/video/cloud_bg.mp4');
-// 読み込み中・動画が再生できない環境での代わり（同じ1コマ目）
-const CLOUD_BG = require('../../assets/video/cloud_bg.jpg');
+// 拾ったことば（ワードクラウド）。川の画面の上に重ねて出す。背景（空のループ動画）は川の画面の1本のプレーヤーが流す
 
 const TWINKLE_MS = 2400;
 
@@ -106,19 +100,14 @@ function GlowLayer({ group, clock, placed }: { group: number; clock: SharedValue
   );
 }
 
-export default function Words() {
-  const { width, height } = useWindowDimensions();
-  const rect = coverRect(width, height);
-  const fill = { position: 'absolute' as const, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-  const player = useVideoPlayer(CLOUD_VIDEO, (p) => {
-    p.loop = true;
-    p.muted = true;
-  });
-  // 再生は画面に出てから（作ったときに play しても Web では動画の要素がまだ無く、止まったままだった）
-  useEffect(() => {
-    player.play();
-  }, [player]);
+type Props = {
+  width: number;
+  height: number;
+  onBack: () => void;
+  onOpenArchive: (word?: string) => void;
+};
 
+export default function WordCloudOverlay({ width, height, onBack, onOpenArchive }: Props) {
   const clock = useSharedValue(0);
   useEffect(() => {
     clock.set(withRepeat(withTiming(1, { duration: TWINKLE_MS, easing: Easing.linear }), -1, false));
@@ -132,11 +121,7 @@ export default function Words() {
   );
 
   return (
-    <View style={styles.container}>
-      <Image source={CLOUD_BG} style={fill} />
-      {/* Android で重なり順を効かせるため textureView（川の画面と同じ） */}
-      <VideoView player={player} style={fill} contentFit="cover" nativeControls={false} pointerEvents="none" surfaceType="textureView" />
-
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
         <Text style={styles.title}>拾ったことば</Text>
@@ -150,12 +135,7 @@ export default function Words() {
       {placed.map((p) => {
         const [r, g, b] = CATEGORY_COLOR[p.category];
         return (
-          <Pressable
-            key={p.word}
-            style={{ position: 'absolute', left: p.x, top: p.y }}
-            hitSlop={4}
-            onPress={() => router.push({ pathname: '/archive', params: { word: p.word } } as never)}
-          >
+          <Pressable key={p.word} style={{ position: 'absolute', left: p.x, top: p.y }} hitSlop={4} onPress={() => onOpenArchive(p.word)}>
             <Text style={[styles.word, { fontSize: p.size, lineHeight: p.h, color: `rgba(${r},${g},${b},${p.textOpacity})` }]}>
               {p.word}
             </Text>
@@ -181,15 +161,11 @@ export default function Words() {
         文字の大きさ＝拾った回数　キラキラ・光＝気持ちの強さ
       </Text>
 
-      <Pressable
-        style={styles.back}
-        hitSlop={16}
-        onPress={() => (router.canGoBack() ? router.back() : router.replace('/' as never))}
-      >
+      <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
         <Text style={styles.backText}>← 川へ</Text>
       </Pressable>
 
-      <Pressable style={styles.next} hitSlop={16} onPress={() => router.push('/archive' as never)}>
+      <Pressable style={styles.next} hitSlop={16} onPress={() => onOpenArchive()}>
         <Text style={styles.nextText}>つながりを見る</Text>
       </Pressable>
     </View>
@@ -197,7 +173,6 @@ export default function Words() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, overflow: 'hidden', backgroundColor: '#1a1c45' },
   back: { position: 'absolute', top: 56, left: 20, zIndex: 10 },
   backText: { fontSize: 14, color: 'rgba(255,246,232,0.7)' },
   titleRow: { position: 'absolute', top: 54, left: 0, right: 0, alignItems: 'center' },

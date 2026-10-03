@@ -9,8 +9,9 @@ const SPEED_FAR_RATIO = 0.9;
 // 泡は奥〜中ほど（川筋の最初の250px）の水面から浮かび上がる。奥の狭いS字だけから出すと一列に詰まり6個しか流れない
 const SPAWN_S_MAX = 250;
 const SPAWN_MARGIN = 1.25;
-// 泡が横に並ぶ位置（川幅の半分に対する割合）
-const LANES = [-0.42, 0.42, 0, -0.22, 0.22];
+// 泡が横に並ぶ位置（その場所で泡が使える横幅＝川幅の半分−泡の半径 に対する割合）。
+// 以前は「川幅の半分×0.42×奥ほど小さい係数」で、川の中央の狭い帯に集まり一列に見えた（横の散らばり 0.24 → 0.45）
+const LANES = [-0.95, 0.95, 0, -0.55, 0.55];
 // 横よけで横に滑る速さ（px/秒）。流れ（32px/秒）より速いので、追いついた泡は回り込める。
 // 速すぎると「跳ねた」ように見える。遅すぎると接触してから横移動するので重なる
 const AVOID_SPEED = 150;
@@ -38,6 +39,8 @@ export type SimBubble = {
   age: number;    // 浮かび上がってからの秒数
   len: number;    // 文字数（大きさの計算用）
   pressed: boolean;
+  // 水面を離れた（指で引っぱり出された・拾われて空へ昇り始めた）。流れの中にもう居ないので、ほかの泡の障害物にしない
+  lifted: boolean;
   drift: number;  // px。押された泡や前にいる泡をよけるため横にずらす量（0=元のレーン）
 };
 
@@ -92,12 +95,12 @@ export function placeBubble(P: PathData, b: SimBubble): Placed {
   'worklet';
   const p = pathAt(P, b.s);
   const size = sizeAt(p.halfw, p.t, b.len);
-  // 奥のS字は川がほぼ横向きで、横にずらすと岸に乗るので、奥ほど中心線に寄せる
-  const laneX = p.x + b.lane * p.halfw * (0.3 + 0.7 * p.t);
   // 横ずれ（drift）は水のなかに収める。岸まで行くと泡が岸の上に載ってしまう。
   // 川幅の割合で区切るのではなく「泡の半径ぶん内側」で区切る。割合で区切ると、
   // 狭いところではよけ幅が足りずよけても通れずに列が残る
   const room = Math.max(0, p.halfw - size / 2 - 2);
+  // 横の位置も同じ room を基準にする。奥の狭いS字では room がほぼ0なので自然に中心線へ寄る
+  const laneX = p.x + b.lane * room;
   const x = Math.max(p.x - room, Math.min(p.x + room, laneX + b.drift));
   return { x, y: p.y, size, t: p.t };
 }
@@ -171,10 +174,11 @@ export function stepBubbles(P: PathData, bs: SimBubble[], dt: number) {
   const done: Placed[] = [];
   const out: SimBubble[] = [];
   const exited: number[] = [];
-  // 押されている泡は done（後ろを止める列）に入れない。ただし重ならない位置には留める
+  // 押されている泡は done（後ろを止める列）に入れない。ただし重ならない位置には留める。
+  // 水面を離れた泡は障害物にもしない（元の場所に見えない壁が残り、後ろが一列に詰まった）
   const held: Spot[] = [];
   for (let k = 0; k < ordered.length; k++) {
-    if (ordered[k].pressed) held.push({ s: ordered[k].s, pl: placeBubble(P, ordered[k]) });
+    if (ordered[k].pressed && !ordered[k].lifted) held.push({ s: ordered[k].s, pl: placeBubble(P, ordered[k]) });
   }
   // 走っている泡の位置。横よけの重なり判定に使う。押されている泡も 넣어おく
   // （入れないと、横よけで押された泡の圏に踏み込んでしまう）
@@ -257,7 +261,7 @@ export function stepBubbles(P: PathData, bs: SimBubble[], dt: number) {
 export function spawnBubble(P: PathData, bs: SimBubble[], id: number, len: number): SimBubble | null {
   'worklet';
   const placed: Placed[] = [];
-  for (let k = 0; k < bs.length; k++) placed.push(placeBubble(P, bs[k]));
+  for (let k = 0; k < bs.length; k++) if (!bs[k].lifted) placed.push(placeBubble(P, bs[k]));
   const lanes = LANES.slice();
   for (let i = lanes.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -266,7 +270,7 @@ export function spawnBubble(P: PathData, bs: SimBubble[], id: number, len: numbe
     lanes[j] = tmp;
   }
   for (let li = 0; li < lanes.length; li++) {
-    const cand: SimBubble = { id, s: Math.random() * SPAWN_S_MAX, lane: lanes[li], age: 0, len, pressed: false, drift: 0 };
+    const cand: SimBubble = { id, s: Math.random() * SPAWN_S_MAX, lane: lanes[li], age: 0, len, pressed: false, lifted: false, drift: 0 };
     const c = placeBubble(P, cand);
     let ok = true;
     for (let k = 0; k < placed.length; k++) {
