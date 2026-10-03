@@ -11,3 +11,7 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+## pukapuka App Specification
+
+See [docs/SPEC.md](docs/SPEC.md) for the complete app specification, including concept, features, design, and data models.

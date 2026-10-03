@@ -9,7 +9,7 @@ export const add = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) return;
     await ctx.db.insert("captures", {
       userId,
       word: args.word,
