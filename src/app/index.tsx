@@ -43,6 +43,14 @@ const CLIPS: Record<Stage, { src: number; loop: boolean; first: Still }> = {
 // 差し替えた動画は、再生位置が実際に進んだ合図（timeUpdate）で上の静止画を消して見せる
 const TIME_UPDATE_S = 0.05;
 const REVEAL_AT_S = 0.06;
+// 静止画を消すのは「新しい動画の最初のコマが描かれた」合図（onFirstFrameRender）の後。再生位置が進んでも、
+// スマホではまだ絵が描かれておらず黒いことがあった（遷移が終わってループに切り替えた直後に黒く光った）。
+// 合図が来ない環境のための保険に、再生位置がこれを過ぎたら消す
+const REVEAL_FALLBACK_AT_S = 0.4;
+// 遷移の動画が終わる少し前から、次のループの最初のコマの静止画を被せておく（遷移の最後のコマと同じ絵なので見た目は変わらない）。
+// 終わった瞬間にいきなり出すと、それまで不透明度0だった静止画の描く準備が間に合わず、黒が見えた
+const PRECOVER_LEFT_S = 0.3;
+const PRECOVER_MS = 250;
 const REVEAL_MS = 120;
 // 静止画で覆ってから差し替える（ループ中の波と静止画の波のずれをフェードで隠す）
 const COVER_IN_MS = 180;
@@ -354,7 +362,11 @@ const WaterMarks = memo(function WaterMarks({ size }: { size: number }) {
 
 // 背景の動画は、親が描き直されても描き直さない。Web の VideoView は描き直すたびに読み込み先を設定し直し、
 // 差し替えた直後の動画がもう一度読み込まれて止まった（空・川のループが動かなかった）
-const BackgroundVideo = memo(function BackgroundVideo({ player, rect }: { player: VideoPlayer; rect: VideoRect }) {
+const BackgroundVideo = memo(function BackgroundVideo({ player, rect, onFirstFrame }: {
+  player: VideoPlayer;
+  rect: VideoRect;
+  onFirstFrame: () => void;
+}) {
   return (
     <VideoView
       player={player}
@@ -363,6 +375,7 @@ const BackgroundVideo = memo(function BackgroundVideo({ player, rect }: { player
       nativeControls={false}
       pointerEvents="none"
       surfaceType={VIDEO_SURFACE}
+      onFirstFrameRender={onFirstFrame}
     />
   );
 });
@@ -489,6 +502,11 @@ export default function Home() {
   const clipRef = useRef<Stage>('river');
   const loadedRef = useRef(true);
   const revealedRef = useRef(false);
+  const firstFrameRef = useRef(false);
+  const precoveredRef = useRef(false);
+  const onFirstFrame = useCallback(() => {
+    firstFrameRef.current = true;
+  }, []);
   const startedRef = useRef(false);
   const leftRef = useRef(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -523,6 +541,8 @@ export default function Home() {
     clipRef.current = clip;
     loadedRef.current = false;
     revealedRef.current = false;
+    firstFrameRef.current = false;
+    precoveredRef.current = false;
     startedRef.current = false;
     setLoop(player, c.loop);
     player.replaceAsync(c.src).then(() => player.play());
@@ -575,9 +595,19 @@ export default function Home() {
     if (stageRef.current === 'cloud') playClip('cloud');
   };
 
-  const handlersRef = useRef({ reveal, onClipStarted, onClipEnd, onReturn });
+  // 遷移の動画の終わり際に、次のループの最初のコマ（＝遷移の最後のコマ）の静止画を被せておく
+  const precover = (t: number) => {
+    const clip = clipRef.current;
+    if (!revealedRef.current || precoveredRef.current || (clip !== 'toCloud' && clip !== 'toRiver')) return;
+    const dur = player.duration > 0 ? player.duration : CLIP_MS / 1000;
+    if (t < dur - PRECOVER_LEFT_S) return;
+    precoveredRef.current = true;
+    (clip === 'toCloud' ? coverCloud : coverRiver).set(withTiming(1, { duration: PRECOVER_MS }));
+  };
+
+  const handlersRef = useRef({ reveal, onClipStarted, onClipEnd, onReturn, precover });
   useEffect(() => {
-    handlersRef.current = { reveal, onClipStarted, onClipEnd, onReturn };
+    handlersRef.current = { reveal, onClipStarted, onClipEnd, onReturn, precover };
   });
 
   useEffect(() => {
@@ -594,9 +624,12 @@ export default function Home() {
         if (e.status === 'readyToPlay' && !player.playing) player.play();
       }),
       player.addListener('timeUpdate', (e) => {
-        if (!loadedRef.current || revealedRef.current) return;
+        const t = e.currentTime;
         // 差し替え直後の古い動画の再生位置で間違えないよう、新しい動画の出だしだけを見る
-        if (e.currentTime > REVEAL_AT_S && e.currentTime < 1) handlersRef.current.reveal();
+        if (loadedRef.current && !revealedRef.current && t < 1.5) {
+          if ((firstFrameRef.current && t > REVEAL_AT_S) || t > REVEAL_FALLBACK_AT_S) handlersRef.current.reveal();
+        }
+        handlersRef.current.precover(t);
       }),
       player.addListener('playToEnd', () => handlersRef.current.onClipEnd(clipRef.current)),
     ];
@@ -664,7 +697,7 @@ export default function Home() {
   return (
     <View style={styles.container}>
       {/* 背景の動画（1本）。その上に、差し替えの瞬間を隠す静止画2枚 */}
-      <BackgroundVideo player={player} rect={rect} />
+      <BackgroundVideo player={player} rect={rect} onFirstFrame={onFirstFrame} />
       <Animated.Image source={RIVER_POSTER} style={[fill, coverRiverStyle]} />
       <Animated.Image source={CLOUD_BG} style={[fill, coverCloudStyle]} />
       {/* 画面下の文字が読めるよう、下端だけ少し暗く */}
