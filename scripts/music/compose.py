@@ -1,10 +1,10 @@
 """pukapuka の曲と効果音。楽譜をデータで書き、楽器の音をコードで合成し、残響を付けてループにする（書き出しは build.py）。
 
-画面ごとに別の曲（調だけ D メジャー／B マイナーにそろえる。docs/SPEC.md の「音」）:
+画面ごとに別の曲（調だけそろえる。楽譜は D メジャー／B マイナーで書き、TRANSPOSE で A メジャー／F# マイナーに下げて鳴らす。docs/SPEC.md の「音」）:
   version_river: ことばの川（夕方）。試作 B「空」: まばらなピアノ＋ハープのアルペジオ＋弦のパッド＋水のさざめき
-  version_cloud: 拾ったことば（ブルーアワー）。3拍子: オルゴール＋ハープのワルツ＋風
-  version_night: ふりかえり（夜）。フェルトピアノのノクターン＋星のベル
-  chimes:        泡を拾ったときの音（ラ シ レ ミ ファ#）
+  version_cloud: 拾ったことば（ブルーアワー）。96 BPM のスウィング: チェレスタ＋ピチカート＋マリンバ＋シェイカー
+  version_night: ふりかえり（夜）。拍なし: 低い持続音＋弓の弦＋星のガラス
+  chimes:        泡を拾ったときの音「ぷかっ」（楽譜ではラ シ レ ミ ファ#）
 version_a は試作 A「森」（使っていないが、version_river が同じ乱数の順で作るために呼ぶ）
 """
 import sys
@@ -14,10 +14,14 @@ from scipy.signal import fftconvolve, butter, sosfilt
 
 SR = 44100
 rng = np.random.default_rng(7)
+# 全体の高さ（半音）。楽譜は D メジャー／B マイナーで書き、鳴らすときに下げる。
+# -5 で A メジャー／F# マイナー（2026-10-04「高くてキンキンする・耳が痛い」→ ユーザーが -3 / -5 から選んだ）。
+# 曲と拾った音を同じだけ動かすので、拾った音の5音と曲の調の関係は変わらない。いちばん低い E2 が B1（62Hz）になる
+TRANSPOSE = -5
 
 
 def mtof(m):
-    return 440.0 * 2 ** ((m - 69) / 12)
+    return 440.0 * 2 ** ((m + TRANSPOSE - 69) / 12)
 
 
 def tvec(sec):
@@ -129,6 +133,17 @@ def seamless(x, n, fade=1.0):
     return out
 
 
+def soften(x, db=-6.0, fc=1500.0):
+    """ループのまま（周期として）高い帯域をなだらかに下げる。fc を中心に、上へ行くほど db に近づく1次のシェルフの形。
+    FFT で周期として扱うので、つなぎ目は保たれる"""
+    X = np.fft.rfft(x, axis=1)
+    f = np.fft.rfftfreq(x.shape[1], 1 / SR)
+    shelf = 1 / (1 + (fc / np.maximum(f, 1)) ** 2)
+    X *= 10 ** (db * shelf / 20)
+    y = np.fft.irfft(X, n=x.shape[1], axis=1)
+    return y / np.abs(y).max() * 0.89
+
+
 def reverb_ir(t60, t60_hi, predelay=0.025):
     """大きな部屋の響き（左右別のノイズを、高い音ほど早く消える形で減衰させる）"""
     t = tvec(t60 * 1.3)
@@ -213,7 +228,7 @@ def version_river():
     global rng
     rng = np.random.default_rng(7)
     version_a()
-    return version_b()
+    return soften(version_b())  # 倍音に薄く広がる高い音を丸くする（キンキンする、2026-10-04）
 
 
 def version_b():
@@ -234,8 +249,8 @@ def version_b():
         if b in (2, 3) and bt > 0:
             continue
         m.add(piano(mtof(note), dur * beat, 0.75), b * bar + bt * beat, pan=0.1, gain=0.55)
-    # 星のような高いベルを少しだけ
-    for b, note in ((1, 90), (3, 93), (5, 88), (7, 86)):
+    # 星のようなベルを少しだけ（初めは1オクターブ上で、キンキンした）
+    for b, note in ((1, 78), (3, 81), (5, 76), (7, 74)):
         m.add(bell(mtof(note), 0.35), b * bar + 3 * beat, pan=0.5, gain=0.18, send=1.5)
     w = water(loop + 8, 0.06)
     m.add(w, 0, pan=-0.1, send=0.3)
@@ -387,7 +402,10 @@ def version_cloud():
         for i in range(8):
             m.add(shaker(0.9 if i % 2 == 0 else 0.6), at(b, i / 2), pan=0.55, gain=0.16, send=0.3)
     for b, bt, note, dur in CLOUD_MELODY:
-        m.add(celesta(mtof(note + 12), 0.85), at(b, bt), pan=0.2, gain=0.5)  # 本物のチェレスタと同じく、書いた音の1オクターブ上で鳴らす
+        # 書いた音で鳴らし、1オクターブ上（本物のチェレスタの高さ）は小さく重ねてキラキラだけ残す。
+        # 初めは1オクターブ上だけで鳴らし、最高 E7 で耳が痛かった（2026-10-04）
+        m.add(celesta(mtof(note), 0.85), at(b, bt), pan=0.2, gain=0.5)
+        m.add(celesta(mtof(note + 12), 0.5), at(b, bt) + 0.004, pan=0.3, gain=0.3)
     return m.render(loop, wet=0.2, t60=1.5, t60_hi=0.8)
 
 
@@ -413,8 +431,8 @@ def version_night():
         for at, note, dur in line:
             m.add(bowed(mtof(note), dur, 0.5), t0 + at, pan=-0.15, gain=0.22, send=0.9)
         t0 += sec
-    # 星: B マイナーの五音音階（シ レ ミ ファ# ラ）の高い音が、まばらに鳴る
-    stars = [83, 86, 88, 90, 93, 95]
+    # 星: B マイナーの五音音階（シ レ ミ ファ# ラ）の高い音が、まばらに鳴る（初めは B5〜B6 で、キンキンした）
+    stars = [78, 81, 83, 86, 88, 90]
     t = 1.7
     while t < loop - 2:
         m.add(glass(mtof(int(rng.choice(stars))), float(rng.uniform(0.25, 0.5))), t,
@@ -423,19 +441,38 @@ def version_night():
     return m.render(loop, wet=0.65, t60=7.0, t60_hi=2.8)
 
 
+def bubble(f, vel):
+    """泡: 低いところから目標の音へ 25ms ですっと上がる純音（水の中の泡が上がって、水面ではじける感じ）"""
+    t = tvec(0.35)
+    glide = f * (0.55 + 0.45 * (1 - np.exp(-t / 0.025)))
+    ph = 2 * np.pi * np.cumsum(glide) / SR
+    return vel * np.sin(ph) * np.clip(t / 0.003, 0, 1) * np.exp(-t / 0.07)
+
+
+def soft_glass(f, vel, d=0.9):
+    """柔らかいガラスの音: ほぼ純音に、すぐ消える2倍の響きを少し"""
+    t = tvec(3.0)
+    out = np.sin(2 * np.pi * f * t) + 0.12 * np.sin(2 * np.pi * 2 * f * t) * np.exp(-t / 0.3)
+    return vel * out * np.clip(t / 0.012, 0, 1) * np.exp(-t / d)
+
+
+CHIME_SEC = 4.0
+
+
 def chimes(out):
-    """泡を拾ったときの音（ハープとベルを重ねた1音）。押した強さで高い音にする: ラ シ レ ミ ファ#"""
+    """泡を拾ったときの音「ぷかっ」: 泡がすっと上がる音に、柔らかいガラスの音が残る（2026-10-04、3案から A を選択）。
+    前の版（ハープ＋ベル）は高い金属の響きで耳が痛かった。押した強さで高い音にする: 楽譜はラ シ レ ミ ファ#（TRANSPOSE で鳴るのは ミ ファ# ラ シ ド#）"""
     global rng
     for i, note in enumerate((81, 83, 86, 88, 90)):
-        rng = np.random.default_rng(100 + i)
-        m = Mix(5.0)
-        m.add(harp(mtof(note), 0.8), 0.0, gain=0.6)
-        m.add(bell(mtof(note), 0.5), 0.0, gain=0.35, send=1.4)
-        m.add(bell(mtof(note + 12), 0.25), 0.03, gain=0.12, send=1.6)
-        ir = reverb_ir(3.2, 1.5)
-        x = np.stack([m.dry[c] + 0.4 * fftconvolve(m.wet[c], ir[c])[: m.dry.shape[1]] for c in range(2)])
-        x *= np.clip((5.0 - np.arange(x.shape[1]) / SR) / 0.8, 0, 1)  # 最後はなめらかに消す
-        x = x / np.abs(x).max() * 0.5
+        rng = np.random.default_rng(200 + i)
+        f = mtof(note)
+        m = Mix(CHIME_SEC)
+        m.add(bubble(f, 0.9), 0.0, gain=0.55, send=0.4)
+        m.add(soft_glass(f, 0.6, 0.8), 0.02, gain=0.35, send=1.2)
+        ir = reverb_ir(2.5, 1.0)
+        x = np.stack([m.dry[c] + 0.35 * fftconvolve(m.wet[c], ir[c])[: m.dry.shape[1]] for c in range(2)])
+        x *= np.clip((CHIME_SEC - np.arange(x.shape[1]) / SR) / 0.8, 0, 1)  # 最後はなめらかに消す
+        x = x / np.abs(x).max() * 0.6  # 前の版（ピーク 0.5）と同じくらいの大きさ（LUFS）に聞こえるように
         wavfile.write(f'{out}/chime_{i}.wav', SR, (x.T * 32767).astype(np.int16))
 
 

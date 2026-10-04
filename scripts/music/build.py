@@ -10,7 +10,7 @@
 3. 曲は3つとも -20 LUFS にそろえ（切り替えで音量が跳ねない）、AAC（m4a）にする
 4. ループの曲は、前後に自分の終わり・頭を CONTEXT サンプルずつ足してから AAC にし、MP4 の編集リスト（elst）で
    「頭の CONTEXT と AAC の前置きを飛ばし、ちょうど n サンプル鳴らす」と書く。AAC は前の区切りと重ねて音を作るので、
-   何もない所から始まる頭の 1024 サンプルが崩れる（夜の曲で誤差が真ん中の 8 倍）。前後に続きを置けば頭も終わりも正しく作られる。
+   何もない所から始まる頭の 1024 サンプルが崩れる（夜の曲で誤差が真ん中の 8 倍）。続きは 8192 サンプル（短いと書き出しの最初の数区切りの崩れが頭に残る）。前後に続きを置けば頭も終わりも正しく作られる。
    編集リストはサンプル単位で書けるよう、映像全体の時間の単位（movie timescale）を 44100 にする。
    iPhone（AVQueuePlayer で同じ曲を並べてループ）も Android（ExoPlayer）も編集リストを使って継ぎ目なく鳴らす
 5. ユーザーが聴いて決めた音の「指紋」（approved.json）と比べ、変わっていたら知らせる。
@@ -42,8 +42,13 @@ def loudness(path):
     return float(re.findall(r'I:\s+(-?[0-9.]+) LUFS', log)[-1])
 
 
-CONTEXT = 2048
+# 前後に足す続きの長さ。2048（AAC の2区切り）では足りず、夜の曲を -5 半音下げたとき頭の誤差が真ん中の 2.3 倍になった
+# （曲をずらして書き出すと同じ所の誤差は小さい＝中身ではなく書き出しの頭の崩れ）。8192 で頭も真ん中より小さくなる
+CONTEXT = 8192
 APPROVED = os.path.join(HERE, 'approved.json')
+# 拾った音「ぷかっ」は頭の 25ms で音程がすっと上がる。96k では頭の誤差が全体の 3〜4 倍になった。
+# 128k がいちばん小さく安定する（160k・192k はかえってばらつく。2026-10-04 に測った）
+CHIME_BITRATE = '128k'
 
 
 def fingerprint(x):
@@ -139,7 +144,7 @@ def main():
         compose.chimes(tmp)
         for i in range(5):
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', os.path.join(tmp, f'chime_{i}.wav'),
-                            '-c:a', 'aac', '-b:a', '96k', os.path.join(OUT, f'chime_{i}.m4a')], check=True)
+                            '-c:a', 'aac', '-b:a', CHIME_BITRATE, os.path.join(OUT, f'chime_{i}.m4a')], check=True)
         for i in range(5):
             x = wavfile.read(os.path.join(tmp, f'chime_{i}.wav'))[1].T.astype(float) / 32767
             prints[f'chime_{i}'] = fingerprint(x)

@@ -1,8 +1,8 @@
 import { AppState, type NativeEventSubscription } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
-// 背景の曲と、泡を拾ったときの音。曲は3つとも同じ和音の進行（Dメジャー: GM7 A6 F#m7 Bm7 Em7 F#m7 GM7 A7sus4）で、
-// 画面が変わるときは遷移の動画と同じ長さで重ねて切り替える。作り方はスキル pukapuka-design の「音」
+// 背景の曲と、泡を拾ったときの音。曲は画面ごとに別で、調だけ（Aメジャー／F#マイナー）そろえる。
+// 画面が変わるときは遷移の動画と同じ長さで重ねて切り替える。作り方はスキル pukapuka-music
 
 export type Scene = 'river' | 'cloud' | 'night';
 
@@ -12,7 +12,7 @@ const BGM: Record<Scene, number> = {
   night: require('../assets/sounds/bgm_night.m4a'),
 };
 
-// ラ シ レ ミ ファ#（Dメジャーの五音音階）。どの和音の上でもぶつかりにくい
+// 泡を拾ったときの音「ぷかっ」。ミ ファ# ラ シ ド#（Aメジャーの五音音階）。どの和音の上でもぶつかりにくい
 const CHIMES = [
   require('../assets/sounds/chime_0.m4a'),
   require('../assets/sounds/chime_1.m4a'),
@@ -24,6 +24,10 @@ const CHIMES = [
 // 曲の音量（3曲とも -20 LUFS にそろえてある）
 const BGM_VOLUME = 0.8;
 const STEP_MS = 40;
+// 拾った音は1つの高さにつき2つずつ持つ。続けて同じ高さを拾っても、前の音の余韻を切らずに次の音を鳴らせる
+const CHIME_VOICES = 2;
+
+type Voice = { player: AudioPlayer; ready: boolean; startedAt: number };
 
 export type Ambient = {
   setScene: (scene: Scene, fadeMs: number) => void;
@@ -43,7 +47,27 @@ export function createAmbient(): Ambient {
     p.volume = 0;
     players[s] = p;
   }
-  const chimes = CHIMES.map((src) => createAudioPlayer(src));
+  // 鳴り終わったら頭へ戻しておき（ready）、押したときは巻き戻しを待たずにすぐ鳴らす。
+  // 巻き戻しは非同期で、待たずに play すると iPhone では前の音の終わりが一瞬鳴る・鳴り出しが遅れることがある。
+  // keepAudioSessionActive: 鳴り終わるたびに iOS の音のセッションを切らない（切ると、ほかのアプリの音楽の音量が揺れる）
+  const chimes: Voice[][] = CHIMES.map((src) =>
+    Array.from({ length: CHIME_VOICES }, () => {
+      const v: Voice = { player: createAudioPlayer(src, { keepAudioSessionActive: true }), ready: true, startedAt: 0 };
+      v.player.addListener('playbackStatusUpdate', (st) => {
+        if (st.didJustFinish) rewind(v);
+      });
+      return v;
+    }),
+  );
+  function rewind(v: Voice) {
+    v.player.pause();
+    v.player
+      .seekTo(0, 0, 0)
+      .then(() => {
+        v.ready = true;
+      })
+      .catch(() => {});
+  }
 
   let scene: Scene | null = null;
   let muted = false;
@@ -106,15 +130,26 @@ export function createAmbient(): Ambient {
     chime(strength) {
       if (muted || !active) return;
       const i = Math.min(CHIMES.length - 1, Math.floor(strength * CHIMES.length));
-      const p = chimes[i];
-      p.volume = 0.5 + 0.5 * strength;
-      p.seekTo(0).catch(() => {});
-      p.play();
+      const voices = chimes[i];
+      const v = voices.find((x) => x.ready) ?? voices.reduce((a, b) => (a.startedAt <= b.startedAt ? a : b));
+      v.player.volume = 0.5 + 0.5 * strength;
+      v.startedAt = Date.now();
+      if (v.ready) {
+        v.ready = false;
+        v.player.play();
+        return;
+      }
+      // 2つとも鳴っている（とても速く続けて拾った）ときは、古いほうを頭へ戻してから鳴らす
+      v.player.pause();
+      v.player
+        .seekTo(0, 0, 0)
+        .then(() => v.player.play())
+        .catch(() => {});
     },
     dispose() {
       if (timer) clearInterval(timer);
       appState.remove();
-      for (const p of [...Object.values(players), ...chimes]) p.remove();
+      for (const p of [...Object.values(players), ...chimes.flat().map((v) => v.player)]) p.remove();
     },
   };
 }
