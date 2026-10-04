@@ -15,6 +15,7 @@ import { api } from '../../convex/_generated/api';
 import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
+import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { buildPathData, placeBubble, spawnBubble, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
 
@@ -41,6 +42,26 @@ const VIDEO_SURFACE = 'textureView' as const;
 // 夜はループの動画を持たない。遷移の最後のコマと同じ静止画で止める
 type Clip = 'river' | 'toCloud' | 'cloud' | 'toRiver' | 'toNight' | 'nightToCloud';
 type Stage = Clip | 'night' | 'nightToRiver';
+
+// 段階ごとに流す曲と、切り替えにかける時間（遷移の動画と同じ長さ）
+const SCENE_OF: Record<Stage, Scene> = {
+  river: 'river',
+  toCloud: 'cloud',
+  cloud: 'cloud',
+  toRiver: 'river',
+  toNight: 'night',
+  night: 'night',
+  nightToCloud: 'cloud',
+  nightToRiver: 'river',
+};
+const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
+  river: 1500,
+  toCloud: 2000,
+  toRiver: 2000,
+  toNight: 3000,
+  nightToCloud: 3000,
+  nightToRiver: 900,
+};
 type Still = 'river' | 'cloud' | 'night';
 // first: 最初のコマと同じ静止画（差し替えの瞬間に被せる）。last: 遷移の最後のコマと同じ静止画（終わり際に被せる）
 const CLIPS: Record<Clip, { src: number; loop: boolean; first: Still; last?: Still; ms?: number }> = {
@@ -511,8 +532,24 @@ export default function Home() {
     })(id);
   }, [sim]);
 
+  // 背景の曲と拾ったときの音
+  const ambientRef = useRef<Ambient | null>(null);
+  const [muted, setMuted] = useState(false);
+  useEffect(() => {
+    const a = createAmbient();
+    ambientRef.current = a;
+    return () => {
+      ambientRef.current = null;
+      a.dispose();
+    };
+  }, []);
+  useEffect(() => {
+    ambientRef.current?.setMuted(muted);
+  }, [muted]);
+
   const handleCapture = useCallback(
     async (word: string, strength: number) => {
+      ambientRef.current?.chime(strength);
       setCaptured(word);
       if (captureTimer.current) clearTimeout(captureTimer.current);
       captureTimer.current = setTimeout(() => setCaptured(null), 1800);
@@ -533,6 +570,9 @@ export default function Home() {
   });
   const [stage, setStage] = useState<Stage>('river');
   const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (MUSIC_FADE_MS[stage] !== undefined) ambientRef.current?.setScene(SCENE_OF[stage], MUSIC_FADE_MS[stage]);
+  }, [stage]);
   const stageRef = useRef<Stage>('river');
   const clipRef = useRef<Clip>('river');
   const loadedRef = useRef(true);
@@ -834,6 +874,18 @@ export default function Home() {
           <NightOverlay width={width} height={height} focus={nightFocus} onBack={nightToCloud} onRiver={nightToRiver} />
         </Animated.View>
       )}
+
+      {/* 音のオン・オフ。どの画面でも右下の同じ場所 */}
+      <Pressable
+        style={styles.soundBtn}
+        hitSlop={12}
+        onPress={() => setMuted((m) => !m)}
+        accessibilityRole="button"
+        accessibilityLabel={muted ? '音を出す' : '音を消す'}
+      >
+        <Text style={[styles.soundIcon, muted && styles.soundIconOff]}>♪</Text>
+        {muted && <View style={styles.soundSlash} />}
+      </Pressable>
     </View>
   );
 }
@@ -871,6 +923,10 @@ const styles = StyleSheet.create({
   },
   wordmark: { position: 'absolute', top: 56, left: 20, fontSize: 20, fontStyle: 'italic', color: 'rgba(255,246,232,0.85)', textShadowColor: 'rgba(120,60,40,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4, zIndex: 10 },
   archiveBtn: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
+  soundBtn: { position: 'absolute', bottom: 34, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
+  soundIconOff: { color: 'rgba(255,246,232,0.35)' },
+  soundSlash: { position: 'absolute', width: 20, height: 1, backgroundColor: 'rgba(255,246,232,0.5)', transform: [{ rotate: '-45deg' }] },
   archiveBtnText: { fontSize: 14, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(120,60,40,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   hint: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'rgba(235,242,248,0.6)', zIndex: 10 },
   capturedMsg: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 16, color: 'rgba(255,248,235,0.95)', zIndex: 10, fontWeight: '500' },
