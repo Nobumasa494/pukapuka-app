@@ -8,12 +8,19 @@
    半端な長さだと終わりに無音が足され、ループのつなぎ目で途切れる。FFT で周期として伸ばすので
    つなぎ目は保たれ、速さの差は 0.06% 以下で聞き分けられない）
 3. 曲は3つとも -20 LUFS にそろえ（切り替えで音量が跳ねない）、AAC（m4a）にする
+4. ループの曲は、前後に自分の終わり・頭を CONTEXT サンプルずつ足してから AAC にし、MP4 の編集リスト（elst）で
+   「頭の CONTEXT と AAC の前置きを飛ばし、ちょうど n サンプル鳴らす」と書く。AAC は前の区切りと重ねて音を作るので、
+   何もない所から始まる頭の 1024 サンプルが崩れる（夜の曲で誤差が真ん中の 8 倍）。前後に続きを置けば頭も終わりも正しく作られる。
+   編集リストはサンプル単位で書けるよう、映像全体の時間の単位（movie timescale）を 44100 にする。
+   iPhone（AVQueuePlayer で同じ曲を並べてループ）も Android（ExoPlayer）も編集リストを使って継ぎ目なく鳴らす
 """
 import os
 import re
 import subprocess
 import sys
 import tempfile
+
+import struct
 
 import numpy as np
 from scipy.io import wavfile
@@ -31,6 +38,62 @@ def loudness(path):
     return float(re.findall(r'I:\s+(-?[0-9.]+) LUFS', log)[-1])
 
 
+CONTEXT = 2048
+
+
+def boxes(buf, off, end):
+    while off < end:
+        size, typ = struct.unpack('>I4s', buf[off:off + 8])
+        yield off, size, typ.decode('latin1')
+        off += size
+
+
+def find(buf, path, off=0, end=None):
+    """moov/trak/edts/elst のような道で箱を探し、(位置, 大きさ) を返す"""
+    end = len(buf) if end is None else end
+    for o, size, typ in boxes(buf, off, end):
+        if typ == path[0]:
+            return (o, size) if len(path) == 1 else find(buf, path[1:], o + 8, o + size)
+    raise ValueError(f'{path} が見つからない')
+
+
+def set_loop_edit(path, n, skip):
+    """編集リストを「頭から skip サンプル飛ばして n サンプル鳴らす」に書き換える（時間の単位はどちらも 44100）"""
+    buf = bytearray(open(path, 'rb').read())
+    o, _ = find(buf, ['moov', 'mvhd'])
+    assert buf[o + 8] == 0 and struct.unpack('>I', buf[o + 20:o + 24])[0] == compose.SR, 'mvhd の単位が 44100 でない'
+    struct.pack_into('>I', buf, o + 24, n)
+    o, _ = find(buf, ['moov', 'trak', 'tkhd'])
+    assert buf[o + 8] == 0
+    struct.pack_into('>I', buf, o + 28, n)
+    o, _ = find(buf, ['moov', 'trak', 'edts', 'elst'])
+    assert buf[o + 8] == 0 and struct.unpack('>I', buf[o + 12:o + 16])[0] == 1, '編集リストが1件でない'
+    priming = struct.unpack('>i', buf[o + 20:o + 24])[0]
+    struct.pack_into('>Ii', buf, o + 16, n, priming + skip)
+    open(path, 'wb').write(buf)
+
+
+def encode_loop(y, out, gain, tmp):
+    """ループの曲を、頭も終わりも崩れない m4a にする。y はループ1回分（チャンネル×サンプル）"""
+    n = y.shape[1]
+    padded = np.concatenate([y[:, -CONTEXT:], y, y[:, :CONTEXT]], axis=1) * 10 ** (gain / 20)
+    wav = os.path.join(tmp, 'padded.wav')
+    wavfile.write(wav, compose.SR, (np.clip(padded, -1, 1).T * 32767).astype(np.int16))
+    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', wav, '-c:a', 'aac', '-b:a', '112k',
+                    '-movie_timescale', str(compose.SR), out], check=True)
+    set_loop_edit(out, n, CONTEXT)
+    # 確かめる: デコードした長さがちょうど n で、頭と終わりの誤差が真ん中と同じくらいか
+    dec = os.path.join(tmp, 'dec.wav')
+    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', out, dec], check=True)
+    d = wavfile.read(dec)[1].astype(float) / 32768
+    ref = (y * 10 ** (gain / 20)).T
+    assert len(d) == n, f'デコードした長さ {len(d)} が {n} でない'
+    err = np.abs(d - ref).max(axis=1)
+    head, tail, mid = err[:2048].max(), err[-2048:].max(), np.percentile(err, 99.9)
+    assert head < 2 * mid and tail < 2 * mid, f'頭 {head:.4f}・終わり {tail:.4f} の誤差が真ん中 {mid:.4f} より大きい'
+    return head, tail, mid
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         for name, fn in (('river', compose.version_river), ('cloud', compose.version_cloud), ('night', compose.version_night)):
@@ -40,9 +103,8 @@ def main():
             wav = os.path.join(tmp, f'{name}.wav')
             wavfile.write(wav, compose.SR, (np.clip(y, -1, 1).T * 32767).astype(np.int16))
             gain = -20 - loudness(wav)
-            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', wav, '-af', f'volume={gain:.2f}dB',
-                            '-c:a', 'aac', '-b:a', '112k', os.path.join(OUT, f'bgm_{name}.m4a')], check=True)
-            print(f'bgm_{name}.m4a  {n / compose.SR:.1f}s  gain {gain:+.1f}dB')
+            head, tail, mid = encode_loop(y, os.path.join(OUT, f'bgm_{name}.m4a'), gain, tmp)
+            print(f'bgm_{name}.m4a  {n / compose.SR:.1f}s  gain {gain:+.1f}dB  AAC の誤差 頭 {head:.4f} / 終わり {tail:.4f} / 真ん中 {mid:.4f}')
         compose.chimes(tmp)
         for i in range(5):
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', os.path.join(tmp, f'chime_{i}.wav'),
