@@ -9,11 +9,12 @@ import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
+import NightOverlay from '../components/NightOverlay';
 import { buildPathData, placeBubble, spawnBubble, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
 
@@ -28,17 +29,27 @@ const CLOUD_VIDEO = require('../../assets/video/cloud_bg.mp4');
 const CLOUD_BG = require('../../assets/video/cloud_bg.jpg');
 // 空→川は行きの動画を逆順にしたもの。最初のコマ＝空、最後のコマ＝川
 const BACK_VIDEO = require('../../assets/video/cloud_to_river.mp4');
+// 空→夜（3秒）。カメラが空へ近づきながら夜が更けて星が出る。最初のコマ＝空のループの最初のコマ、最後のコマ＝夜の静止画
+const NIGHT_VIDEO = require('../../assets/video/cloud_to_night.mp4');
+const NIGHT_BG = require('../../assets/video/night_bg.jpg');
+// 夜→空は行きの動画を逆順にしたもの。最初のコマ＝夜、最後のコマ＝空のループの最初のコマ
+const NIGHT_BACK_VIDEO = require('../../assets/video/night_to_cloud.mp4');
 const VIDEO_SURFACE = 'textureView' as const;
 
 // 背景の動画は1本のプレーヤーで差し替える（stage ごとに1本）。同時に複数の動画を持つと、Android で
 // 新しい動画を動かし始めた瞬間に表示中の動画が黒くなった（ボタンを押した瞬間に画面が黒く光る）
-type Stage = 'river' | 'toCloud' | 'cloud' | 'toRiver';
-type Still = 'river' | 'cloud';
-const CLIPS: Record<Stage, { src: number; loop: boolean; first: Still }> = {
+// 夜はループの動画を持たない。遷移の最後のコマと同じ静止画で止める
+type Clip = 'river' | 'toCloud' | 'cloud' | 'toRiver' | 'toNight' | 'nightToCloud';
+type Stage = Clip | 'night' | 'nightToRiver';
+type Still = 'river' | 'cloud' | 'night';
+// first: 最初のコマと同じ静止画（差し替えの瞬間に被せる）。last: 遷移の最後のコマと同じ静止画（終わり際に被せる）
+const CLIPS: Record<Clip, { src: number; loop: boolean; first: Still; last?: Still; ms?: number }> = {
   river: { src: RIVER_VIDEO, loop: true, first: 'river' },
-  toCloud: { src: TRANS_VIDEO, loop: false, first: 'river' },
+  toCloud: { src: TRANS_VIDEO, loop: false, first: 'river', last: 'cloud', ms: 2000 },
   cloud: { src: CLOUD_VIDEO, loop: true, first: 'cloud' },
-  toRiver: { src: BACK_VIDEO, loop: false, first: 'cloud' },
+  toRiver: { src: BACK_VIDEO, loop: false, first: 'cloud', last: 'river', ms: 2000 },
+  toNight: { src: NIGHT_VIDEO, loop: false, first: 'cloud', last: 'night', ms: 3000 },
+  nightToCloud: { src: NIGHT_BACK_VIDEO, loop: false, first: 'night', last: 'cloud', ms: 3000 },
 };
 // 差し替えた動画は、再生位置が実際に進んだ合図（timeUpdate）で上の静止画を消して見せる
 const TIME_UPDATE_S = 0.05;
@@ -59,9 +70,10 @@ const CLOUD_UI_IN_MS = 500;
 const TRANS_RISE_MS = 1600;
 const BACK_SURFACE_DELAY_MS = 1300;
 const BACK_SURFACE_MS = 900;
-const CLIP_MS = 2000;
 // 演出と保険タイマーは動画が実際に見え始めた時から数える（スマホは再生開始が遅れる）
-const CLIP_END_FALLBACK_MS = CLIP_MS + 800;
+const CLIP_END_SLACK_MS = 800;
+// 夜→川は動画を使わず、夜の静止画をフェードして夕方の川の静止画を見せる（仕様「夜空がフェードし、夕方の渓流へ戻る」）
+const NIGHT_FADE_MS = 900;
 // 動画が再生できない環境では、この時間待っても始まらなければ静止画のまま進める
 const VIDEO_START_TIMEOUT_MS = 1200;
 
@@ -521,7 +533,7 @@ export default function Home() {
   });
   const [stage, setStage] = useState<Stage>('river');
   const stageRef = useRef<Stage>('river');
-  const clipRef = useRef<Stage>('river');
+  const clipRef = useRef<Clip>('river');
   const loadedRef = useRef(true);
   const revealedRef = useRef(false);
   const firstFrameRef = useRef(false);
@@ -535,6 +547,9 @@ export default function Home() {
   // 動画の上に重ねる静止画（各動画の最初のコマと同じ絵）。最初から読み込んでおき、不透明度だけ切り替える
   const coverRiver = useSharedValue(1);
   const coverCloud = useSharedValue(0);
+  const coverNight = useSharedValue(0);
+  const covers: Record<Still, SharedValue<number>> = { river: coverRiver, cloud: coverCloud, night: coverNight };
+  const nightUi = useSharedValue(0);
   const riverUi = useSharedValue(1);
   const cloudUi = useSharedValue(0);
   const rise = useSharedValue(0);
@@ -556,10 +571,9 @@ export default function Home() {
   };
 
   // 動画を差し替える。差し替えの瞬間の動画は黒いことがあるので、次の動画の最初のコマと同じ静止画で覆っておく
-  const playClip = (clip: Stage) => {
+  const playClip = (clip: Clip) => {
     const c = CLIPS[clip];
-    (c.first === 'river' ? coverRiver : coverCloud).set(1);
-    (c.first === 'river' ? coverCloud : coverRiver).set(0);
+    (Object.keys(covers) as Still[]).forEach((k) => covers[k].set(k === c.first ? 1 : 0));
     clipRef.current = clip;
     loadedRef.current = false;
     revealedRef.current = false;
@@ -575,31 +589,32 @@ export default function Home() {
   const reveal = () => {
     if (revealedRef.current) return;
     revealedRef.current = true;
-    coverRiver.set(withTiming(0, { duration: REVEAL_MS }));
-    coverCloud.set(withTiming(0, { duration: REVEAL_MS }));
+    (Object.keys(covers) as Still[]).forEach((k) => covers[k].set(withTiming(0, { duration: REVEAL_MS })));
     onClipStarted(clipRef.current);
   };
 
   // 動画が見え始めた（または再生できずに待ちきった）ときの演出
-  const onClipStarted = (clip: Stage) => {
+  const onClipStarted = (clip: Clip) => {
     if (clipRef.current !== clip || startedRef.current) return;
     if (!revealedRef.current && !player.playing) player.play();
     startedRef.current = true;
     if (clip === 'toCloud') {
       // カメラが空を見上げるのに合わせて泡は空へ昇って消える
       rise.set(withTiming(1, { duration: TRANS_RISE_MS, easing: Easing.in(Easing.quad) }));
-      later(() => handlersRef.current.onClipEnd('toCloud'), CLIP_END_FALLBACK_MS);
+      later(() => handlersRef.current.onClipEnd('toCloud'), CLIPS.toCloud.ms! + CLIP_END_SLACK_MS);
     } else if (clip === 'toRiver') {
       // カメラが川岸へ下りた後半、泡は元の水面から浮かび上がる
       appear.set(withDelay(BACK_SURFACE_DELAY_MS, withTiming(1, { duration: BACK_SURFACE_MS, easing: Easing.out(Easing.quad) })));
-      later(() => handlersRef.current.onClipEnd('toRiver'), CLIP_END_FALLBACK_MS);
+      later(() => handlersRef.current.onClipEnd('toRiver'), CLIPS.toRiver.ms! + CLIP_END_SLACK_MS);
+    } else if (clip === 'toNight' || clip === 'nightToCloud') {
+      later(() => handlersRef.current.onClipEnd(clip), CLIPS[clip].ms! + CLIP_END_SLACK_MS);
     }
   };
 
   // 遷移の動画が終わった: 次のループへ。行きの最後のコマ＝空のループの最初のコマ、帰りの最後のコマ＝川の最初のコマ
-  const onClipEnd = (clip: Stage) => {
+  const onClipEnd = (clip: Clip) => {
     if (clipRef.current !== clip) return;
-    if (clip === 'toCloud') {
+    if (clip === 'toCloud' || clip === 'nightToCloud') {
       goStage('cloud');
       playClip('cloud');
       cloudUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
@@ -609,6 +624,12 @@ export default function Home() {
       appear.set(1);
       paused.set(false);
       riverUi.set(withTiming(1, { duration: UI_FADE_MS }));
+    } else if (clip === 'toNight') {
+      // 夜はループの動画が無いので、最後のコマと同じ静止画（終わり際に被せ済み）で止める
+      goStage('night');
+      coverNight.set(1);
+      player.pause();
+      nightUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
     }
   };
 
@@ -619,12 +640,12 @@ export default function Home() {
 
   // 遷移の動画の終わり際に、次のループの最初のコマ（＝遷移の最後のコマ）の静止画を被せておく
   const precover = (t: number) => {
-    const clip = clipRef.current;
-    if (!revealedRef.current || precoveredRef.current || (clip !== 'toCloud' && clip !== 'toRiver')) return;
-    const dur = player.duration > 0 ? player.duration : CLIP_MS / 1000;
+    const c = CLIPS[clipRef.current];
+    if (!revealedRef.current || precoveredRef.current || !c.last) return;
+    const dur = player.duration > 0 ? player.duration : c.ms! / 1000;
     if (t < dur - PRECOVER_LEFT_S) return;
     precoveredRef.current = true;
-    (clip === 'toCloud' ? coverCloud : coverRiver).set(withTiming(1, { duration: PRECOVER_MS }));
+    covers[c.last].set(withTiming(1, { duration: PRECOVER_MS }));
   };
 
   const handlersRef = useRef({ reveal, onClipStarted, onClipEnd, onReturn, precover });
@@ -695,15 +716,49 @@ export default function Home() {
     }, COVER_IN_MS + 20);
   };
 
-  const openArchive = (word?: string) => {
+  // 拾ったことば → ふりかえり（夜）。画面は切り替えず、同じプレーヤーで夜への遷移を流す
+  // TODO(星座): タップした言葉（word）を、ふりかえりの中心の星にする
+  const goNight = () => {
     if (stageRef.current !== 'cloud') return;
-    // 戻ってきたときに描き直されるまでの黒が見えないよう、先に静止画で覆っておく
-    coverCloud.set(1);
-    router.push((word ? { pathname: '/archive', params: { word } } : '/archive') as never);
+    goStage('toNight');
+    cloudUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    coverCloud.set(withTiming(1, { duration: COVER_IN_MS }));
+    later(() => {
+      if (stageRef.current === 'toNight') playClip('toNight');
+    }, COVER_IN_MS + 20);
+  };
+
+  // ふりかえり（夜）→ 拾ったことば。夜の静止画のまま、行きの逆順の動画を流す
+  const nightToCloud = () => {
+    if (stageRef.current !== 'night') return;
+    goStage('nightToCloud');
+    nightUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    playClip('nightToCloud');
+  };
+
+  // ふりかえり（夜）→ 川。夜の静止画をフェードして、下の夕方の川の静止画を見せてから川のループへ
+  const nightToRiver = () => {
+    if (stageRef.current !== 'night') return;
+    goStage('nightToRiver');
+    rise.set(0);
+    appear.set(0);
+    nightUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    coverRiver.set(1);
+    coverNight.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    later(() => {
+      if (stageRef.current !== 'nightToRiver') return;
+      goStage('river');
+      playClip('river');
+      appear.set(withTiming(1, { duration: BACK_SURFACE_MS, easing: Easing.out(Easing.quad) }));
+      paused.set(false);
+      riverUi.set(withTiming(1, { duration: UI_FADE_MS }));
+    }, NIGHT_FADE_MS);
   };
 
   const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
   const coverCloudStyle = useAnimatedStyle(() => ({ opacity: coverCloud.value }));
+  const coverNightStyle = useAnimatedStyle(() => ({ opacity: coverNight.value }));
+  const nightUiStyle = useAnimatedStyle(() => ({ opacity: nightUi.value }));
   // 行き: カメラが空を見上げるのに合わせて泡は空へ昇って消える。帰り: 水面から少し浮かび上がって現れる
   const riseStyle = useAnimatedStyle(() => ({
     opacity: (1 - rise.value) * appear.value,
@@ -722,6 +777,7 @@ export default function Home() {
       <BackgroundVideo player={player} rect={rect} onFirstFrame={onFirstFrame} />
       <Animated.Image source={RIVER_POSTER} style={[fill, coverRiverStyle]} />
       <Animated.Image source={CLOUD_BG} style={[fill, coverCloudStyle]} />
+      <Animated.Image source={NIGHT_BG} style={[fill, coverNightStyle]} />
       {/* 画面下の文字が読めるよう、下端だけ少し暗く */}
       <LinearGradient
         colors={['rgba(14,30,48,0)', 'rgba(14,30,48,0.45)']}
@@ -764,9 +820,16 @@ export default function Home() {
       </Animated.View>
 
       {/* 拾ったことば。空のループの上に重ねる（画面は切り替えない） */}
-      {(stage === 'cloud' || stage === 'toRiver') && (
+      {(stage === 'cloud' || stage === 'toRiver' || stage === 'toNight') && (
         <Animated.View style={[StyleSheet.absoluteFill, cloudUiStyle]} pointerEvents={stage === 'cloud' ? 'box-none' : 'none'}>
-          <WordCloudOverlay width={width} height={height} onBack={backToRiver} onOpenArchive={openArchive} />
+          <WordCloudOverlay width={width} height={height} onBack={backToRiver} onOpenArchive={goNight} />
+        </Animated.View>
+      )}
+
+      {/* ふりかえり（夜）。夜の静止画の上に重ねる */}
+      {(stage === 'night' || stage === 'nightToRiver' || stage === 'nightToCloud') && (
+        <Animated.View style={[StyleSheet.absoluteFill, nightUiStyle]} pointerEvents={stage === 'night' ? 'box-none' : 'none'}>
+          <NightOverlay onBack={nightToCloud} onRiver={nightToRiver} />
         </Animated.View>
       )}
     </View>
