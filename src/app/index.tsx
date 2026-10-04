@@ -532,6 +532,7 @@ export default function Home() {
     p.timeUpdateEventInterval = TIME_UPDATE_S;
   });
   const [stage, setStage] = useState<Stage>('river');
+  const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
   const stageRef = useRef<Stage>('river');
   const clipRef = useRef<Clip>('river');
   const loadedRef = useRef(true);
@@ -716,10 +717,11 @@ export default function Home() {
     }, COVER_IN_MS + 20);
   };
 
-  // 拾ったことば → ふりかえり（夜）。画面は切り替えず、同じプレーヤーで夜への遷移を流す
-  // TODO(星座): タップした言葉（word）を、ふりかえりの中心の星にする
-  const goNight = () => {
+  // 拾ったことば → ふりかえり（夜）。画面は切り替えず、同じプレーヤーで夜への遷移を流す。
+  // 言葉をタップして来たときは、その言葉を星座の中心に置く
+  const goNight = (word?: string) => {
     if (stageRef.current !== 'cloud') return;
+    setNightFocus(word);
     goStage('toNight');
     cloudUi.set(withTiming(0, { duration: UI_FADE_MS }));
     coverCloud.set(withTiming(1, { duration: COVER_IN_MS }));
@@ -829,7 +831,7 @@ export default function Home() {
       {/* ふりかえり（夜）。夜の静止画の上に重ねる */}
       {(stage === 'night' || stage === 'nightToRiver' || stage === 'nightToCloud') && (
         <Animated.View style={[StyleSheet.absoluteFill, nightUiStyle]} pointerEvents={stage === 'night' ? 'box-none' : 'none'}>
-          <NightOverlay onBack={nightToCloud} onRiver={nightToRiver} />
+          <NightOverlay width={width} height={height} focus={nightFocus} onBack={nightToCloud} onRiver={nightToRiver} />
         </Animated.View>
       )}
     </View>
