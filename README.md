@@ -25,6 +25,7 @@ npx expo start --tunnel --clear   # スマホの Expo Go で QR を読む
 ```bash
 cd scripts/music
 uv run build.py   # assets/sounds/ の bgm_*.m4a と chime_*.m4a を書き直す
+uv run check.py   # 音割れ・音量・帯域・ループのつなぎ目を数値で確かめる
 ```
 
 楽譜と楽器は `scripts/music/compose.py` にあります。作り方は `docs/SPEC.md` の「音」。
