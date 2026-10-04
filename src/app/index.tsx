@@ -73,6 +73,10 @@ function setLoop(p: VideoPlayer, loop: boolean) {
 const SURFACE_SEC = 1.2;
 const PREWARM_SEC = 30;
 const SPAWN_EVERY_MS = 250;
+// 泡を押さえている間は、ほかの泡の流れをこの割合までゆっくりにする（選んでいるあいだ慌てないように）。
+// いきなり変えると止まったように見えるので、FLOW_EASE_SEC 秒くらいかけてなめらかに落とす・戻す
+const HOLD_FLOW_RATE = 0.3;
+const FLOW_EASE_SEC = 0.35;
 // 画面下のヒント文の手前で泡を消す
 const BOTTOM_UI = 60;
 // 泡はこの大きさで一度だけ描き、UI スレッドで拡大・縮小して正しい大きさにする（流れている泡は描き直さない）。
@@ -157,13 +161,14 @@ type BubbleProps = {
   onCapture: (word: string, strength: number) => void;
   onRemove: (id: number) => void;
   onPressStart: (id: number) => void;
+  onPressEnd: () => void;
   onLift: (id: number) => void;
 };
 
 // 指でこれ以上引っぱったら、泡は水面を離れたとみなす（px）
 const LIFT_DRAG_PX = 20;
 
-const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCapture, onRemove, onPressStart, onLift }: BubbleProps) {
+const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCapture, onRemove, onPressStart, onPressEnd, onLift }: BubbleProps) {
   const base = BASE;
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
@@ -223,6 +228,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     if (pressStart.current === 0) return;
     const elapsed = Date.now() - pressStart.current;
     pressStart.current = 0;
+    onPressEnd();
     const strength = elapsed < 200 ? 0.1 : Math.min(elapsed / CHARGE_MAX, 1);
     // 拾った泡は空へ昇るので、昇りきるのを待たずに流れから外す（待つと1.4秒間、後ろをせき止めた）
     lift();
@@ -407,6 +413,9 @@ export default function Home() {
   const sim = useSharedValue<SimBubble[]>(initial.bs);
   const time = useSharedValue(0);
   const paused = useSharedValue(false);
+  // 指で押さえている泡の数と、いまの流れの速さの倍率（1=ふだん）
+  const holds = useSharedValue(0);
+  const flowRate = useSharedValue(1);
   const [list, setList] = useState<ListItem[]>(initial.items);
   const listRef = useRef<ListItem[]>(initial.items);
   const recentRef = useRef<string[]>([]);
@@ -432,7 +441,10 @@ export default function Home() {
     const dt = Math.min(0.05, (fi.timeSincePreviousFrame ?? 16) / 1000);
     time.set(time.get() + dt);
     if (paused.get()) return;
-    const r = stepBubbles(P, sim.get(), dt);
+    const target = holds.get() > 0 ? HOLD_FLOW_RATE : 1;
+    const rate = flowRate.get() + (target - flowRate.get()) * Math.min(1, dt / FLOW_EASE_SEC);
+    flowRate.set(rate);
+    const r = stepBubbles(P, sim.get(), dt * rate);
     sim.set(r.bs);
     if (r.exited.length) runOnJS(onExited)(r.exited);
   });
@@ -441,6 +453,8 @@ export default function Home() {
   useEffect(() => {
     const timer = setInterval(() => {
       if (paused.get()) return;
+      // 流れがゆっくりの間は出す数も減らす（減らさないと奥に泡が溜まり、戻ったとき詰まって流れる）
+      if (Math.random() > flowRate.get()) return;
       const word = pickWord(listRef.current);
       const id = nextId++;
       const bob = Math.random() * Math.PI * 2;
@@ -453,14 +467,22 @@ export default function Home() {
       })(P, id, word, bob);
     }, SPAWN_EVERY_MS);
     return () => clearInterval(timer);
-  }, [P, sim, paused, pickWord, onSpawned]);
+  }, [P, sim, paused, flowRate, pickWord, onSpawned]);
 
   const onPressStart = useCallback((id: number) => {
     runOnUI((bid: number) => {
       'worklet';
       sim.set(sim.get().map((b) => (b.id === bid ? { ...b, pressed: true } : b)));
+      holds.set(holds.get() + 1);
     })(id);
-  }, [sim]);
+  }, [sim, holds]);
+
+  const onPressEnd = useCallback(() => {
+    runOnUI(() => {
+      'worklet';
+      holds.set(Math.max(0, holds.get() - 1));
+    })();
+  }, [holds]);
 
   const onLift = useCallback((id: number) => {
     runOnUI((bid: number) => {
@@ -727,6 +749,7 @@ export default function Home() {
             onCapture={handleCapture}
             onRemove={onRemove}
             onPressStart={onPressStart}
+            onPressEnd={onPressEnd}
             onLift={onLift}
           />
         ))}
