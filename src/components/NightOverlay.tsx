@@ -11,7 +11,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
-import { MIN_CO, layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type Line, type Star } from '../constellation';
+import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type Line, type Star } from '../constellation';
 import { PERIODS, filterByPeriod, type Period } from '../period';
 import { SAMPLE_CAPTURES, SAMPLE_NOW } from '../sampleCaptures';
 
@@ -208,11 +208,12 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
   const degree = current ? lines.filter((l) => l.a === current.word || l.b === current.word).length : 0;
+  // 画面に数字を出さない（分析されている感じを出さない。docs/SPEC.md「大事にすること」2026-10-05 決定）
   const hint = current
     ? degree > 0
-      ? `「${current.word}」 ${current.count}回　同じ日に拾った言葉 ${degree}`
-      : `「${current.word}」 ${current.count}回　もう少し拾うと見えてきます`
-    : `星の大きさ＝拾った回数　線＝同じ日に${MIN_CO}回以上`;
+      ? `「${current.word}」とよく一緒の星が、光っています`
+      : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
+    : '大きな星ほど、よく拾った言葉　線は、よく一緒に拾った言葉';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
