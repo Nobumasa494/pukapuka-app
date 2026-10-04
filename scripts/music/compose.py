@@ -1,7 +1,11 @@
 """pukapuka の曲と効果音。楽譜をデータで書き、楽器の音をコードで合成し、残響を付けてループにする（書き出しは build.py）。
 
-A「森」: どうぶつの森寄り。カリンバのメロディ＋マリンバの伴奏、やや軽快
-B「空」: Sky／ジブリ寄り。まばらなピアノ＋ハープのアルペジオ＋弦のパッド＋水のさざめき、深い残響
+画面ごとに別の曲（調だけ D メジャー／B マイナーにそろえる。docs/SPEC.md の「音」）:
+  version_river: ことばの川（夕方）。試作 B「空」: まばらなピアノ＋ハープのアルペジオ＋弦のパッド＋水のさざめき
+  version_cloud: 拾ったことば（ブルーアワー）。3拍子: オルゴール＋ハープのワルツ＋風
+  version_night: ふりかえり（夜）。フェルトピアノのノクターン＋星のベル
+  chimes:        泡を拾ったときの音（ラ シ レ ミ ファ#）
+version_a は試作 A「森」（使っていないが、version_river が同じ乱数の順で作るために呼ぶ）
 """
 import sys
 import numpy as np
@@ -113,6 +117,16 @@ def water(sec, level):
         drop = np.sin(2 * np.pi * (f0 * tt + f0 * 3 * tt * tt)) * np.exp(-tt / 0.012) * rng.uniform(0.1, 0.35)
         out[s:s + len(drop)] += drop
     return level * out
+
+
+def seamless(x, n, fade=1.0):
+    """ノイズ（風・水）を長さ n でつながるループにする。終わりの先の部分を頭に重ねてなめらかに入れ替える。
+    ノイズは消えていかないので、音符のように「終わりの残響を頭へ回し込む」だけでは、つなぎ目で段差ができ、頭が二重になる"""
+    k = int(fade * SR)
+    out = x[:n].copy()
+    r = np.linspace(0, 1, k)
+    out[:k] = x[:k] * r + x[n:n + k] * (1 - r)
+    return out
 
 
 def reverb_ir(t60, t60_hi, predelay=0.025):
@@ -239,54 +253,139 @@ def wind(sec, level):
     return level * x * swell
 
 
+def music_box(f, vel):
+    """オルゴール: 澄んだ芯に、すぐ消える高い金属の響き"""
+    t = tvec(3.0)
+    out = np.zeros_like(t)
+    for r, a, d in ((1, 1, 1.5), (2.0, 0.12, 0.6), (5.27, 0.18, 0.08), (8.9, 0.05, 0.03)):
+        out += a * np.sin(2 * np.pi * f * r * t) * np.exp(-t / d)
+    return vel * out * attack(t, 0.0015)
+
+
+def felt_piano(f, dur, vel):
+    """フェルトピアノ: ハンマーに布をはさんだ、こもった柔らかいピアノ（倍音を少なく、立ち上がりをゆるく）"""
+    t = tvec(min(dur + 2.5, 6.0))
+    out = np.zeros_like(t)
+    for n in range(1, 7):
+        fn = f * n * np.sqrt(1 + 0.0003 * n * n)
+        a = 0.55 ** (n - 1) / n
+        t60 = 5.0 / (1 + 0.6 * (n - 1)) * (330 / f) ** 0.3
+        for det in (-0.8, 0.8):
+            out += 0.5 * a * np.sin(2 * np.pi * fn * (1 + det / 1731) * t + rng.uniform(0, 6.28)) * np.exp(-6.9 * t / t60)
+    thump = sosfilt(butter(2, 300, 'low', fs=SR, output='sos'), rng.normal(0, 1, len(t))) * np.exp(-t / 0.015) * 0.15
+    damp = np.where(t > dur, np.exp(-(t - dur) / 0.5), 1.0)
+    return vel * (out + thump) * attack(t, 0.012) * damp
+
+
+# ---- 拾ったことば（ブルーアワー）: 3拍子のゆっくりしたワルツ。Bm9 から始まる12小節 ----
+CLOUD_CHORDS = [
+    (47, [62, 66, 69, 73]),  # Bm9
+    (43, [59, 62, 66, 69]),  # GM7(9)
+    (42, [57, 62, 66, 69]),  # D/F#
+    (40, [59, 62, 64, 67]),  # Em7
+    (47, [62, 66, 69, 73]),  # Bm9
+    (43, [59, 62, 66, 69]),  # GM7(9)
+    (45, [57, 62, 64, 69]),  # Asus4
+    (45, [57, 61, 64, 69]),  # A
+    (43, [59, 62, 66, 69]),  # GM7(9)
+    (42, [57, 61, 64, 66]),  # F#m7
+    (40, [59, 62, 66, 67]),  # Em9
+    (45, [57, 62, 64, 69]),  # Asus4
+]
+# メロディはシ レ ミ ファ# ラ（拾ったときの音と同じ5音）。(小節, 拍, 音, 長さ)
+CLOUD_MELODY = [
+    (0, 0, 78, 2), (0, 2, 81, 1),
+    (1, 0, 83, 3),
+    (2, 0, 81, 1), (2, 1, 78, 1), (2, 2, 76, 1),
+    (3, 0, 74, 3),
+    (4, 0, 78, 1.5), (4, 1.5, 76, 0.5), (4, 2, 78, 1),
+    (5, 0, 86, 2), (5, 2, 83, 1),
+    (6, 0, 81, 3),
+    (7, 0, 76, 2), (7, 2, 78, 1),
+    (8, 0, 83, 2), (8, 2, 81, 1),
+    (9, 0, 78, 3),
+    (10, 0, 76, 1), (10, 1, 78, 1), (10, 2, 83, 1),
+    (11, 0, 81, 3),
+]
+
+
 def version_cloud():
-    """拾ったことば（ブルーアワー）: 川の曲と同じ和音。メロディはほとんどなく、ハープは1拍ずつ、風が入る"""
+    """拾ったことば（ブルーアワー）: オルゴールのメロディ＋ハープのワルツの伴奏＋薄い和音＋風"""
     global rng
     rng = np.random.default_rng(11)
-    bpm = 52
+    bpm = 63
     beat = 60 / bpm
-    bar = 4 * beat
-    loop = 8 * bar
+    bar = 3 * beat
+    loop = len(CLOUD_CHORDS) * bar
     m = Mix(loop + 8)
-    for b, (bass, notes) in enumerate(CHORDS):
+    for b, (bass, notes) in enumerate(CLOUD_CHORDS):
         t0 = b * bar
-        m.add(pad(notes, bar, 0.55, bright=4, vib=True), t0, gain=0.36, send=0.9)
-        m.add(pad([bass], bar, 0.6, bright=3), t0, gain=0.1, send=0.5)
-        for k, nn in enumerate([bass + 12, notes[1], notes[2], notes[3] + 12 if b % 2 else notes[3]]):
-            m.add(harp(mtof(nn), 0.42), t0 + k * beat, pan=-0.5 + k / 3, gain=0.3)
-    for b, bt, note, dur in MELODY:
-        if (b, bt) in ((0, 2), (1, 2), (4, 3), (6, 2)):
-            m.add(piano(mtof(note + 12), 2 * beat, 0.5), b * bar + bt * beat, pan=0.25, gain=0.32)
-    for b, note in ((2, 93), (5, 90), (7, 95)):
-        m.add(bell(mtof(note), 0.3), b * bar + 2.5 * beat, pan=0.4, gain=0.16, send=1.6)
-    w = wind(loop + 8, 0.05)
+        m.add(pad(notes, bar, 0.5, bright=3, atk=1.0, rel=1.8), t0, gain=0.24, send=0.8)
+        m.add(pad([bass, bass + 12], bar, 0.6, bright=2, atk=1.0, rel=1.8), t0, gain=0.6, send=0.5)  # 下を支える柔らかい低音
+        # ワルツ: 1拍目に低い音、2・3拍目に和音を小さく
+        m.add(harp(mtof(bass + 12), 0.55), t0, pan=-0.35, gain=0.34)
+        m.add(harp(mtof(notes[1]), 0.3), t0 + beat, pan=0.15, gain=0.26)
+        m.add(harp(mtof(notes[2]), 0.3), t0 + beat + 0.02, pan=0.25, gain=0.26)
+        m.add(harp(mtof(notes[3]), 0.28), t0 + 2 * beat, pan=0.35, gain=0.24)
+    for b, bt, note, dur in CLOUD_MELODY:
+        t = b * bar + bt * beat
+        m.add(music_box(mtof(note), 0.85), t, pan=0.05, gain=0.4)
+        m.add(music_box(mtof(note + 12), 0.2), t + 0.008, pan=0.1, gain=0.18)
+    n = int(loop * SR)
+    w = seamless(wind(loop + 2, 0.045), n)
     m.add(w, 0, pan=-0.3, send=0.2)
     m.add(w[::-1].copy(), 0, pan=0.4, gain=0.8, send=0.2)
-    m.add(water(loop + 8, 0.025), 0, pan=0.1, send=0.3)
-    return m.render(loop, wet=0.55, t60=5.2, t60_hi=2.2)
+    return m.render(loop, wet=0.45, t60=4.0, t60_hi=1.8)
+
+
+# ---- ふりかえり（夜）: 4拍子のノクターン。Em9 から始まる8小節 ----
+NIGHT_CHORDS = [
+    (40, [55, 59, 62, 66]),  # Em9
+    (43, [57, 59, 62, 66]),  # GM9
+    (47, [57, 61, 62, 66]),  # Bm9
+    (42, [54, 59, 61, 66]),  # F#sus4
+    (40, [55, 59, 62, 66]),  # Em9
+    (42, [57, 62, 64, 66]),  # D(add9)/F#
+    (43, [55, 59, 62, 66]),  # GM7
+    (45, [57, 62, 64, 69]),  # Asus4
+]
+NIGHT_MELODY = [
+    (0, 2, 71, 2),
+    (1, 0, 69, 2), (1, 2, 74, 2),
+    (2, 0, 78, 4),
+    (3, 1, 76, 3),
+    (4, 2, 71, 2),
+    (5, 0, 74, 2), (5, 2, 76, 1), (5, 3, 78, 1),
+    (6, 0, 74, 4),
+    (7, 1, 76, 3),
+]
 
 
 def version_night():
-    """ふりかえり（夜）: 同じ和音を低く暗いパッドで。高いベルが星のようにまばらに鳴る"""
+    """ふりかえり（夜）: 低めのフェルトピアノがゆっくり和音をほどき、まばらなメロディ。声のような和音と星のベル"""
     global rng
     rng = np.random.default_rng(23)
-    bpm = 48
+    bpm = 44
     beat = 60 / bpm
     bar = 4 * beat
-    loop = 8 * bar
+    loop = len(NIGHT_CHORDS) * bar
     m = Mix(loop + 9)
-    for b, (bass, notes) in enumerate(CHORDS):
+    for b, (bass, notes) in enumerate(NIGHT_CHORDS):
         t0 = b * bar
-        m.add(pad(notes, bar, 0.5, bright=3, vib=True, atk=2.2, rel=3.0), t0, gain=0.4, send=1.0)
-        m.add(pad([bass], bar, 0.6, bright=2, atk=2.2, rel=3.0), t0, gain=0.12, send=0.6)
-    stars = [86, 88, 90, 93, 95, 98]
-    t = 1.3
-    while t < loop - 1:
-        note = int(rng.choice(stars))
-        m.add(bell(mtof(note), float(rng.uniform(0.18, 0.4))), t, pan=float(rng.uniform(-0.7, 0.7)), gain=0.17, send=1.8)
-        t += float(rng.uniform(1.6, 3.4))
-    m.add(water(loop + 9, 0.018), 0, pan=-0.2, send=0.4)
-    return m.render(loop, wet=0.6, t60=6.0, t60_hi=2.4)
+        m.add(pad(notes, bar, 0.45, bright=2, atk=2.4, rel=3.0), t0, gain=0.3, send=1.0)
+        # 和音をゆっくり、少し不規則にほどく
+        for bt, nn, v in ((0, bass + 12, 0.6), (1.5, notes[1], 0.4), (2, notes[2], 0.38), (3, notes[3], 0.35)):
+            m.add(felt_piano(mtof(nn), 2.5 * beat, v), t0 + bt * beat, pan=-0.25 + 0.15 * bt, gain=0.5)
+    for b, bt, note, dur in NIGHT_MELODY:
+        m.add(felt_piano(mtof(note), dur * beat, 0.62), b * bar + bt * beat, pan=0.15, gain=0.55)
+    stars = [86, 88, 90, 93, 95]
+    t = 2.1
+    while t < loop - 1.5:
+        m.add(bell(mtof(int(rng.choice(stars))), float(rng.uniform(0.15, 0.32))), t,
+              pan=float(rng.uniform(-0.7, 0.7)), gain=0.15, send=1.8)
+        t += float(rng.uniform(3.0, 5.5))
+    m.add(seamless(water(loop + 2, 0.016), int(loop * SR)), 0, pan=-0.2, send=0.4)
+    return m.render(loop, wet=0.55, t60=5.5, t60_hi=2.2)
 
 
 def chimes(out):
