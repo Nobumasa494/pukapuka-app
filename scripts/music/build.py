@@ -13,6 +13,8 @@
    何もない所から始まる頭の 1024 サンプルが崩れる（夜の曲で誤差が真ん中の 8 倍）。前後に続きを置けば頭も終わりも正しく作られる。
    編集リストはサンプル単位で書けるよう、映像全体の時間の単位（movie timescale）を 44100 にする。
    iPhone（AVQueuePlayer で同じ曲を並べてループ）も Android（ExoPlayer）も編集リストを使って継ぎ目なく鳴らす
+5. ユーザーが聴いて決めた音の「指紋」（approved.json）と比べ、変わっていたら知らせる。
+   曲を変えてユーザーが聴いて OK したら `uv run build.py --approve` で指紋を書き直す
 """
 import os
 import re
@@ -20,6 +22,8 @@ import subprocess
 import sys
 import tempfile
 
+import hashlib
+import json
 import struct
 
 import numpy as np
@@ -39,6 +43,28 @@ def loudness(path):
 
 
 CONTEXT = 2048
+APPROVED = os.path.join(HERE, 'approved.json')
+
+
+def fingerprint(x):
+    """合成した音（書き出す前）の指紋: ビットまで同じかを見るハッシュと、0.5秒ごとの音量（環境による小数のわずかな差を見分ける）"""
+    q = (np.clip(x, -1, 1).T * 32767).astype(np.int16)
+    w = compose.SR // 2
+    m = q.shape[0] // w * w
+    env = np.sqrt((q[:m].astype(float) / 32767) ** 2).reshape(-1, w, q.shape[1]).mean(axis=(1, 2))
+    return {'sha256': hashlib.sha256(q.tobytes()).hexdigest(), 'samples': int(q.shape[0]), 'level': [round(float(v), 4) for v in env]}
+
+
+def compare(name, fp, approved):
+    """ユーザーが決めた音と比べる。同じ／環境の差くらい／違う"""
+    ref = approved.get(name)
+    if ref is None:
+        return 'まだ決めていない音'
+    if ref['sha256'] == fp['sha256']:
+        return '決めた音とビットまで同じ'
+    if ref['samples'] == fp['samples'] and np.abs(np.array(ref['level']) - np.array(fp['level'])).max() < 0.002:
+        return '決めた音とほぼ同じ（計算環境による小数の差。聴いて分かる差ではない）'
+    return '!! 決めた音と違う（曲を変えたなら、ユーザーに聴いてもらってから --approve）'
 
 
 def boxes(buf, off, end):
@@ -95,21 +121,33 @@ def encode_loop(y, out, gain, tmp):
 
 
 def main():
+    approve = '--approve' in sys.argv
+    approved = json.load(open(APPROVED, encoding='utf-8')) if os.path.exists(APPROVED) else {}
+    prints = {}
     with tempfile.TemporaryDirectory() as tmp:
         for name, fn in (('river', compose.version_river), ('cloud', compose.version_cloud), ('night', compose.version_night)):
             x = fn()
+            prints[name] = fingerprint(x)
             n = int(np.ceil(x.shape[1] / 1024) * 1024)
             y = resample(x, n, axis=1)
             wav = os.path.join(tmp, f'{name}.wav')
             wavfile.write(wav, compose.SR, (np.clip(y, -1, 1).T * 32767).astype(np.int16))
             gain = -20 - loudness(wav)
             head, tail, mid = encode_loop(y, os.path.join(OUT, f'bgm_{name}.m4a'), gain, tmp)
-            print(f'bgm_{name}.m4a  {n / compose.SR:.1f}s  gain {gain:+.1f}dB  AAC の誤差 頭 {head:.4f} / 終わり {tail:.4f} / 真ん中 {mid:.4f}')
+            print(f'bgm_{name}.m4a  {n / compose.SR:.1f}s  gain {gain:+.1f}dB  AAC の誤差 頭 {head:.4f} / 終わり {tail:.4f} / 真ん中 {mid:.4f}'
+                  f'  {compare(name, prints[name], approved)}')
         compose.chimes(tmp)
         for i in range(5):
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', os.path.join(tmp, f'chime_{i}.wav'),
                             '-c:a', 'aac', '-b:a', '96k', os.path.join(OUT, f'chime_{i}.m4a')], check=True)
-        print('chime_0..4.m4a')
+        for i in range(5):
+            x = wavfile.read(os.path.join(tmp, f'chime_{i}.wav'))[1].T.astype(float) / 32767
+            prints[f'chime_{i}'] = fingerprint(x)
+        results = {compare(f'chime_{i}', prints[f'chime_{i}'], approved) for i in range(5)}
+        print('chime_0..4.m4a  ' + ' / '.join(sorted(results)))
+    if approve:
+        json.dump(prints, open(APPROVED, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        print('approved.json を今の音で書き直した（ユーザーが聴いて決めた音として記録）')
 
 
 if __name__ == '__main__':
