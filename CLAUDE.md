@@ -15,3 +15,5 @@ Convex agent skills for common tasks can be installed by running
 ## pukapuka App Specification
 
 See [docs/SPEC.md](docs/SPEC.md) for the complete app specification, including concept, features, design, and data models.
+
+When updating docs/SPEC.md, use the `/pukapuka-spec` skill (write → self-review with its checklist → fix, repeated until no new issues, max 3 rounds).
