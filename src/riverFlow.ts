@@ -27,9 +27,19 @@ const MAX_LIVE = 15;
 const LANES = [-0.95, 0.95, 0, -0.55, 0.55];
 // 横よけで横に滑る速さ（px/秒）。流れ（32px/秒）より速いので、追いついた泡は回り込める。
 // 速すぎると「跳ねた」ように見える。遅すぎると接触してから横移動するので重なる
-const AVOID_SPEED = 150;
+// 150 では急に横へ跳ね、ぶつかったときのカクつきの一因だった（2026-10-05）。追いつくまで1秒以上あるので、これで間に合う
+const AVOID_SPEED = 60;
 // よけるときの最低間隔（泡の半径の和＋余白）
 const AVOID_MARGIN = 8;
+// 車間距離: 前の泡との隙間が FOLLOW_GAP px を切ると少しずつゆっくりになり、隙間0で止まる。
+// 以前は全速のままぶつかる直前で止まり、空くと全速に戻っていたので、1つの泡が1分に約200回「進む・止まる」をくり返してカクついた（ユーザー指摘「泡同士がぶつかるとカクつく。特にスマホ」）
+const FOLLOW_GAP = 34;
+// 速さを寄せる速さ（1秒あたり）。落とすのは速く、戻すのはゆっくり
+const FOLLOW_DOWN = 9;
+const FOLLOW_UP = 2.5;
+const FOLLOW_MIN = 0.15;
+// これより遅くなった泡は、後ろの泡がよける相手にする（止まった泡と同じ）
+const SLOW_AS_STALLED = 0.3;
 // 触る前に何分手前まで横へ動き始めるか（px）。ここが小さいと接触してからよけるので重なる
 const AVOID_LOOKAHEAD = 55;
 
@@ -55,6 +65,7 @@ export type SimBubble = {
   // 水面を離れた（指で引っぱり出された・拾われて空へ昇り始めた）。流れの中にもう居ないので、ほかの泡の障害物にしない
   lifted: boolean;
   drift: number;  // px。押された泡や前にいる泡をよけるため横にずらす量（0=元のレーン）
+  sp: number;     // いまの速さ（ふだんの速さに対する割合 0〜1）。前の泡に近づくと少しずつ落ち、離れると少しずつ戻る
 };
 
 export type Placed = { x: number; y: number; size: number; t: number };
@@ -245,13 +256,37 @@ export function stepBubbles(P: PathData, bs: SimBubble[], dt: number) {
       }
 
       const side: SimBubble = { ...b, age: nb.age, pressed: false, drift };
-      const fwd: SimBubble = { ...side, s: b.s + v * dt };
+      // 前（進むと近づく泡）との隙間を測り、近いほど目標の速さを下げる
+      const probe = placeBubble(P, { ...side, s: b.s + 4 });
+      const here = placeBubble(P, side);
+      let gap = FOLLOW_GAP;
+      for (let j = 0; j < done.length; j++) {
+        const o = done[j];
+        const r = ((here.size + o.size) / 2) * 1.04;
+        const dNow = Math.hypot(here.x - o.x, here.y - o.y) - r;
+        if (dNow >= gap) continue;
+        // ほぼ真正面の泡だけ（4px 進むと 2px 以上近づく）。斜め横の泡でまで遅くなると、ゆっくりの列がつながって止まった
+        if (dNow - (Math.hypot(probe.x - o.x, probe.y - o.y) - r) > 2) gap = Math.max(0, dNow);
+      }
+      for (let j = 0; j < held.length; j++) {
+        if (held[j].s <= b.s) continue;
+        const o = held[j].pl;
+        const dNow = Math.hypot(here.x - o.x, here.y - o.y) - (here.size + o.size) / 2 - AVOID_MARGIN;
+        if (dNow < gap) gap = Math.max(0, dNow);
+      }
+      const u = gap / FOLLOW_GAP;
+      // 止まりきらずに、ごくゆっくりは進み続ける（ぶつかる所へは進まないので重ならない）
+      const want = FOLLOW_MIN + (1 - FOLLOW_MIN) * u * u * (3 - 2 * u);
+      const rate = want < b.sp ? FOLLOW_DOWN : FOLLOW_UP;
+      const sp = b.sp + (want - b.sp) * Math.min(1, dt * rate);
+      const fwd: SimBubble = { ...side, s: b.s + v * sp * dt, sp };
       if (!blocked(P, fwd, done, held)) {
         nb = fwd;
       } else if (!blocked(P, side, done, held) || sideIsFree(P, side, base, done, others)) {
-        nb = side;
+        nb = { ...side, sp: 0 };
         stopped = Math.abs(drift - b.drift) < 0.01; // 横よけもできずに止まった
       } else {
+        nb = { ...nb, sp: 0 };
         stopped = true;
       }
     }
@@ -263,7 +298,7 @@ export function stepBubbles(P: PathData, bs: SimBubble[], dt: number) {
     if (!nb.pressed) {
       done.push(np);
       others.push(np);
-      if (stopped) stalled.push({ s: b.s, pl: base });
+      if (stopped || nb.sp < SLOW_AS_STALLED) stalled.push({ s: b.s, pl: base });
     }
     out.push(nb);
   }
@@ -290,7 +325,7 @@ export function spawnBubble(
     lanes[j] = tmp;
   }
   for (let li = 0; li < lanes.length * tries; li++) {
-    const cand: SimBubble = { id, s: Math.random() * Math.min(sMax, P.length), lane: lanes[li % lanes.length], age: 0, len, pressed: false, lifted: false, drift: 0 };
+    const cand: SimBubble = { id, s: Math.random() * Math.min(sMax, P.length), lane: lanes[li % lanes.length], age: 0, len, pressed: false, lifted: false, drift: 0, sp: 1 };
     const c = placeBubble(P, cand);
     if (c.y + c.size * 0.35 > yMax) continue;
     let ok = true;

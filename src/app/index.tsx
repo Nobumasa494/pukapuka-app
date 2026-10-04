@@ -316,9 +316,12 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     return {
       transform: [
         { scale: scale.value },
-        { translateX: dragX.value / s },
+        // 横のゆらゆら（見た目だけ ±SWAY_PX。流れの計算には入れない）
+        { translateX: (dragX.value + SWAY_PX * Math.sin((2 * Math.PI * time.value) / SWAY_SEC + bob * 1.3)) / s },
         // ぷかぷか上下 ±3px・周期2.8秒（全体共通の時計に泡ごとの位相）
         { translateY: (translateY.value + 3 * Math.sin((2 * Math.PI * time.value) / 2.8 + bob) + dragY.value) / s },
+        // 浮いているものらしく、ほんの少しゆっくり傾く（±3度。文字が読める範囲）
+        { rotate: `${TILT_DEG * Math.sin((2 * Math.PI * time.value) / TILT_SEC + bob * 1.7)}deg` },
       ],
       opacity: opacity.value,
     };
@@ -371,7 +374,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
       onTouchEnd={endPress}
       onTouchCancel={endPress}
     >
-      {/* 水との接点: 淡い映り込みと2重の波紋 */}
+      {/* 水との接点: 泡の足元の水面に、寝かせた波紋と淡い映り込み（最初から潰した形で描き、毎コマは動かさない） */}
       <Animated.View pointerEvents="none" style={[waterStyle, StyleSheet.absoluteFill]}>
         <WaterMarks size={base} />
       </Animated.View>
@@ -478,15 +481,29 @@ function ChargeDot({ k, charge }: { k: number; charge: SharedValue<number> }) {
 
 // 見た目の部品は大きさ・言葉が変わったときだけ描き直す
 //
-// 水面の波紋は円に近づける。横長の楕円（幅:高さ = 4:1 程度）にすると「泡の下の筋」のように見え、
-// さらに泡より外にはみ出すので「ここで泡が止まる場所」= 障害物の境目に見える。
-// 直径を泡の 1.1 倍以内に収めて、泡の足元だけ見せる
+// 水面の波紋と映り込みは、泡の足元（FOOT）の水面に寝かせて描く。斜め上から見た水面なので、水面上の輪は縦に潰れた楕円に見える
+// （円に近い輪にすると、立った円盤や泡の2重の輪郭に見え、泡が浮いて見えた。2026-10-05 ユーザー指摘）。
+// 潰れ方は最初から形に入れて、毎コマは計算しない（泡ごとに毎コマ潰し・波紋・水の跡を動かしたら、スマホで重くなりカクついた）。
+// 横幅は泡の 1.08 倍以内（はみ出すと「ここで泡が止まる」障害物の境目に見える）
+// 泡の底の少し上（水に触れる所）。泡の中に置くと、泡の中に浮かぶ板に見えた
+const FOOT = 0.95;
+const WATER_ASPECT = 0.36;
+const TILT_DEG = 3;
+const TILT_SEC = 5.3;
+const SWAY_PX = 3;
+const SWAY_SEC = 6.1;
+
 const WaterMarks = memo(function WaterMarks({ size }: { size: number }) {
+  // 円を描いてから縦に縮める（横長の四角に角丸をつけると、楕円ではなくカプセル形になった）。変形は最初に決めた形で、毎コマは動かさない
+  const ring = (k: number, dy = 0) => {
+    const w = size * k;
+    return { width: w, height: w, borderRadius: w / 2, left: (size - w) / 2, top: size * FOOT - w / 2 + dy, transform: [{ scaleY: WATER_ASPECT }] };
+  };
   return (
     <>
-      <View style={[styles.reflection, { width: size * 0.72, height: size * 0.5, left: size * 0.14, top: size * 0.8, borderRadius: size }]} />
-      <View style={[styles.ringOuter, { width: size * 1.1, height: size * 0.98, left: -size * 0.05, top: size * 0.35, borderRadius: size }]} />
-      <View style={[styles.ringInner, { width: size * 0.84, height: size * 0.74, left: size * 0.08, top: size * 0.49, borderRadius: size }]} />
+      <View style={[styles.reflection, ring(0.74, size * 0.07)]} />
+      <View style={[styles.ringOuter, ring(1.08)]} />
+      <View style={[styles.ringInner, ring(0.86)]} />
     </>
   );
 });
@@ -719,6 +736,9 @@ export default function Home() {
   });
   const [stage, setStage] = useState<Stage>('river');
   const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
+  // 拾ったことばの画面は、離れるときに消え終わったら外す。外さないと、次の動画が流れている間（2〜3秒）も
+  // 見えないキラキラと光のアニメーションが動き続け、動画の読み込みと重なってスマホで重かった（2026-10-05）
+  const [cloudUiOn, setCloudUiOn] = useState(true);
   useEffect(() => {
     if (MUSIC_FADE_MS[stage] !== undefined) ambientRef.current?.setScene(SCENE_OF[stage], MUSIC_FADE_MS[stage]);
   }, [stage]);
@@ -806,6 +826,7 @@ export default function Home() {
     if (clipRef.current !== clip) return;
     if (clip === 'toCloud' || clip === 'nightToCloud') {
       goStage('cloud');
+      setCloudUiOn(true);
       playClip('cloud');
       cloudUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
     } else if (clip === 'toRiver') {
@@ -900,6 +921,7 @@ export default function Home() {
     rise.set(0);
     appear.set(0);
     cloudUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    later(() => setCloudUiOn(false), UI_FADE_MS + 50);
     coverCloud.set(withTiming(1, { duration: COVER_IN_MS }));
     later(() => {
       if (stageRef.current === 'toRiver') playClip('toRiver');
@@ -913,6 +935,7 @@ export default function Home() {
     setNightFocus(word);
     goStage('toNight');
     cloudUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    later(() => setCloudUiOn(false), UI_FADE_MS + 50);
     coverCloud.set(withTiming(1, { duration: COVER_IN_MS }));
     later(() => {
       if (stageRef.current === 'toNight') playClip('toNight');
@@ -1001,7 +1024,7 @@ export default function Home() {
       </Animated.View>
 
       {/* 拾ったことば。空のループの上に重ねる（画面は切り替えない） */}
-      {(stage === 'cloud' || stage === 'toRiver' || stage === 'toNight') && (
+      {(stage === 'cloud' || ((stage === 'toRiver' || stage === 'toNight') && cloudUiOn)) && (
         <Animated.View style={[StyleSheet.absoluteFill, cloudUiStyle]} pointerEvents={stage === 'cloud' ? 'box-none' : 'none'}>
           <WordCloudOverlay width={width} height={height} onBack={backToRiver} onOpenArchive={goNight} />
         </Animated.View>
@@ -1066,9 +1089,10 @@ const styles = StyleSheet.create({
   haze: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(250,200,175,0.12)' },
   // 文字は15pxで並べてから縮めるので、泡より広い箱で折り返さないようにする
   textBox: { position: 'absolute', top: 0, bottom: 0, left: -110, right: -110, alignItems: 'center', justifyContent: 'center' },
-  reflection: { position: 'absolute', backgroundColor: 'rgba(255,226,196,0.05)' },
-  ringInner: { position: 'absolute', borderWidth: 1, borderColor: 'rgba(255,236,214,0.30)' },
-  ringOuter: { position: 'absolute', borderWidth: 1, borderColor: 'rgba(255,236,214,0.14)' },
+  reflection: { position: 'absolute', backgroundColor: 'rgba(255,230,205,0.07)' },
+  ringInner: { position: 'absolute', borderWidth: 1, borderColor: 'rgba(255,236,214,0.32)' },
+  ringOuter: { position: 'absolute', borderWidth: 1, borderColor: 'rgba(255,236,214,0.16)' },
+
   bubbleText: {
     color: '#fffaf0',
     textShadowColor: 'rgba(8,28,48,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
