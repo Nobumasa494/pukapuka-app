@@ -2,8 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
-  useSharedValue, useAnimatedStyle, useAnimatedProps, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI, Easing,
-  type SharedValue,
+  useSharedValue, useAnimatedStyle, useAnimatedProps, useAnimatedReaction, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI,
+  cancelAnimation, Easing, type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -210,6 +210,8 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   const dragY = useSharedValue(0);
   const chargeScale = useSharedValue(0);
   const chargeOpacity = useSharedValue(0);
+  // 押している時間の割合（0〜1、2秒で1）。強さと同じく時間に比例させる（chargeScale は見た目のための緩急つき）
+  const charge = useSharedValue(0);
   const pressStart = useRef<number>(0);
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
@@ -244,6 +246,8 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     chargeScale.set(0);
     chargeOpacity.set(withTiming(0.8, { duration: 200 }));
     chargeScale.set(withTiming(1, { duration: CHARGE_MAX }));
+    charge.set(0);
+    charge.set(withTiming(1, { duration: CHARGE_MAX, easing: Easing.linear }));
     setCharging(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPressStart(id);
@@ -263,6 +267,8 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     pressStart.current = 0;
     onPressEnd();
     const strength = elapsed < 200 ? 0.1 : Math.min(elapsed / CHARGE_MAX, 1);
+    // 離したら光の粒はその段で止める（振動もそれ以上は返さない）
+    cancelAnimation(charge);
     // 拾った泡は空へ昇るので、昇りきるのを待たずに流れから外す（待つと1.4秒間、後ろをせき止めた）
     lift();
     chargeOpacity.set(withTiming(0, { duration: 300 }));
@@ -343,7 +349,8 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
 
   return (
     <Animated.View
-      style={[styles.bubbleWrapper, { width: base, height: base }, posStyle]}
+      // 押している泡は手前に出す（光の粒が隣の泡の下に潜って、くすんで見えた）
+      style={[styles.bubbleWrapper, { width: base, height: base }, charging && styles.bubbleFront, posStyle]}
       onTouchStart={(e) => startPress(e.nativeEvent.touches[0]?.pageX, e.nativeEvent.touches[0]?.pageY)}
       onTouchMove={handleTouchMove}
       onTouchEnd={endPress}
@@ -374,6 +381,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
           </Animated.View>
         )}
         {rippling && <Ripple size={base} />}
+        {charging && <ChargeDots id={id} P={P} sim={sim} charge={charge} visible={chargeOpacity} />}
         <BubbleFace size={base} />
         <Animated.View pointerEvents="none" style={[styles.haze, { borderRadius: base / 2 }, hazeStyle]} />
         <View pointerEvents="none" style={styles.textBox}>
@@ -383,6 +391,75 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     </Animated.View>
   );
 });
+
+// 長押しの強さを、指で隠れない泡の上に5つの光の粒で見せる（2026-10-04、ユーザー指摘「リングが指で隠れて、どれくらい押したか分からない」）。
+// 粒は 0・0.4・0.8・1.2・1.6秒で1つずつ灯る。拾う音の高さ（floor(強さ×5) 段目）と同じ段なので、灯った数＝鳴る音の高さ。
+// 段が上がるたびに軽い振動を返し、画面を見なくても分かるようにする。
+// 泡と一緒に動く（指で引っぱる・ぷかぷか）が、大きさは泡の遠近に関係なく画面上で一定（1/s で打ち消す）
+const DOT_COUNT = 5;
+const DOT_SIZE = 7;
+const DOT_GAP = 6;
+const DOTS_WIDTH = DOT_COUNT * DOT_SIZE + (DOT_COUNT - 1) * DOT_GAP;
+// 指先より上に出す: 泡の中心から「半径＋24px」と 60px（iPhone で約9mm）の遠いほう。
+// 46px（約7mm）では、指先がタッチした所より上まで伸びたときにかかるおそれがあった
+const DOTS_ABOVE_RIM = 24;
+const DOTS_ABOVE_MIN = 60;
+
+const tickHaptic = (level: number) => {
+  if (level >= DOT_COUNT - 1) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  else Haptics.selectionAsync();
+};
+
+const ChargeDots = memo(function ChargeDots({ id, P, sim, charge, visible }: {
+  id: number;
+  P: PathData;
+  sim: SharedValue<SimBubble[]>;
+  charge: SharedValue<number>;
+  visible: SharedValue<number>;
+}) {
+  useAnimatedReaction(
+    () => Math.min(DOT_COUNT - 1, Math.floor(charge.value * DOT_COUNT)),
+    (level, prev) => {
+      if (prev !== null && level > prev) runOnJS(tickHaptic)(level);
+    },
+  );
+  const rowStyle = useAnimatedStyle(() => {
+    const b = findBubble(sim.value, id);
+    const size = b ? placeBubble(P, b).size : BASE;
+    const s = size / BASE;
+    const above = Math.max(size / 2 + DOTS_ABOVE_RIM, DOTS_ABOVE_MIN);
+    return {
+      opacity: Math.min(1, visible.value / 0.8),
+      transform: [{ translateY: -above / s }, { scale: 1 / s }],
+    };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[styles.dotsRow, rowStyle]}>
+      {Array.from({ length: DOT_COUNT }, (_, k) => <ChargeDot key={k} k={k} charge={charge} />)}
+    </Animated.View>
+  );
+});
+
+// 弱い段はゴールド、強い段ほどオレンジ（チャージリングと同じ色の流れ）
+const dotColor = (k: number) => `rgb(255,${Math.round(200 - (80 * k) / (DOT_COUNT - 1))},${Math.round(100 - (60 * k) / (DOT_COUNT - 1))})`;
+
+function ChargeDot({ k, charge }: { k: number; charge: SharedValue<number> }) {
+  const color = dotColor(k);
+  // 灯るときは 60ms でふわっと少し大きくなってから落ち着く
+  const litStyle = useAnimatedStyle(() => {
+    const a = Math.min(1, Math.max(0, (charge.value - k / DOT_COUNT) / 0.03));
+    const lit = k === 0 ? 1 : a;
+    return { opacity: lit, transform: [{ scale: 0.8 + 0.2 * lit + 0.35 * Math.sin(Math.PI * lit) }] };
+  });
+  return (
+    <View style={styles.dot}>
+      <View style={styles.dotGlow}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: color, borderRadius: DOT_SIZE }, litStyle]} />
+      </View>
+      <Animated.View style={[styles.dotCore, { backgroundColor: color }, litStyle]} />
+    </View>
+  );
+}
 
 // 見た目の部品は大きさ・言葉が変わったときだけ描き直す
 //
@@ -895,6 +972,21 @@ const styles = StyleSheet.create({
   bubbleClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
   uiLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10 },
   bubbleWrapper: { position: 'absolute', left: 0, top: 0 },
+  bubbleFront: { zIndex: 10 },
+  // 光の粒の列は泡の中心に置き、transform で上へずらす
+  dotsRow: {
+    position: 'absolute', left: BASE / 2 - DOTS_WIDTH / 2, top: BASE / 2 - DOT_SIZE / 2, width: DOTS_WIDTH, height: DOT_SIZE,
+    flexDirection: 'row', justifyContent: 'space-between',
+  },
+  // 灯っていない粒: 明るい水面・空でも見えるよう、暗い芯にクリーム色の縁
+  dot: {
+    width: DOT_SIZE, height: DOT_SIZE, borderRadius: DOT_SIZE / 2,
+    borderWidth: 1, borderColor: 'rgba(255,240,225,0.6)', backgroundColor: 'rgba(10,30,45,0.35)',
+  },
+  dotCore: { position: 'absolute', left: -1, top: -1, width: DOT_SIZE, height: DOT_SIZE, borderRadius: DOT_SIZE / 2 },
+  // 粒の周りの淡い光（灯った粒だけ）。不透明度は包む箱で決め、灯るアニメーションの不透明度と掛け合わせる
+  // 大きい（+8px・0.35）と茶色の円盤に見えて粒の輪郭がぼやけた
+  dotGlow: { position: 'absolute', left: -3, top: -3, width: DOT_SIZE + 4, height: DOT_SIZE + 4, opacity: 0.22 },
   bubble: {
     borderWidth: 1.4,
     borderColor: 'rgba(255,240,225,0.78)',
