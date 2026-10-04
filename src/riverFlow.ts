@@ -6,9 +6,22 @@ import { coverRect, type VideoRect } from './riverPath';
 // 流れの速さ（px/秒）。遠近は泡の大きさで出し、速さは奥でも手前の9割（奥で詰まらないように）
 const SPEED_NEAR = 32;
 const SPEED_FAR_RATIO = 0.9;
-// 泡は奥〜中ほど（川筋の最初の250px）の水面から浮かび上がる。奥の狭いS字だけから出すと一列に詰まり6個しか流れない
-const SPAWN_S_MAX = 250;
-const SPAWN_MARGIN = 1.25;
+// 泡は奥〜中ほど（川筋の最初の350px）の水面から浮かび上がる。奥の狭いS字だけから出すと一列に詰まり6個しか流れない。
+// 250px・間隔1.25倍では見える泡が平均8.9個で少なかった（2026-10-04、ユーザー「泡は多めで広がる感じに」）。
+// 350px・1.18倍で 11.7個・手前（画面の下半分）4.8 → 7.4個。重なる時間（7%）と詰まり（1秒以上止まる 10回/分）は変わらない（node で計測）
+const SPAWN_S_MAX = 350;
+const SPAWN_MARGIN = 1.18;
+// 拾って泡が減ったら、空いている水面からすぐ補う（続けて拾うと泡が一気に減って寂しい、2026-10-04）。
+// 流れている泡が REFILL_BELOW 個より少ないときだけ、川全体（画面下のヒント文の手前 REFILL_BOTTOM px まで）で
+// 置ける場所を REFILL_TRIES 倍探す。8個続けて拾っても 3.2個まで減っていたのが 8.6個までに、戻るまで 5〜8秒 → 1秒以内。
+// ふだん手前で湧くのは 8%（補わなくても5%）で、「奥から流れてくる」感じは保つ
+const REFILL_BELOW = 13;
+const REFILL_TRIES = 4;
+const REFILL_BOTTOM = 140;
+// 流れている泡はこれより増やさない。縦に長い画面は奥の川も長く見えるので、上限がないと 412×915 で最大29個になり、
+// 奥の狭いS字で列になって「流れずに詰まる」（ユーザーの実機、2026-10-04。3秒以上止まる泡 2.1 → 4.3個/分）。
+// 15個で 3秒以上止まる泡は 0.1個/分以下（3サイズとも）、SE の見える泡は 10.8個（前の版 8.9個）
+const MAX_LIVE = 15;
 // 泡が横に並ぶ位置（その場所で泡が使える横幅＝川幅の半分−泡の半径 に対する割合）。
 // 以前は「川幅の半分×0.42×奥ほど小さい係数」で、川の中央の狭い帯に集まり一列に見えた（横の散らばり 0.24 → 0.45）
 const LANES = [-0.95, 0.95, 0, -0.55, 0.55];
@@ -257,8 +270,15 @@ export function stepBubbles(P: PathData, bs: SimBubble[], dt: number) {
   return { bs: out, exited };
 }
 
-// 奥〜中ほどの水面に、ほかの泡と重ならない場所があれば新しい泡を出す
-export function spawnBubble(P: PathData, bs: SimBubble[], id: number, len: number): SimBubble | null {
+// 奥〜中ほどの水面に、ほかの泡と重ならない場所があれば新しい泡を出す。
+// sMax: 川筋のどこまでに出すか（px）。yMax: 泡の下の方がこの高さより下になる場所には出さない（画面下のヒント文の手前）。
+// tries: 置ける場所を何周探すか（1周＝横の列の数だけ、川筋の位置をランダムに選ぶ）。
+// 引数の既定値に定数を書かない（スマホの UI スレッドでは、既定値の中の定数が worklet に取り込まれず「Property 'SPAWN_S_MAX' doesn't exist」で止まった。
+// Web は UI スレッドに分けないので気づけない）。すべて呼ぶ側（spawnFlowing）が渡す
+export function spawnBubble(
+  P: PathData, bs: SimBubble[], id: number, len: number,
+  sMax: number, yMax: number, margin: number, tries: number,
+): SimBubble | null {
   'worklet';
   const placed: Placed[] = [];
   for (let k = 0; k < bs.length; k++) if (!bs[k].lifted) placed.push(placeBubble(P, bs[k]));
@@ -269,13 +289,14 @@ export function spawnBubble(P: PathData, bs: SimBubble[], id: number, len: numbe
     lanes[i] = lanes[j];
     lanes[j] = tmp;
   }
-  for (let li = 0; li < lanes.length; li++) {
-    const cand: SimBubble = { id, s: Math.random() * SPAWN_S_MAX, lane: lanes[li], age: 0, len, pressed: false, lifted: false, drift: 0 };
+  for (let li = 0; li < lanes.length * tries; li++) {
+    const cand: SimBubble = { id, s: Math.random() * Math.min(sMax, P.length), lane: lanes[li % lanes.length], age: 0, len, pressed: false, lifted: false, drift: 0 };
     const c = placeBubble(P, cand);
+    if (c.y + c.size * 0.35 > yMax) continue;
     let ok = true;
     for (let k = 0; k < placed.length; k++) {
       const o = placed[k];
-      if (Math.hypot(o.x - c.x, o.y - c.y) < ((o.size + c.size) / 2) * SPAWN_MARGIN) {
+      if (Math.hypot(o.x - c.x, o.y - c.y) < ((o.size + c.size) / 2) * margin) {
         ok = false;
         break;
       }
@@ -283,4 +304,15 @@ export function spawnBubble(P: PathData, bs: SimBubble[], id: number, len: numbe
     if (ok) return cand;
   }
   return null;
+}
+
+// ふだんは奥〜中ほどから、泡が減っていれば空いている水面のどこからでも、新しい泡を出す。
+// spawnBubble より後に書く（worklet は作られるときに中で使う関数を取り込むので、前に書くと「初期化前に参照」で画面が止まる）
+export function spawnFlowing(P: PathData, bs: SimBubble[], id: number, len: number): SimBubble | null {
+  'worklet';
+  let live = 0;
+  for (let k = 0; k < bs.length; k++) if (!bs[k].lifted) live++;
+  if (live >= MAX_LIVE) return null;
+  if (live >= REFILL_BELOW) return spawnBubble(P, bs, id, len, SPAWN_S_MAX, Infinity, SPAWN_MARGIN, 1);
+  return spawnBubble(P, bs, id, len, P.length, P.height - REFILL_BOTTOM, SPAWN_MARGIN, REFILL_TRIES);
 }

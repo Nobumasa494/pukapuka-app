@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -16,7 +16,7 @@ import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
-import { buildPathData, placeBubble, spawnBubble, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
+import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -107,8 +107,9 @@ const SURFACE_SEC = 1.2;
 const PREWARM_SEC = 30;
 const SPAWN_EVERY_MS = 250;
 // 泡を押さえている間は、ほかの泡の流れをこの割合までゆっくりにする（選んでいるあいだ慌てないように）。
+// 0.3 ではまだ慌てる（2026-10-04、ユーザー「止まってはいないけど、かなりゆっくり」）。0.12 で手前の泡は約4px/秒。
 // いきなり変えると止まったように見えるので、FLOW_EASE_SEC 秒くらいかけてなめらかに落とす・戻す
-const HOLD_FLOW_RATE = 0.3;
+const HOLD_FLOW_RATE = 0.12;
 const FLOW_EASE_SEC = 0.35;
 // 画面下のヒント文の手前で泡を消す
 const BOTTOM_UI = 60;
@@ -147,7 +148,7 @@ function prewarm(P: PathData) {
     const word = pickWordFrom(items, recent, (r) => {
       recent = r;
     });
-    const c = spawnBubble(P, bs, nextId++, word.length);
+    const c = spawnFlowing(P, bs, nextId++, word.length);
     if (c) {
       bs = [...bs, c];
       items = [...items, { id: c.id, word, bob: Math.random() * Math.PI * 2 }];
@@ -198,6 +199,8 @@ type BubbleProps = {
   onLift: (id: number) => void;
 };
 
+// 長押しのリングと光の粒を出すまでの時間（ms）。タップ（強さ0.1になる 200ms 未満）の多くはこれより短い
+const CHARGE_UI_DELAY_MS = 150;
 // 指でこれ以上引っぱったら、泡は水面を離れたとみなす（px）
 const LIFT_DRAG_PX = 20;
 
@@ -216,9 +219,16 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const liftedRef = useRef(false);
+  // 拾われた（離した）泡。空へ昇っている間にもう一度触れても、押したことにしない
+  const capturedRef = useRef(false);
   const [rippling, setRippling] = useState(false);
-  // 長押しのリング（SVG）は押している間だけ描く
+  // 長押しのリング（SVG）と光の粒は、CHARGE_UI_DELAY_MS 押し続けてから描く。
+  // すぐ離すタップでも作っていて、続けて拾うとリングと粒（アニメーションつきの部品6つ）の作成が重なりカクついた（2026-10-05）
   const [charging, setCharging] = useState(false);
+  const chargeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (chargeTimer.current) clearTimeout(chargeTimer.current);
+  }, []);
 
   // 位置・大きさ・透明度は UI スレッドで毎コマ、流れの計算結果（sim）から決める
   const posStyle = useAnimatedStyle(() => {
@@ -237,6 +247,9 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   const CHARGE_MAX = 2000;
 
   const startPress = (touchX?: number, touchY?: number) => {
+    // 押している最中にもう1本の指が触れた・拾われて昇っている泡に触れたときは数えない。
+    // 数えると、押している指の数（holds）が離しても0に戻らず、流れがゆっくり（0.12倍）のまま残って「詰まった」ように見える
+    if (pressStart.current !== 0 || capturedRef.current) return;
     pressStart.current = Date.now();
     if (touchX !== undefined) touchStartX.current = touchX;
     if (touchY !== undefined) touchStartY.current = touchY;
@@ -248,7 +261,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     chargeScale.set(withTiming(1, { duration: CHARGE_MAX }));
     charge.set(0);
     charge.set(withTiming(1, { duration: CHARGE_MAX, easing: Easing.linear }));
-    setCharging(true);
+    chargeTimer.current = setTimeout(() => setCharging(true), CHARGE_UI_DELAY_MS);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPressStart(id);
   };
@@ -265,6 +278,8 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     if (pressStart.current === 0) return;
     const elapsed = Date.now() - pressStart.current;
     pressStart.current = 0;
+    capturedRef.current = true;
+    if (chargeTimer.current) clearTimeout(chargeTimer.current);
     onPressEnd();
     const strength = elapsed < 200 ? 0.1 : Math.min(elapsed / CHARGE_MAX, 1);
     // 離したら光の粒はその段で止める（振動もそれ以上は返さない）
@@ -508,26 +523,22 @@ const BubbleFace = memo(function BubbleFace({ size }: { size: number }) {
   );
 });
 
-export default function Home() {
-  const { width, height } = useWindowDimensions();
-  const [captured, setCaptured] = useState<string | null>(null);
-  const captureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const addCapture = useMutation(api.captures.add);
-
-  const P = useMemo(() => buildPathData(width, height), [width, height]);
-
-  // 起動時は約30秒流した状態を最初の描画の前に計算して、開いた瞬間から川全体に泡があるようにする（同じ worklet を JS で実行）
-  const [initial] = useState(() => prewarm(buildPathData(width, height)));
-
-  // 流れの状態は UI スレッドの sim が持つ。React は「どの泡があるか」だけ（泡が出る・消えるときだけ描き直す）
-  const sim = useSharedValue<SimBubble[]>(initial.bs);
-  const time = useSharedValue(0);
-  const paused = useSharedValue(false);
-  // 指で押さえている泡の数と、いまの流れの速さの倍率（1=ふだん）
-  const holds = useSharedValue(0);
-  const flowRate = useSharedValue(1);
-  const [list, setList] = useState<ListItem[]>(initial.items);
-  const listRef = useRef<ListItem[]>(initial.items);
+// 川を流れる泡の一覧。泡が出る・消えるたびに描き直すのはこの層だけにする。
+// 以前は一覧を画面全体（Home）が持っていて、泡が出る・消える・「拾った」の表示が変わるたびに、背景・ボタン・重ねる画面まで
+// 描き直していた。拾うとすぐ泡を補うようにしてから、続けて拾うと描き直しが集中してスマホでカクついた（2026-10-05）
+const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise, paused, holds, flowRate, onCapture }: {
+  P: PathData;
+  initialItems: ListItem[];
+  sim: SharedValue<SimBubble[]>;
+  time: SharedValue<number>;
+  rise: SharedValue<number>;
+  paused: SharedValue<boolean>;
+  holds: SharedValue<number>;
+  flowRate: SharedValue<number>;
+  onCapture: (word: string, strength: number) => void;
+}) {
+  const [list, setList] = useState<ListItem[]>(initialItems);
+  const listRef = useRef<ListItem[]>(initialItems);
   const recentRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -570,7 +581,7 @@ export default function Home() {
       const bob = Math.random() * Math.PI * 2;
       runOnUI((pathData: PathData, bid: number, w: string, bb: number) => {
         'worklet';
-        const c = spawnBubble(pathData, sim.get(), bid, w.length);
+        const c = spawnFlowing(pathData, sim.get(), bid, w.length);
         if (!c) return;
         sim.set([...sim.get(), c]);
         runOnJS(onSpawned)(bid, w, bb);
@@ -609,6 +620,69 @@ export default function Home() {
     })(id);
   }, [sim]);
 
+  return (
+    <>
+      {list.map((w) => (
+        <Bubble
+          key={w.id}
+          id={w.id}
+          word={w.word}
+          bob={w.bob}
+          P={P}
+          sim={sim}
+          time={time}
+          rise={rise}
+          onCapture={onCapture}
+          onRemove={onRemove}
+          onPressStart={onPressStart}
+          onPressEnd={onPressEnd}
+          onLift={onLift}
+        />
+      ))}
+    </>
+  );
+});
+
+type ToastHandle = { show: (word: string) => void };
+
+// 画面下の「「〇〇」を拾った」（1.8秒）とヒント。表示が変わっても画面全体を描き直さないよう、自分で状態を持つ
+function CaptureToast({ ref }: { ref: React.Ref<ToastHandle> }) {
+  const [captured, setCaptured] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useImperativeHandle(ref, () => ({
+    show(word: string) {
+      setCaptured(word);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCaptured(null), 1800);
+    },
+  }), []);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  return captured ? (
+    <Text style={styles.capturedMsg}>「{captured}」を拾った</Text>
+  ) : (
+    <Text style={styles.hint}>気になる言葉をタップしてみてください</Text>
+  );
+}
+
+export default function Home() {
+  const { width, height } = useWindowDimensions();
+  const toastRef = useRef<ToastHandle>(null);
+  const addCapture = useMutation(api.captures.add);
+
+  const P = useMemo(() => buildPathData(width, height), [width, height]);
+
+  // 起動時は約30秒流した状態を最初の描画の前に計算して、開いた瞬間から川全体に泡があるようにする（同じ worklet を JS で実行）
+  const [initial] = useState(() => prewarm(buildPathData(width, height)));
+
+  // 流れの状態は UI スレッドの sim が持つ。React は「どの泡があるか」だけ（泡が出る・消えるときだけ描き直す）
+  const sim = useSharedValue<SimBubble[]>(initial.bs);
+  const time = useSharedValue(0);
+  const paused = useSharedValue(false);
+  // 指で押さえている泡の数と、いまの流れの速さの倍率（1=ふだん）
+  const holds = useSharedValue(0);
+  const flowRate = useSharedValue(1);
   // 背景の曲と拾ったときの音
   const ambientRef = useRef<Ambient | null>(null);
   const [muted, setMuted] = useState(false);
@@ -627,9 +701,7 @@ export default function Home() {
   const handleCapture = useCallback(
     async (word: string, strength: number) => {
       ambientRef.current?.chime(strength);
-      setCaptured(word);
-      if (captureTimer.current) clearTimeout(captureTimer.current);
-      captureTimer.current = setTimeout(() => setCaptured(null), 1800);
+      toastRef.current?.show(word);
       try {
         await addCapture({ word, strength });
       } catch {
@@ -911,31 +983,21 @@ export default function Home() {
       </Animated.View>
 
       <Animated.View style={[styles.bubbleClip, riseStyle]} pointerEvents={atRiver ? 'auto' : 'none'}>
-        {list.map((w) => (
-          <Bubble
-            key={w.id}
-            id={w.id}
-            word={w.word}
-            bob={w.bob}
-            P={P}
-            sim={sim}
-            time={time}
-            rise={rise}
-            onCapture={handleCapture}
-            onRemove={onRemove}
-            onPressStart={onPressStart}
-            onPressEnd={onPressEnd}
-            onLift={onLift}
-          />
-        ))}
+        <BubbleLayer
+          P={P}
+          initialItems={initial.items}
+          sim={sim}
+          time={time}
+          rise={rise}
+          paused={paused}
+          holds={holds}
+          flowRate={flowRate}
+          onCapture={handleCapture}
+        />
       </Animated.View>
 
       <Animated.View style={[styles.uiLayer, uiStyle]} pointerEvents="none">
-        {captured ? (
-          <Text style={styles.capturedMsg}>「{captured}」を拾った</Text>
-        ) : (
-          <Text style={styles.hint}>気になる言葉をタップしてみてください</Text>
-        )}
+        <CaptureToast ref={toastRef} />
       </Animated.View>
 
       {/* 拾ったことば。空のループの上に重ねる（画面は切り替えない） */}
