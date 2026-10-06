@@ -137,6 +137,11 @@ v18・v19 で「ルールはあるのに新しい物に当てはめ忘れて撮�
 - 作業用の静止画は Temp の `pk_tmp.png` を上書きで使い回し、報告後に消す
 - 動画は最新1本だけ Temp に残し、OK後に Documents へ。連番フォルダは MP4 にしたら消す。.blend は消さない
 - 消すのは自分が作った `pk_*` だけ
+- **.blend を保存したら、非公開リポジトリにも上げる**（2026-10-06、ユーザーが選んだ。パソコンが壊れても作り直せるように）
+  1. 保存は Poly Pizza の鍵を空にしてから（`copy=True` で保存し、終わったら戻す）
+  2. Blender で `scripts/island/blender/check_no_key.py` を実行し「ok」を確かめる
+  3. `scripts/backup-blend.sh` を実行（`Nobumasa494/pukapuka-blender` に**最新だけ**を上書きで上げる。古い版は残さない）
+  4. 最新のファイル名が変わったら（例：`pk_island_v7.blend`）、`backup-blend.sh` の `FILES` と `check_no_key.py` の `FILES` を書き換える
 
 ### 完了報告の形
 ```
