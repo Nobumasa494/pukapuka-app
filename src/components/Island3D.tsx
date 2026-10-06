@@ -152,8 +152,8 @@ const GLINT_TILE = 3.0; // 光のゆらぎの絵1枚が覆う長さ（m）
 const GLINT_ACROSS = 1.6; // 光のゆらぎの絵1枚が覆う幅（m）
 // 水の流れ：同じ絵を大きさと速さを変えて2枚重ねる。重なりが時間とともに変わり、ゆらいで見える
 // （1枚だけだと、同じ模様が同じ速さでまっすぐ動き、ベルトコンベアのように見えた。ユーザー「違和感ありすぎ」）
-const FLOW_A = { speed: 0.42, repeat: 1, opacity: 0.38 };
-const FLOW_B = { speed: 0.26, repeat: 0.62, opacity: 0.32, drift: 0.02 };
+const FLOW_A = { speed: 0.42, repeat: 1, opacity: 0.26 }; // 0.38 では水が白っぽく、海の色とつながらなかった
+const FLOW_B = { speed: 0.26, repeat: 0.62, opacity: 0.22, drift: 0.02 };
 
 const texSrc = (mod: number) => (Platform.OS === 'web' ? Asset.fromModule(mod).uri : (mod as unknown as string));
 const LM_SRC = [texSrc(require('../../assets/island/lm_ground.png')), texSrc(require('../../assets/island/lm_ground_early.png'))];
@@ -555,6 +555,7 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
       const g = globalThis as { __island?: unknown; __islandFrames?: number; __islandRig?: unknown };
       g.__islandFrames = (g.__islandFrames ?? 0) + 1;
       g.__islandRig = { dist: rig.dist, home: rig.home, x: rig.target.x, y: rig.target.y, z: rig.target.z };
+      (g as { __islandRigRef?: CameraRig }).__islandRigRef = rig; // 確かめ用：撮るスクリプトがカメラを動かす
       g.__island = layout.plants.map((p, i) => {
         tmp.v.set(p.x, groundY(p.x, p.z) + plantHeight(p) * scales[i] * 0.5, p.z).project(camera);
         return { word: p.word, x: ((tmp.v.x + 1) / 2) * size.width, y: ((1 - tmp.v.y) / 2) * size.height, scale: scales[i] };

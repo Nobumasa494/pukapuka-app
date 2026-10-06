@@ -7,6 +7,7 @@
 const AZ0 = 0.7;
 const CAMD = [Math.sin(AZ0), Math.cos(AZ0)] as const; // カメラのいる向き（50°）
 const TILT = 0.03; // 奥ほど高くする傾き（1m あたり）
+const LAND_MIN = 0.12; // 草地の高さの下限（なめらか。海面より上）
 
 export const P = (deg: number, r: number): [number, number] => {
   const a = (deg * Math.PI) / 180;
@@ -27,14 +28,15 @@ export const STREAMS: [number, number][][] = [
   [SPRING, P(225, 9.8), P(213, 7.6), P(196, 5.8), P(170, 4.6), P(132, 4.2), P(92, 4.3), POOL],
   [SPRING2, P(305, 9.2), P(318, 7.0), P(338, 5.4), P(8, 4.4), POOL],
   [POOL, P(45, 5.8), P(40, 7.2), POND],
-  [POND, P(31, 15.2), P(28, 18.2), P(26, 21.0), P(25, 23.5)],
+  [POND, P(33, 14.4), P(29, 16.3), P(33, 18.1), P(29, 19.9), P(31, 21.8), P(31, 23.5)], // 細く曲がりくねる（まっすぐ広い帯は不自然だった）
 ];
 const STREAM_WS: [number, number][] = [
   [0.28, 0.5],
   [0.2, 0.38],
   [0.52, 0.68],
-  [0.6, 0.95],
+  [0.32, 0.5],
 ];
+const WATER_PAD = 0.6; // 水の板は小川の幅よりこれだけ広い（縁は岸の地面の下。island_terrain.py と同じ）
 
 // 水面に貼る絵の場所（u＝道すじの始まりからの長さ m、v＝道すじからの横のずれ m。右が＋）。
 // きらめきの絵を流れの向きに貼り、下流へずらすのに使う（3D で動かすための計算。絵そのものは Blender）
@@ -69,13 +71,14 @@ const back = (x: number, z: number) => -(x * CAMD[0] + z * CAMD[1]);
 // 草地の高さ（island_terrain.py の meadow() と同じ）
 export function meadow(x: number, z: number): number {
   const dq2 = (x - POOL[0]) ** 2 + (z - POOL[1]) ** 2;
-  return (
+  const m =
     0.6 +
     0.2 * Math.sin(0.33 * x + 1.3) * Math.cos(0.29 * z - 0.4) +
     0.1 * Math.sin(0.71 * x - 0.47 * z + 2.0) +
     TILT * back(x, z) -
-    BASIN * Math.exp(-dq2 / BASIN_R ** 2)
-  );
+    BASIN * Math.exp(-dq2 / BASIN_R ** 2);
+  // 海面より少し上より下がらない、なめらかな下限（island_terrain.py と同じ）
+  return 0.5 * (m + LAND_MIN + Math.sqrt((m - LAND_MIN) ** 2 + 0.01));
 }
 
 function pondR(a: number): number {
@@ -114,7 +117,7 @@ export function streamGap(x: number, z: number): number {
 export const TREE_R = 3.0;
 export function plantRoom(x: number, z: number): number {
   return Math.min(
-    streamGap(x, z) - 0.25,
+    streamGap(x, z) - WATER_PAD - 0.15,
     Math.hypot(x - POOL[0], z - POOL[1]) - POOL_R - 0.3,
     (pondU(x, z) - 1) * POND_R - 0.3,
     Math.hypot(x - SPRING[0], z - SPRING[1]) - 1.6,

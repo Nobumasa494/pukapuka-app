@@ -9,8 +9,9 @@
 import bpy, bmesh, math, mathutils, os, time
 
 LM_S = 29.0     # 絵が覆う範囲（中心から ±29m。地面の端まで入る）
-RES = 512
+RES = 1024   # 512（1ピクセル約11cm）では、小川の岸の影がにじんで黒いふちになった
 SAMPLES = 64
+LM_FLOOR = 0.32   # 日なた（約1.1）の約3割
 OUT = r'\\wsl.localhost\Ubuntu\home\Nobumasa494\pukapuka-app\assets\island'
 sc = bpy.data.scenes['IslandV4']
 KEY = mathutils.Vector(bpy.data.scenes['Scene']['island_key_dir']).normalized()
@@ -76,7 +77,8 @@ def bake(obj_name, file_name):
     # 明るさを半分にして 8bit で保存（アプリで 2 倍に戻す）
     px = list(img.pixels)
     for i in range(0, len(px), 4):
-        px[i], px[i + 1], px[i + 2] = px[i] * 0.5, px[i + 1] * 0.5, px[i + 2] * 0.5
+        # 影の明るさの下限（LM_FLOOR）。ガマ・岩のそばの影が真っ黒に焼け、池の縁に黒い塊が出た（木・植物の bake_faces.py の下限と同じ考え）
+        px[i], px[i + 1], px[i + 2] = [max(v, LM_FLOOR) * 0.5 for v in px[i:i + 3]]
     out = bpy.data.images.new(file_name + '_8bit', RES, RES)
     out.pixels = px
     out.filepath_raw = os.path.join(OUT, file_name + '.png')

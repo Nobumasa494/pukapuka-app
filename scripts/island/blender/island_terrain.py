@@ -11,6 +11,7 @@ MEADOW_R = 10.3          # 言葉の植物が育つ草地（ここは景色を�
 AZ0 = 0.7
 CAMD = (math.sin(AZ0), math.cos(AZ0))  # カメラのいる向き（50°）
 TILT = 0.03              # 奥ほど高くする傾き（1m あたり）
+LAND_MIN = 0.12          # 草地の高さの下限（なめらか）。海面 0 と海の波 0.035 より上
 FRONT_BULGE = 0.12       # 手前（50°）に島を広げる量（0.24 では左手前に深い入り江ができた）
 
 
@@ -31,11 +32,13 @@ STREAMS = [
     [SPRING, P(225, 9.8), P(213, 7.6), P(196, 5.8), P(170, 4.6), P(132, 4.2), P(92, 4.3), POOL],
     [SPRING2, P(305, 9.2), P(318, 7.0), P(338, 5.4), P(8, 4.4), POOL],
     [POOL, P(45, 5.8), P(40, 7.2), POND],
-    [POND, P(31, 15.2), P(28, 18.2), P(26, 21.0), P(25, 23.5)],  # v7: 池 → 浜 → 海（たまる一方にしない。拾った言葉は、やがて海へ帰る）
+    # v7: 池 → 浜 → 海（たまる一方にしない。拾った言葉は、やがて海へ帰る）。細く曲がりくねらせる（まっすぐ広い帯は不自然だった）
+    [POND, P(33, 14.4), P(29, 16.3), P(33, 18.1), P(29, 19.9), P(31, 21.8), P(31, 23.5)],
 ]
 STREAM = STREAMS[0]      # 前の版との互換
-STREAM_WS = [(0.28, 0.5), (0.2, 0.38), (0.52, 0.68), (0.6, 0.95)]  # 道すじごとの、始まり・終わりの半分の幅
+STREAM_WS = [(0.28, 0.5), (0.2, 0.38), (0.52, 0.68), (0.32, 0.5)]  # 道すじごとの、始まり・終わりの半分の幅
 POND_LEVEL = 0.055       # 池の水面（海の波 0.035 より上）
+WATER_PAD = 0.6          # 水の板を、小川の幅よりこれだけ広く作る（縁は岸の地面の下に隠れる）
 
 
 def ss(a, b, x):
@@ -57,8 +60,11 @@ def back(x, z):
 def meadow(x, z):
     # 草地のゆるい起伏（±0.3 くらい）と、奥ほど少し高い傾き。v7: 淵のまわりはゆるいくぼ地（水が集まる所）
     dq2 = (x - POOL[0]) ** 2 + (z - POOL[1]) ** 2
-    return (0.6 + 0.2 * math.sin(0.33 * x + 1.3) * math.cos(0.29 * z - 0.4) + 0.1 * math.sin(0.71 * x - 0.47 * z + 2.0)
-            + TILT * back(x, z) - BASIN * math.exp(-dq2 / BASIN_R ** 2))
+    m = (0.6 + 0.2 * math.sin(0.33 * x + 1.3) * math.cos(0.29 * z - 0.4) + 0.1 * math.sin(0.71 * x - 0.47 * z + 2.0)
+         + TILT * back(x, z) - BASIN * math.exp(-dq2 / BASIN_R ** 2))
+    # 海面より少し上（LAND_MIN）より下がらない、なめらかな下限。島の手前は傾きで低く、海面より低いくぼみに海が見えて
+    # 草地に青い穴・河口のまわりに大きな入り江ができた（2026-10-07）
+    return 0.5 * (m + LAND_MIN + math.sqrt((m - LAND_MIN) ** 2 + 0.01))
 
 
 def _seg(px, pz, ax, az, bx, bz):
@@ -141,17 +147,20 @@ def stream_level(prog, k=0):
     return L[i] * (1 - t) + L[i + 1] * t
 
 
-def height(x, z, carve=True):
+def height(x, z, carve=True, river=True):
+    # carve=False：小川と淵を掘らない（最初のころ）。river=False：池から海へ出る川も掘らない（溝を掘る前の地面の高さを知りたいとき）
     r = math.hypot(x, z)
     a = math.atan2(z, x)
     u = r / (R_ISLAND * shore(a))
     h = base_height(x, z)
-    if True:
-        # 小川：水面より少し低く掘る。岸はなだらかに。池から海へ出る川（3）は、最初のころの地面にも掘る（いつも流れている）
-        d, prog, k = stream_near(x, z) if carve else stream_near(x, z, (3,))
+    if carve or river:
+        # 小川：水面より少し低く掘る。池から海へ出る川（3）は、最初のころの地面にも掘る（いつも流れている）
+        d, prog, k = stream_near(x, z, None if carve else (3,)) if river else stream_near(x, z, (0, 1, 2))
         w = stream_w(prog, k)
-        kk = ss(w + (2.2 if k == 3 else 0.9), w * 0.7, d)  # 海へ出る川は谷を広く（深い溝に見えないように）
-        bed = stream_level(prog, k) - 0.1
+        # 岸は狭く・溝は浅く（水面の 0.07 下まで）。水の板は溝より広く（WATER_PAD）して、岸の地面で縁を隠す
+        # （溝を w+0.9 まで掘ると、水の板の外に斜面がむき出しになり、深い日陰が黒く焼けて、水が浮いた板に見えた）
+        kk = ss(w + 0.55, w * 0.8, d)
+        bed = stream_level(prog, k) - 0.07
         h = h * (1 - kk) + min(h, bed) * kk
     if carve:
         # 淵

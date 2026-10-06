@@ -82,7 +82,10 @@ for si, S in enumerate(T['STREAMS']):
             pts.append((ax + (bx - ax) * t, az + (bz - az) * t))
     pts.append(S[-1])
     # 池と淵の中には帯を入れない（縁で終える）
-    pts = [q for q in pts if math.hypot(q[0] - PX, q[1] - PZ) > T['POND_R'] - 0.2 and math.hypot(q[0] - QX, q[1] - QZ) > T['POOL_R'] - 0.25]
+    pts = [q for q in pts if T['pond_u'](*q) > 0.95 and math.hypot(q[0] - QX, q[1] - QZ) > T['POOL_R'] - 0.25]
+    if si == 3:
+        # 海へ出る川の水の帯は、浜の手前で終える。そこから先は溝が海面より下なので、海の水そのものが入り込む（本物の河口と同じ）
+        pts = [q for q in pts if T['height'](q[0], q[1], False, False) > 0.12]  # 溝を掘る前の地面の高さで見る
     for _ in range(8):  # 細かくしたので、ならす回数も増やす（角を丸める）
         pts = [pts[0]] + [((pts[i - 1][0] + 2 * pts[i][0] + pts[i + 1][0]) / 4, (pts[i - 1][1] + 2 * pts[i][1] + pts[i + 1][1]) / 4)
                           for i in range(1, len(pts) - 1)] + [pts[-1]]
@@ -95,16 +98,33 @@ for si, S in enumerate(T['STREAMS']):
         L = math.hypot(tx, tz) or 1
         nx, nz = -tz / L, tx / L
         pr = i / (N - 1)
-        w = T['stream_w'](pr, si) * (1 + 0.12 * math.sin(i * 0.75))
+        w = T['stream_w'](pr, si) * (1 + 0.12 * math.sin(i * 0.75)) + T['WATER_PAD']  # 溝より広く。縁は岸の地面の下に隠れる
         y = T['stream_level'](pr, si) + 0.03
-        rows.append([bm.verts.new((x + nx * w * s_, -(z + nz * w * s_), y + 0.012 * rnd.uniform(-1, 1))) for s_ in (-1, 0, 1)])
+        row = []
+        for s_ in (-1, 0, 1):
+            ex, ez = x + nx * w * s_, z + nz * w * s_
+            # 縁は、その場所の地面より少し下に（斜面を横切る所で、低い側の縁が宙に浮かないように）。真ん中は水面の高さ
+            yy = y if s_ == 0 else min(y, T['height'](ex, ez) - 0.02)
+            row.append(bm.verts.new((ex, -ez, yy + 0.012 * rnd.uniform(-1, 1))))
+        rows.append(row)
     for i in range(N - 1):
         a_, b_ = rows[i], rows[i + 1]
         for k in range(2):
             bm.faces.new((a_[k], a_[k + 1], b_[k + 1]))
             bm.faces.new((a_[k], b_[k + 1], b_[k]))
 stream = finish('island__stream', bms['island__stream'], lambda p: [v * (1 + rnd.uniform(-0.05, 0.05)) for v in mix(W1, W2, rnd.random() * 0.6)], W)
-finish('island__river', bms['island__river'], lambda p: [v * (1 + rnd.uniform(-0.05, 0.05)) for v in mix(W1, W2, rnd.random() * 0.6)], W)
+SEA_NEAR = l2('#5aaebb')  # 海の浅い所の色（world_colors.py の NEAR に近い）
+
+
+def river_col(p):
+    # 海へ出る川は、下流ほど海の浅い所の色へ（白っぽい小川の先に急に濃い海が入り、つながって見えなかった）
+    c = p.center
+    _, prog, _k = T['stream_near'](c.x, -c.y, (3,))
+    base = mix(W1, W2, rnd.random() * 0.6)
+    return [v * (1 + rnd.uniform(-0.05, 0.05)) for v in mix(base, SEA_NEAR, T['ss'](0.25, 0.9, prog))]
+
+
+finish('island__river', bms['island__river'], river_col, W)
 
 
 def disc(name, cx, cz, rad, y, deep, mid, nseg=24, coll=W):
