@@ -1,7 +1,7 @@
 # pukapuka Blender スキル
 
 pukapukaアプリ用の背景アニメーション（川・星）をBlenderで作るためのスキル。
-**世界観・カラーパレットは `/pukapuka-design`。このスキルは Blender の技術メモ。**
+**世界観・カラーパレットは `/pukapuka-design`。このスキルは Blender の技術メモ。島（朝）の3D の部品と素材は `/pukapuka-island`。**
 **採用されなかった版や古い数値は `HISTORY.md`（2026-10-03 までの旧 SKILL.md 全文）。必要なときだけ読む。**
 
 ---
