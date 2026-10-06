@@ -784,4 +784,4 @@ Capture {
 ### 作ったものを守る
 
 - Blender の .blend は、パソコンの中にしかない（`C:\Users\nobu2\Documents\pukapuka_blender\`）。リポジトリのスクリプトだけでは、素材の取り込み・塗り直し・空と海は作り直せない
-- .blend をクラウド（OneDrive・Google ドライブ）にも置く（案）。GitHub に入れると、直すたびに約29MBずつ増える
+- .blend の最新だけを、非公開のリポジトリ `Nobumasa494/pukapuka-blender` に置く（決定 2026-10-06）。古い版は残さず上書きするので、大きさは増えない。保存したら `scripts/backup-blend.sh` で上げる

@@ -22,7 +22,7 @@ pukapuka の4つ目の画面「島（朝）」を考えて作るためのスキ�
   4. 島の曲（`/pukapuka-music`）、川 ⇄ 島の動画（`/pukapuka-blender`。静止画で OK のあと1回だけ）
 - **Blender の準備**：Blender を開き、MCP のアドオンで接続する。`pk_island_v6.blend` を開く。Poly Pizza を使うときだけ鍵を入れ直す（保存の前に必ず空に）
 - **スマホで見るとき**：`npx expo start --tunnel --port 8081 --clear`（前のチャットのサーバーは時間切れで止まった）
-- **.blend はパソコンの中だけ**。スクリプトだけでは素材・空・海を作り直せない。クラウドへのコピーをユーザーにすすめた（まだしたか分からない）
+- **.blend の写しは非公開リポジトリ `Nobumasa494/pukapuka-blender`**（最新だけ。2026-10-06）。.blend を保存したら `scripts/backup-blend.sh` で上げる（手順は `/pukapuka-blender` の「ファイル」）
 
 - **状態: 3D の試作（2026-10-05〜06。main に入った）**。仮のデータで、使い始めてからの4つの時期（1回目・1週間・1か月・数か月）の島を見比べられる
 - 入口: 川の画面の右上「振り返る」の下の「**島（試作）**」（仮の入口。試作が終わったら消す。`src/app/index.tsx` の `islandBtn`）
