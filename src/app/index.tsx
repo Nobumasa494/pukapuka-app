@@ -9,7 +9,7 @@ import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { getRandomWords } from '../words';
@@ -1003,6 +1003,10 @@ export default function Home() {
         <Pressable style={styles.archiveBtn} hitSlop={16} onPress={startTransition}>
           <Text style={styles.archiveBtnText}>振り返る</Text>
         </Pressable>
+        {/* 島の3D試作への仮の入口（試作が終わったら消す） */}
+        <Pressable style={styles.islandBtn} hitSlop={12} onPress={() => router.push('/island')}>
+          <Text style={styles.archiveBtnText}>島（試作）</Text>
+        </Pressable>
       </Animated.View>
 
       <Animated.View style={[styles.bubbleClip, riseStyle]} pointerEvents={atRiver ? 'auto' : 'none'}>
@@ -1101,6 +1105,7 @@ const styles = StyleSheet.create({
   },
   wordmark: { position: 'absolute', top: 56, left: 20, fontSize: 20, fontStyle: 'italic', color: 'rgba(255,246,232,0.85)', textShadowColor: 'rgba(120,60,40,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4, zIndex: 10 },
   archiveBtn: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
+  islandBtn: { position: 'absolute', top: 90, right: 20, zIndex: 10 },
   soundBtn: { position: 'absolute', bottom: 34, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
   soundIconOff: { color: 'rgba(255,246,232,0.35)' },

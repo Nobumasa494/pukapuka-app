@@ -173,6 +173,8 @@ pukapukaアプリのUI/UX設計・実装を行うためのスキル。デザイ�
   - 画面下に凡例（色の点＋カテゴリ名、bottom 100）とヒント「文字の大きさ＝拾った回数　キラキラ・光＝気持ちの強さ」（bottom 76、常に表示）。ヒントは SE で1行に収まる長さにする（「キラキラと光の広がり」だと端が切れかけた）
   - 本物の記録（`captures.listByUser` → `aggregate()`）にはまだつないでいない。今は仮の記録 `SAMPLE_CAPTURES`（`src/sampleCaptures.ts`）を `aggregate()` したもの。ふりかえりと同じ記録を使うので、タップした言葉が星座にある
 
+### 島（朝）— 3D の試作中。デザインと作り方は `/pukapuka-island`
+
 ### ふりかえり（星座）— `src/components/NightOverlay.tsx`（川の画面に重ねる）
 - 背景は Blender の夜空の静止画 `night_bg.jpg`（深い藍・星・天の川、下に木の先と地平線。カメラはワードクラウドの空より前へ進んで見上げた位置）。作り方は `/pukapuka-blender`
 - **星座（共起ネットワーク）— 2026-10-04 仮の記録で実装**: 計算は `src/constellation.ts`（`cooccurrence` → `selectConstellation` → `layoutConstellation`）、式は SPEC。期間は `src/period.ts`（拾ったことばでも使う予定）
