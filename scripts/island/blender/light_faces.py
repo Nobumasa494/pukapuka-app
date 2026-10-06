@@ -16,6 +16,7 @@ GROUND_COLOR = (0.62, 0.66, 0.50)  # 下からの照り返し（草の色）
 AMB_K = 0.52                    # 空からの光の強さ
 AO_RAYS = 10                    # まわりの開け具合を測る光線の数
 AO_DIST = 2.2                   # この距離までの物で、空の光がさえぎられる
+SHADOW_KEEP = 0.4               # 影の中でも日なたの光を少し残す（v7。木の影が地面に硬い暗い三角になった）
 
 
 def build_bvh(objs):
@@ -73,7 +74,7 @@ def light_objects(objs, occluders, sun_dir):
             sun = 0.0
             if ndl > 0:
                 sh = tree.ray_cast(c + n * eps, L, 80.0)
-                sun = ndl if sh[0] is None else 0.0
+                sun = ndl if sh[0] is None else ndl * SHADOW_KEEP
             # 空の光（まわりの開け具合）
             open_ = 0
             dirs = hemisphere(n, AO_RAYS, rnd)

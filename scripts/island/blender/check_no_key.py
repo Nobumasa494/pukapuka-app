@@ -3,7 +3,7 @@
 import bpy, os, zstandard
 
 DIR = r"C:\Users\nobu2\Documents\pukapuka_blender"
-FILES = ['pk_island_v6.blend', 'pk_island_parts_v3.blend', 'pk_river_v21b_far_ridges.blend', 'pk_pool_v1.blend', 'pk_night_v1.blend']
+FILES = ['pk_island_v7.blend', 'pk_island_parts_v3.blend', 'pk_river_v21b_far_ridges.blend', 'pk_pool_v1.blend', 'pk_night_v1.blend']
 keys = {getattr(s, 'blendermcp_polypizza_api_key', '') for s in bpy.data.scenes} - {''}
 if not keys:
     print('このセッションに鍵がない。鍵を入れたファイルを開いてから実行する')

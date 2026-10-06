@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
+import { Asset } from 'expo-asset';
 import * as THREE from 'three';
 import type { SharedValue } from 'react-native-reanimated';
 import type { IslandLayout, Plant } from '../islandLayout';
+import { flowUV, meadow } from '../islandTerrain';
 import { CATEGORY_COLOR } from '../wordCloud';
 import { ISLAND_KIT, type KitPart } from '../islandKit';
 
-// 島（朝）の3D（2026-10-05）。見えるものはすべて Blender で作った形と、Blender で焼いた色（光と影）だけ。
-// 島の地面・景色（林・池・岩・飛び石）・海・空・太陽・言葉の植物・根もとの影・種の光・選んだ印の輪、どれも src/islandKit.ts から。
+// 島（朝）の3D（2026-10-05、v7 2026-10-06）。見えるものはすべて Blender で作った形と、Blender で焼いた色（光と影）だけ。
+// 島の地面・景色（林・岩・野の花）・池・淵・小川・湧き水・水たまり・海・空・太陽・遠くの山と河口・言葉の植物・根もとの影・種の光・選んだ印の輪、
+// どれも src/islandKit.ts から（Blender: pk_island_v7.blend、書き出しは scripts/island/blender/export_kit.py）。
+// 水の様子は時期で出し分ける（layout.water）：none＝溝のない地面だけ、puddles＝水たまりと湧き水、streams＝溝のある地面と小川・淵
 // アプリは光の計算をせず（MeshBasic）、形も作らない。回す・寄る・歩く・植物に触れる・種が降りる、の動きだけをアプリで行う。
 // 言葉の植物は部品ごとに InstancedMesh 1つで描く。何も動いていないときは描かない（frameloop="demand"）
 
@@ -35,9 +39,12 @@ const FOV = 45;
 const TILT = 0.09;
 const AZ0 = 0.7;
 const EL0 = 0.3;
-// 最初に見せる範囲の半径：草地（言葉の植物が育つ所）全体と、その奥の林が入る
-const FRAME_MIN = 7.5;
-const FRAME_MAX = 12;
+// 最初に見せる範囲の半径：草地（言葉の植物が育つ所）全体と、その奥の林が入る。
+// v7: Blender の配置図の開いたとき（距離 42、縦長 390×844）が範囲 約8
+const FRAME_MIN = 8;
+const FRAME_MAX = 9;
+// 見る点：ワクワクの木の根もとの少し上
+const LOOK_Y = meadow(0, 0) + 0.6;
 
 // 範囲（半径 extent）が横に収まる距離。縦長の画面では横の画角が狭いので、横で決まる
 function frameDist(extent: number, aspect: number): number {
@@ -53,21 +60,20 @@ export function makeRig(): CameraRig {
     dist: home * 1.25, // 開いたとき、少し遠くから近づく
     goalDist: home,
     home,
-    target: new THREE.Vector3(0, 0.6, 0),
-    goalTarget: new THREE.Vector3(0, 0.6, 0),
+    target: new THREE.Vector3(0, LOOK_Y, 0),
+    goalTarget: new THREE.Vector3(0, LOOK_Y, 0),
     tap: null,
     reset: false,
   };
 }
 
-export const distLimits = (rig: CameraRig) => [DIST_MIN, rig.home * 1.5] as const;
+// 引きで見られるよう、全体が見える距離の 2 倍まで離れられる（v7）
+export const distLimits = (rig: CameraRig) => [DIST_MIN, rig.home * 2] as const;
 
 // ---- 地面の高さ ----
-// 島の地形は Blender で作った（scripts/island/blender/island_terrain.py）。言葉の植物が育つ草地（半径 7 まで）の高さだけをここで計算する。
-// 式は island_terrain.py の meadow() と必ず同じにする（違うと植物が浮く・埋まる）
-function groundY(x: number, z: number): number {
-  return 0.6 + 0.2 * Math.sin(0.33 * x + 1.3) * Math.cos(0.29 * z - 0.4) + 0.1 * Math.sin(0.71 * x - 0.47 * z + 2.0);
-}
+// 島の地形は Blender で作った（scripts/island/blender/island_terrain.py）。言葉の植物が育つ草地の高さだけを、
+// 同じ式の src/islandTerrain.ts の meadow() で計算する（違うと植物が浮く・埋まる）
+const groundY = meadow;
 
 // ---- Blender の部品を読む ----
 
@@ -135,12 +141,49 @@ function geo(k: KitPart): THREE.BufferGeometry {
   return g;
 }
 
+// ---- 光の絵と、流れる水（試し 2026-10-06：川の画面に近い質にする）----
+// 地面：光を焼く前の元の色（三角形ごと）× Blender の Cycles で焼いた光の絵（scripts/island/blender/bake_lightmap.py）。
+//   絵は上から見た向き。位置 (x, z) から絵の場所を出す（bake_lightmap.py の LM_S と同じ）。明るさは半分で入っているので 2 倍に戻す
+// 水：元の水面に、Blender で作ったきらめきの絵（water_glint.py）を足し合わせ、下流へゆっくりずらす（絵は Blender、ずらす動きはアプリ）
+const LM_S = 29;
+const LM_GAIN = 2 * 1.15; // 2 倍に戻す × 明るさ（前の三角形ごとの光の草地と同じ明るさになるよう、ブラウザで撮った色を数値で比べて合わせた）
+const WATER_FPS = 15; // 水が流れるので、島を見ている間は1秒にこの回数だけ描く（60回より電池を食わない）
+const GLINT_TILE = 3.0; // 光のゆらぎの絵1枚が覆う長さ（m）
+const GLINT_ACROSS = 1.6; // 光のゆらぎの絵1枚が覆う幅（m）
+// 水の流れ：同じ絵を大きさと速さを変えて2枚重ねる。重なりが時間とともに変わり、ゆらいで見える
+// （1枚だけだと、同じ模様が同じ速さでまっすぐ動き、ベルトコンベアのように見えた。ユーザー「違和感ありすぎ」）
+const FLOW_A = { speed: 0.42, repeat: 1, opacity: 0.38 };
+const FLOW_B = { speed: 0.26, repeat: 0.62, opacity: 0.32, drift: 0.02 };
+
+const texSrc = (mod: number) => (Platform.OS === 'web' ? Asset.fromModule(mod).uri : (mod as unknown as string));
+const LM_SRC = [texSrc(require('../../assets/island/lm_ground.png')), texSrc(require('../../assets/island/lm_ground_early.png'))];
+const GLINT_SRC = texSrc(require('../../assets/island/water_glint.png'));
+
+function withUV(k: KitPart, uvOf: (x: number, z: number) => [number, number]): THREE.BufferGeometry {
+  const g = geo(k).clone();
+  const pos = g.getAttribute('position');
+  const uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    const [u, v] = uvOf(pos.getX(i), pos.getZ(i));
+    uv[i * 2] = u;
+    uv[i * 2 + 1] = v;
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return g;
+}
+const planarLM = (x: number, z: number): [number, number] => [(x + LM_S) / (2 * LM_S), (-z + LM_S) / (2 * LM_S)];
+const streamUV = (ks: number[]) => (x: number, z: number): [number, number] => {
+  const [a, c] = flowUV(x, z, ks);
+  return [a / GLINT_TILE, c / GLINT_ACROSS + 0.5];
+};
+
 // ---- 言葉の植物 ----
 // 種類ごとの部品（Poly Pizza の素材を Blender で塗り直し、光を焼いたもの）
 //   base＝葉・幹など（焼いた色のまま）、accent＝花びら・実（白で焼いてある。種類の色を掛ける）
-type Kind = 'sprout' | 'flower' | 'grass' | 'bush' | 'tree_small' | 'tree_big';
+type Kind = 'sprout' | 'flower' | 'grass' | 'bush' | 'tree_small' | 'tree_big' | 'fruitbush';
 const KIND_OF: Record<Plant['category'], Kind> = { emotion: 'flower', body: 'grass', situation: 'bush', value: 'tree_small', curiosity: 'tree_big' };
-const KINDS: Kind[] = ['sprout', 'flower', 'grass', 'bush', 'tree_small', 'tree_big'];
+// fruitbush（実のなる低木）は6つ目の種類「していること」用（言葉の一覧に足したら KIND_OF に入れる）
+const KINDS: Kind[] = ['sprout', 'flower', 'grass', 'bush', 'tree_small', 'tree_big', 'fruitbush'];
 const PARTS_OF = Object.fromEntries(
   KINDS.map((kind) => [kind, (Object.keys(ISLAND_KIT) as KitPart[]).filter((k) => k.startsWith(kind + '__'))]),
 ) as Record<Kind, KitPart[]>;
@@ -175,7 +218,8 @@ function colorFor(part: KitPart, p: Plant): THREE.Color {
   // ワクワクの木の実は金色（好奇心の色だけだと白っぽく、雪のように見えた）。強く拾うほど濃い金
   if (part.endsWith('__accent')) return p.category === 'curiosity' ? GOLD.clone().lerp(tint(p), 0.2).multiplyScalar(0.85 + 0.25 * p.avgStrength) : tint(p);
   const hasAccent = PARTS_OF[kind].some((k) => k.endsWith('__accent'));
-  return hasAccent ? WHITE : WHITE.clone().lerp(tint(p), 0.28);
+  // 葉に混ぜる種類の色は 13% まで（28% では緑が灰色に濁った。補色に近い色を混ぜると濁る。Blender の配置図と同じ割合）
+  return hasAccent ? WHITE : WHITE.clone().lerp(tint(p), 0.13);
 }
 
 // ---- 場面 ----
@@ -213,6 +257,53 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
   const lastSelected = useRef<string | null>(null);
 
   rig.invalidate = invalidate;
+
+  // 光の絵（地面）と、きらめきの絵（水）
+  const [lmGround, lmEarly] = useLoader(THREE.TextureLoader, LM_SRC);
+  const glintBase = useLoader(THREE.TextureLoader, GLINT_SRC);
+  const look = useMemo(() => {
+    for (const t of [lmGround, lmEarly]) {
+      t.colorSpace = THREE.NoColorSpace;
+      t.needsUpdate = true;
+    }
+    const layer = (repeat: number) => {
+      const t = glintBase.clone();
+      t.colorSpace = THREE.NoColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(repeat, repeat);
+      t.needsUpdate = true;
+      return t;
+    };
+    const glintA = layer(FLOW_A.repeat);
+    const glintB = layer(FLOW_B.repeat);
+    const pondA = layer(0.8);
+    const pondB = layer(0.5);
+    const glintMat = (map: THREE.Texture, opacity: number) =>
+      new THREE.MeshBasicMaterial({ map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+    return {
+      ground: withUV('island__ground_albedo', planarLM),
+      early: withUV('island__ground_early_albedo', planarLM),
+      groundMat: new THREE.MeshBasicMaterial({ vertexColors: true, map: lmGround, color: new THREE.Color(LM_GAIN, LM_GAIN, LM_GAIN) }),
+      earlyMat: new THREE.MeshBasicMaterial({ vertexColors: true, map: lmEarly, color: new THREE.Color(LM_GAIN, LM_GAIN, LM_GAIN) }),
+      stream: withUV('island__stream', streamUV([0, 1, 2])),
+      river: withUV('island__river', streamUV([3])),
+      pond: withUV('island__pond', (x, z) => [x / 5, z / 5]),
+      pool: withUV('island__pool', (x, z) => [x / 5, z / 5]),
+      glintA,
+      glintB,
+      pondA,
+      pondB,
+      flowMatA: glintMat(glintA, FLOW_A.opacity),
+      flowMatB: glintMat(glintB, FLOW_B.opacity),
+      // 池と淵は流れがないので、ゆっくり・控えめに
+      pondMatA: glintMat(pondA, 0.2),
+      pondMatB: glintMat(pondB, 0.16),
+    };
+  }, [lmGround, lmEarly, glintBase]);
+  useEffect(() => {
+    const id = setInterval(invalidate, 1000 / WATER_FPS);
+    return () => clearInterval(id);
+  }, [invalidate]);
 
   // 選んだ植物が変わったら描き直す（何も動いていないと描かないので、選んだことが画面に出ない）
   const selectedAt = useRef(0);
@@ -315,13 +406,18 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
   useFrame((_, dt) => {
     clock.current += Math.min(dt, 0.1);
     const now = clock.current;
+    // 光のゆらぎの絵を下流へずらす（u が大きいほど下流。絵を −u へずらすと、模様は下流へ進む）。2枚は速さが違う
+    look.glintA.offset.x = -(((now * FLOW_A.speed) / GLINT_TILE) * FLOW_A.repeat) % 1;
+    look.glintB.offset.set(-(((now * FLOW_B.speed) / GLINT_TILE) * FLOW_B.repeat) % 1, (now * FLOW_B.drift) % 1);
+    look.pondA.offset.set((now * 0.012) % 1, (now * 0.008) % 1);
+    look.pondB.offset.set(-((now * 0.009) % 1), (now * 0.011) % 1);
     let moving = false;
 
     // カメラ
     if (rig.reset) {
       rig.reset = false;
       rig.home = frameDist(frame.extent, size.width / size.height);
-      rig.goalTarget.set(0, 0.6, 0);
+      rig.goalTarget.set(0, LOOK_Y, 0);
       rig.goalDist = rig.home;
     }
     const k = Math.min(1, dt * 4);
@@ -479,16 +575,63 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
           <meshBasicMaterial vertexColors side={THREE.DoubleSide} depthWrite={false} depthTest={false} />
         </mesh>
       </group>
-      {/* 海・島の地面・景色（林・池・岩・飛び石）。どれも Blender で光を焼いてある */}
+      {/* 海・遠くの山と河口・島の地面・景色（林・岩・野の花）・池。どれも Blender で光を焼いてある */}
       <mesh geometry={geo('island__sea')}>
         <meshBasicMaterial vertexColors />
       </mesh>
-      <mesh ref={groundRef} geometry={geo('island__ground')}>
-        <meshBasicMaterial vertexColors />
+      <mesh geometry={geo('island__far')}>
+        <meshBasicMaterial vertexColors side={THREE.DoubleSide} />
       </mesh>
+      {/* 地面：小川が出るまでは溝のない地面（溝だけ見えると、まだない小川の跡に見える） */}
+      <mesh
+        ref={groundRef}
+        geometry={layout.water === 'streams' ? look.ground : look.early}
+        material={layout.water === 'streams' ? look.groundMat : look.earlyMat}
+      />
       <mesh geometry={geo('island__scenery')}>
         <meshBasicMaterial vertexColors side={THREE.DoubleSide} />
       </mesh>
+      <mesh geometry={look.pond}>
+        <meshBasicMaterial vertexColors />
+      </mesh>
+      <mesh geometry={look.pond} material={look.pondMatA} />
+      <mesh geometry={look.pond} material={look.pondMatB} />
+      {/* 池から浜を通って海へ出る川（いつも流れている。たまる一方にしない） */}
+      <mesh geometry={look.river}>
+        <meshBasicMaterial vertexColors />
+      </mesh>
+      <mesh geometry={look.river} material={look.flowMatA} />
+      <mesh geometry={look.river} material={look.flowMatB} />
+      {/* 水の様子：1か月ほどで水たまりと湧き水、データがたまると小川と木の根もとの淵（SPEC 5. の「最初のころ」） */}
+      {layout.water !== 'none' && (
+        <>
+          <mesh geometry={geo('island__spring')}>
+            <meshBasicMaterial vertexColors />
+          </mesh>
+          <mesh geometry={geo('island__spring2')}>
+            <meshBasicMaterial vertexColors />
+          </mesh>
+        </>
+      )}
+      {layout.water === 'puddles' && (
+        <mesh geometry={geo('island__puddles')}>
+          <meshBasicMaterial vertexColors />
+        </mesh>
+      )}
+      {layout.water === 'streams' && (
+        <>
+          <mesh geometry={look.stream}>
+            <meshBasicMaterial vertexColors />
+          </mesh>
+          <mesh geometry={look.stream} material={look.flowMatA} />
+          <mesh geometry={look.stream} material={look.flowMatB} />
+          <mesh geometry={look.pool}>
+            <meshBasicMaterial vertexColors />
+          </mesh>
+          <mesh geometry={look.pool} material={look.pondMatA} />
+          <mesh geometry={look.pool} material={look.pondMatB} />
+        </>
+      )}
       <primitive object={built.shadows} />
       {built.meshes.map(({ mesh }) => (
         <primitive key={mesh.uuid} object={mesh} />
@@ -505,8 +648,12 @@ type Props = SceneProps & { width: number; height: number };
 
 export default function Island3D({ width, height, ...scene }: Props) {
   return (
-    <Canvas style={{ width, height }} flat frameloop="demand" camera={{ fov: FOV, near: 0.1, far: 600, position: [10, 6, 10] }}>
-      <Scene {...scene} />
+    // antialias：縁のギザギザを減らす。dpr：細かさは 1.5 倍まで（2 倍では描く量が4倍になり、スマホで重かった）
+    <Canvas style={{ width, height }} flat frameloop="demand" gl={{ antialias: true }} dpr={[1, 1.5]} camera={{ fov: FOV, near: 0.1, far: 600, position: [10, 6, 10] }}>
+      {/* 光の絵・きらめきの絵を読み込む間は何も出さない */}
+      <Suspense fallback={null}>
+        <Scene {...scene} />
+      </Suspense>
     </Canvas>
   );
 }

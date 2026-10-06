@@ -1,4 +1,4 @@
-# 島の地面・景色・光をまとめて作り直す。Blender の中で実行する（MCP の execute_blender_code に中身を渡す）。
+# 島の地面・景色・光・空と海の色をまとめて作り直す（v7 で world_colors.py を足した）。Blender の中で実行する（MCP の execute_blender_code に中身を渡す）。
 # Windows の一時フォルダ（%TEMP%）に、このフォルダの island_terrain.py・build_ground.py・place_scenery.py・light_faces.py を置いてから実行する
 # （WSL から: cp scripts/island/blender/*.py /mnt/c/Users/nobu2/AppData/Local/Temp/）
 import bpy, bmesh, os, tempfile, time
@@ -64,8 +64,13 @@ key = list(bpy.data.scenes['Scene']['island_key_dir'])
 g = bpy.data.objects['v4__ground']
 s = bpy.data.objects['v4__scenery']
 ns['light_objects']([g, s], [g, s], key)
+e = bpy.data.objects['design__ground_early']  # 最初のころの地面（小川を掘らない。v7）
+e.hide_render = True
+e.hide_viewport = True  # 画面でも隠す（溝のある地面と重なり、小川の水を隠した）
+ns['light_objects']([e], [e, s], key)
 K = bpy.data.collections['V4Kit']
 for kind in sorted({o.name.split('__')[0] for o in K.objects if not o.name.startswith('fx__')}):
     group = [o for o in K.objects if o.name.startswith(kind + '__')]
     ns['light_objects'](group, group, key)
+exec(load('world_colors.py', 'island_world_colors'), {'__name__': '__main__'})
 print('rebuild_world', round(time.time() - t0, 1), 's')

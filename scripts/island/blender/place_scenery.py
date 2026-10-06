@@ -57,11 +57,13 @@ rnd = random.Random(11)
 
 
 def blocked(x, z, pad=0.6):
-    # 小川・池・湧き水の上には置かない
-    d, prog = T['stream_near'](x, z)
-    if d < T['stream_w'](prog) + pad:
+    # 小川・淵・池の上には置かない
+    d, prog, k = T['stream_near'](x, z)
+    if d < T['stream_w'](prog, k) + pad:
         return True
-    return math.hypot(x - T['POND'][0], z - T['POND'][1]) < T['POND_R'] + pad
+    if math.hypot(x - T['POOL'][0], z - T['POOL'][1]) < T['POOL_R'] + pad:
+        return True
+    return T['pond_u'](x, z) < 1 + pad / T['POND_R']
 
 
 def place(name, xz, size=1.0, rot=None, sink=0.04, y=None, force=False):
@@ -98,35 +100,32 @@ grove(258, 11.6, [('tree_pine', 1.0, (0, 0)), ('tree_fir', 1.1, (1.7, 1.0)), ('t
 grove(305, 11.2, [('tree_birch', 0.9, (0, 0)), ('tree_sola', 0.85, (1.4, 0.9)), ('bush_berry', 0.9, (-1.0, 0.8)),
                   ('fern', 0.9, (0.5, -0.9)), ('flower_plume', 0.9, (-0.6, -1.1))])
 # 湧き水（小川が始まる所）：まわりに小さな岩とシダ。その奥の丘に大きな木を1本
-sx, sz = T['SPRING']
-for ang, dd, name, sz_ in [(0, 0.9, 'rock_q', 0.45), (110, 0.85, 'rock_danni', 0.6), (200, 0.95, 'rock_q', 0.5), (290, 1.0, 'rock_danni', 0.45)]:
-    a = math.radians(ang)
-    place(name, (sx + dd * math.cos(a), sz + dd * math.sin(a)), sz_, sink=0.1, force=True)
-for ang in (60, 160, 250):
-    a = math.radians(ang)
-    place('fern', (sx + 1.5 * math.cos(a), sz + 1.5 * math.sin(a)), 0.8, force=True)
+# v7: 支流の始まり SPRING2 にも湧き水（小川は必ず湧き水から始まる）
+for (sx, sz) in (T['SPRING'], T['SPRING2']):
+    for ang, dd, name, sz_ in [(0, 1.0, 'rock_q', 0.45), (110, 0.95, 'rock_danni', 0.6), (200, 1.05, 'rock_q', 0.5), (290, 1.05, 'rock_danni', 0.45)]:
+        a = math.radians(ang)
+        place(name, (sx + dd * math.cos(a), sz + dd * math.sin(a)), sz_, sink=0.1, force=True)
+    for ang in (60, 200):  # シダは2本ずつ（v7 の軽量化）
+        a = math.radians(ang)
+        place('fern', (sx + 1.6 * math.cos(a), sz + 1.6 * math.sin(a)), 0.8, force=True)
 place('tree_sola2', P(236, 12.8), 1.35)
-place('flower_plume', P(222, 10.2), 1.0)
-place('flower_plume', P(240, 10.4), 0.8)
+# 飾りの花は置かない（v7 の軽量化。言葉の花と見分けにくく、触っても何も出ない）
 # 左：桜と花
 place('tree_cherry', P(150, 8.9), 1.0)
-place('flower_group', P(142, 8.0), 1.2)
-place('flower_group', P(158, 8.1), 1.0)
 place('rock_danni', P(154, 9.9), 1.0)
 # 右手前：池（小川が行き着く所。ガマと蓮の葉）
 px, pz = T['POND']
 pr = T['POND_R']
-for ang, dd, sz_ in [(200, 1.05, 1.0), (235, 1.1, 0.85), (150, 1.15, 0.9), (20, 1.1, 0.8), (330, 1.05, 0.9)]:
+for ang, dd, sz_ in [(200, 1.05, 1.0)]:  # ガマは1本（1本 約1100 三角形と重い）
     a = math.radians(ang)
-    place('cattail', (px + pr * dd * math.cos(a), pz + pr * dd * math.sin(a)), sz_, sink=0.0, force=True)
+    rr_ = T['pond_r'](a) * dd
+    place('cattail', (px + rr_ * math.cos(a), pz + rr_ * math.sin(a)), sz_, sink=0.0, force=True)
 for dx, dz in [(0.5, 0.3), (-0.9, -0.5), (1.0, -1.0), (-0.3, 1.2), (-1.4, 0.6), (1.6, 0.9)]:
     place('lily', (px + dx, pz + dz), 1.0, y=0.075, force=True)
-place('rock_q', (px + pr + 0.9, pz - 1.6), 0.8, force=True)
-place('flower_zoe', (px - pr - 0.6, pz + 1.2), 0.9, force=True)
-place('flower_zoe', (px - pr - 0.3, pz + 1.9), 0.7, force=True)
-# 手前：浜から草地への飛び石（間を空けて、少し左右に揺らす）
-for k, rr in enumerate([14.2, 13.3, 12.4, 11.5, 10.6, 9.7, 8.8, 7.9]):
-    place('rock_flat', P(82 + (-2 if k % 2 else 2), rr), 1.0, sink=0.06)
+place('rock_q', (px + T['pond_r'](-0.4) + 0.6, pz - 1.4), 0.8, force=True)
+place('flower_zoe', (px - T['pond_r'](math.pi) - 0.6, pz + 1.2), 0.9, force=True)
+place('flower_zoe', (px - T['pond_r'](math.pi) - 0.3, pz + 1.9), 0.7, force=True)
+# 手前の野の花のまとまりはやめた（v7 の軽量化。景色の三角形の約4割が飾りの花だった）
 # 岸の岩
 for deg, rr, name, sz_ in [(112, 14.8, 'boulder', 1.0), (116, 15.2, 'rock_q', 0.7), (108, 15.4, 'rock_danni', 1.2),
                            (8, 15.2, 'boulder', 0.8), (14, 15.6, 'rock_danni', 1.0), (300, 15.0, 'rock_q', 0.9), (205, 15.0, 'boulder', 1.1),
@@ -135,9 +134,4 @@ for deg, rr, name, sz_ in [(112, 14.8, 'boulder', 1.0), (116, 15.2, 'rock_q', 0.
 # まばらな草
 for deg, rr in [(95, 10.5), (70, 12.0), (30, 11.0), (330, 9.8), (250, 8.8), (170, 10.2), (125, 12.6), (345, 12.8), (190, 12.8), (280, 9.6)]:
     place('tall_grass' if int(deg) % 2 else 'tuft', P(deg, rr), 1.0)
-# 野の花（草地のふち）
-for deg, rr in [(75, 8.6), (20, 8.9), (300, 8.7), (115, 8.5)]:
-    for j in range(3):
-        place(['flower_single', 'flower_zoe', 'flower_plume'][j], P(deg + j * 2.5 - 2.5, rr + (j % 2) * 0.4), 0.7)
-
 print(len(S.objects), 'objects', sum(len(p.vertices) - 2 for o in S.objects for p in o.data.polygons), 'tris')

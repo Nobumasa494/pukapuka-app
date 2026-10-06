@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { InteractionManager, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +26,12 @@ export default function IslandScreen() {
   const labelX = useSharedValue(0);
   const labelY = useSharedValue(0);
   const labelOn = useSharedValue(0);
+  // 3D は、画面が切り替わる動きが終わってから準備する（同時に始めると、切り替わりが遅く・ぎこちなくなった）。その間は空の色だけ
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setReady(true));
+    return () => task.cancel();
+  }, []);
 
   const gesture = useMemo(() => {
     const touch = () => {
@@ -83,17 +89,19 @@ export default function IslandScreen() {
     <View style={styles.container}>
       {/* 朝の明るい空なので、時計・電池の文字は黒（アプリ全体は白） */}
       <StatusBar style="dark" />
-      <Island3D
-        width={width}
-        height={height}
-        layout={layout}
-        rig={rig}
-        selected={selected}
-        onPick={setSelected}
-        labelX={labelX}
-        labelY={labelY}
-        labelOn={labelOn}
-      />
+      {ready && (
+        <Island3D
+          width={width}
+          height={height}
+          layout={layout}
+          rig={rig}
+          selected={selected}
+          onPick={setSelected}
+          labelX={labelX}
+          labelY={labelY}
+          labelOn={labelOn}
+        />
+      )}
       <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill} />
       </GestureDetector>
@@ -103,7 +111,7 @@ export default function IslandScreen() {
       <LinearGradient colors={['rgba(24,70,84,0)', 'rgba(24,70,84,0.32)']} style={styles.bottomScrim} pointerEvents="none" />
 
       <Animated.View style={[styles.label, labelStyle]} pointerEvents="none">
-        <Text style={styles.labelText}>{selected ?? ''}</Text>
+        <Text style={styles.labelText}>{layout.plants.find((p) => p.word === selected)?.label ?? ''}</Text>
       </Animated.View>
 
       <View style={styles.top} pointerEvents="box-none">

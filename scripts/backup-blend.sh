@@ -9,7 +9,7 @@ SRC=/mnt/c/Users/nobu2/Documents/pukapuka_blender
 WORK="$HOME/pukapuka-blender-backup"
 REMOTE=https://github.com/Nobumasa494/pukapuka-blender.git
 FILES=(
-  pk_island_v6.blend              # 島（v6 の配置図。素材・空・海・言葉の植物の部品もこの中）
+  pk_island_v7.blend              # 島（v7 の配置図。素材・空・海・言葉の植物の部品もこの中）
   pk_island_parts_v3.blend        # 島の部品の前の版（川の部品から作った植物）
   pk_river_v21b_far_ridges.blend  # 川
   pk_pool_v1.blend                # 拾ったことばの空
