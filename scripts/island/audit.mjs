@@ -60,11 +60,11 @@ await p.mouse.dblclick(w * 0.5, h * 0.3);
 await p.waitForTimeout(1500);
 await shot('5-reset');
 
-// 何も動いていないときに描き続けていないか（2秒待って描いた回数が増えないこと）
+// 何も触っていないときに描きすぎていないか（v7 から水が流れるので、1秒に 15 回だけ描く。2秒で 30 回前後がよい。60 回を超えたら描きすぎ）
 const f0 = await p.evaluate(() => globalThis.__islandFrames);
 await p.waitForTimeout(2000);
 const f1 = await p.evaluate(() => globalThis.__islandFrames);
-console.log('止まっているときに描いた回数（0 がよい）:', f1 - f0);
+console.log('触っていない2秒に描いた回数（30 前後がよい。水が流れる分）:', f1 - f0);
 
 await p.getByText('1回目', { exact: true }).click();
 await p.waitForTimeout(4500);

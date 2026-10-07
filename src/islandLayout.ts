@@ -1,10 +1,13 @@
 import { MIN_CO, cooccurrence } from './constellation';
 import { dayKey } from './period';
 import { makeSampleCaptures, type Capture } from './sampleCaptures';
+import { MEADOW_R, TREE_R, plantRoom } from './islandTerrain';
 import { aggregate, type WordStat } from './wordCloud';
 
 // 島（朝）の植え方。拾った記録だけから、植物の場所・大きさ・色づきを決める。RN に依存しないので node で検証できる。
 // 3D の試作用（2026-10-05）。数値は仮。実機で見て調整する
+// v7（2026-10-06）: ワクワクの木は島の真ん中に1本。好奇心の言葉と、わくわくに近い気持ちの言葉がこの木に集まる（1日目から若木で立つ）。
+// ほかの植物は、木の葉の下・小川・淵・池・湧き水の上には植えない（islandTerrain.ts の plantRoom）
 
 export type Plant = WordStat & {
   x: number;
@@ -13,11 +16,25 @@ export type Plant = WordStat & {
   growth: number;
   // 大きさの倍率（回数で決まる）
   size: number;
-  // よく一緒に拾う言葉のまとまり（同じ番号は近くに植わる）
+  // よく一緒に拾う言葉のまとまり（同じ番号は近くに植わる）。ワクワクの木は -1
   group: number;
+  // 触れたときに出す言葉（ワクワクの木は、集まった言葉を並べる）
+  label: string;
 };
 
-export type IslandLayout = { radius: number; plants: Plant[] };
+// 島の水の様子（SPEC 5. の「最初のころ」）：はじめは何もなく、1か月ほどで水たまりと湧き水、データがたまると小川
+export type Water = 'none' | 'puddles' | 'streams';
+export type IslandLayout = { radius: number; plants: Plant[]; water: Water };
+
+// ワクワクの木に集まる言葉：好奇心の言葉と、わくわくに近い気持ち（一覧は仮。SPEC K. の未決事項）
+export const TREE_WORD = 'ワクワクの木';
+const WOW_FEELINGS = new Set(['わくわく', 'ときめき', '喜び', 'うれしい', '高揚感']);
+export const isTreeWord = (s: WordStat) => s.category === 'curiosity' || WOW_FEELINGS.has(s.word);
+
+// 木の大きさ：集まった言葉の回数の合計で育つ（何もなくても若木）
+export function treeSize(total: number): number {
+  return VIEW * Math.min(1.9, 0.75 + 0.16 * Math.sqrt(total));
+}
 
 // 1つの言葉から残すつながりの数（よく拾う言葉が全部とつながって、島じゅうが1つのまとまりになるのを防ぐ）
 const MAX_LINKS = 3;
@@ -72,20 +89,46 @@ export function findGroups(stats: WordStat[], captures: Capture[]): Map<string, 
 
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
+// 植物の見え方の倍率（v7。Blender の配置図で OK をもらった大きさ：花 2.6 倍・木 2.9 倍に合わせる。島全体で花が点にならないように）
+export const VIEW = 1.5;
+
 export function sizeFor(count: number): number {
-  return Math.min(1.8, 0.55 + 0.25 * Math.sqrt(count));
+  return VIEW * Math.min(1.8, 0.55 + 0.25 * Math.sqrt(count));
 }
 
 export function growthFor(count: number): number {
   return count <= 1 ? 0 : Math.min(1, 0.35 + 0.13 * count);
 }
 
+// 島に入れる期間：直近12か月（決定 2026-10-06。島は1つだけで、古い言葉は静かに消える。昔の自分は川の「過去の自分の泡」で出会う）
+export const ISLAND_DAYS = 365;
+
 export function layoutIsland(captures: Capture[]): IslandLayout {
-  const stats = aggregate(captures);
+  const latest = captures.reduce((m, c) => Math.max(m, c.capturedAt), 0);
+  captures = captures.filter((c) => c.capturedAt > latest - ISLAND_DAYS * DAY);
+  const all = aggregate(captures);
+  const treeWords = all.filter(isTreeWord).sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
+  const stats = all.filter((s) => !isTreeWord(s));
   const groups = findGroups(stats, captures);
-  const categories = new Set(stats.map((s) => s.category));
-  // 新しい種類の言葉を拾うと島が少し広がる。言葉が増えても少し広がる
-  const radius = 2.4 + 0.55 * categories.size + 0.06 * stats.length;
+  const categories = new Set(all.map((s) => s.category));
+  // 新しい種類の言葉を拾うと島が少し広がる。言葉が増えても少し広がる（今の島の形は Blender で固定。カメラの範囲に使う）
+  const radius = 2.4 + 0.55 * categories.size + 0.06 * all.length;
+
+  // ワクワクの木（真ん中に1本。1日目から若木で立っている）
+  const total = treeWords.reduce((n, s) => n + s.count, 0);
+  const strength = total ? treeWords.reduce((n, s) => n + s.avgStrength * s.count, 0) / total : 0.5;
+  const tree: Plant = {
+    word: TREE_WORD,
+    category: 'curiosity',
+    count: total,
+    avgStrength: strength,
+    x: 0,
+    z: 0,
+    growth: 1,
+    size: treeSize(total),
+    group: -1,
+    label: treeWords.length ? treeWords.slice(0, 4).map((s) => s.word).join('・') : TREE_WORD,
+  };
 
   const byGroup = new Map<number, WordStat[]>();
   for (const s of stats) {
@@ -95,11 +138,12 @@ export function layoutIsland(captures: Capture[]): IslandLayout {
   }
   const nGroups = byGroup.size;
   const plants: Plant[] = [];
+  // 言葉が少ない間は、まとまりを木の近くに寄せる（島じゅうに散らばると、小さな芽がばらばらで見えない）
+  const spread = Math.min(1, Math.sqrt(stats.length / 20));
+  const inner = TREE_R + 1.4;
   for (const [g, members] of [...byGroup].sort((a, b) => a[0] - b[0])) {
-    // まとまりの中心：大きいまとまりほど島の真ん中寄り。黄金角でずらして重ならないようにする
-    // 言葉が少ない間は、まとまりを真ん中に寄せる（島じゅうに散らばると、小さな芽がばらばらで見えない）
-    const spread = Math.min(1, Math.sqrt(stats.length / 20));
-    const cr = nGroups <= 1 ? 0 : radius * 0.62 * spread * Math.sqrt((g + 0.5) / nGroups);
+    // まとまりの中心：大きいまとまりほど木の近く。黄金角でずらして重ならないようにする
+    const cr = inner + (MEADOW_R - 1.2 - inner) * spread * Math.sqrt((g + 0.5) / Math.max(1, nGroups));
     const ca = g * GOLDEN * 1.7 + 0.6;
     const cx = cr * Math.cos(ca);
     const cz = cr * Math.sin(ca);
@@ -107,23 +151,22 @@ export function layoutIsland(captures: Capture[]): IslandLayout {
     members.forEach((s, j) => {
       const r = 0.62 * Math.sqrt(j);
       const a = j * GOLDEN + g;
-      let x = cx + r * Math.cos(a);
-      let z = cz + r * Math.sin(a);
-      // 島からはみ出さない
-      const d = Math.hypot(x, z);
-      const max = radius * 0.8;
-      if (d > max) [x, z] = [(x / d) * max, (z / d) * max];
-      plants.push({ ...s, x, z, growth: growthFor(s.count), size: sizeFor(s.count), group: g });
+      plants.push({ ...s, x: cx + r * Math.cos(a), z: cz + r * Math.sin(a), growth: growthFor(s.count), size: sizeFor(s.count), group: g, label: s.word });
     });
   }
-  relax(plants, radius * 0.8);
-  return { radius, plants };
+  relax(plants);
+  const days = new Set(captures.map((c) => dayKey(c.capturedAt))).size;
+  const water: Water = days < 12 ? 'none' : days < 40 ? 'puddles' : 'streams';
+  return { radius, plants: [tree, ...plants], water };
 }
 
-// 近すぎる植物どうしを押し離す（まとまりどうしが重なることがあるため）。島の外へ出たものは内側へ戻す
-function relax(plants: Plant[], max: number) {
+// 近すぎる植物どうしを押し離す（まとまりどうしが重なることがあるため）。
+// 小川・淵・池・湧き水・木の葉の下に入ったものは外へ、草地の外へ出たものは内側へ戻す
+function relax(plants: Plant[]) {
   const gap = (p: Plant) => 0.22 + 0.2 * p.size;
-  for (let it = 0; it < 60; it++) {
+  const max = MEADOW_R - 0.6;
+  const e = 0.05;
+  for (let it = 0; it < 80; it++) {
     for (let i = 0; i < plants.length; i++)
       for (let j = i + 1; j < plants.length; j++) {
         const a = plants[i];
@@ -140,6 +183,15 @@ function relax(plants: Plant[], max: number) {
         b.z += (dz / d) * push;
       }
     for (const p of plants) {
+      // 植えてはいけない所から、余白が足りない分だけ外へ（向きは余白が増える向き）
+      const room = plantRoom(p.x, p.z) - gap(p) * 0.6;
+      if (room < 0) {
+        const gx = (plantRoom(p.x + e, p.z) - plantRoom(p.x - e, p.z)) / (2 * e);
+        const gz = (plantRoom(p.x, p.z + e) - plantRoom(p.x, p.z - e)) / (2 * e);
+        const gl = Math.hypot(gx, gz) || 1;
+        p.x += (gx / gl) * -room;
+        p.z += (gz / gl) * -room;
+      }
       const d = Math.hypot(p.x, p.z);
       if (d > max) [p.x, p.z] = [(p.x / d) * max, (p.z / d) * max];
     }
