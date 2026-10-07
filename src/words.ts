@@ -1,4 +1,4 @@
-export type Category = 'emotion' | 'body' | 'situation' | 'value' | 'curiosity';
+export type Category = 'emotion' | 'body' | 'situation' | 'value' | 'curiosity' | 'doing';
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   emotion: '感情',
@@ -6,6 +6,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   situation: '状況・場面',
   value: '価値観・欲求',
   curiosity: '好奇心',
+  doing: 'していること',
 };
 
 const WORDS_BY_CATEGORY: Record<Category, readonly string[]> = {
@@ -25,7 +26,7 @@ const WORDS_BY_CATEGORY: Record<Category, readonly string[]> = {
   situation: [
     "仕事", "人間関係", "将来", "お金", "家族", "恋愛",
     "友達", "時間", "自分", "変化", "失敗", "評価",
-    "健康", "趣味", "勉強", "SNS", "比較", "プレッシャー",
+    "健康", "SNS", "比較", "プレッシャー",
     "責任", "期待", "締め切り", "会議", "帰り道", "朝",
   ],
   value: [
@@ -39,6 +40,14 @@ const WORDS_BY_CATEGORY: Record<Category, readonly string[]> = {
     "やってみたい", "不思議", "ひらめいた",
     "試してみたい", "調べたい", "どうなるんだろう", "深掘りしたい",
     "ワクワクする", "意外だった", "もしかして",
+  ],
+  // 6つ目の種類（決定 2026-10-06）：何をしていたか。「何で元気になるか」に届くのに要る。「趣味」「勉強」は場面から移した
+  doing: [
+    "料理", "作る", "絵を描く", "書く", "写真", "片づけ", "植物を育てる",
+    "散歩", "運動", "外に出る", "お風呂",
+    "読書", "音楽", "映画", "ゲーム", "調べもの",
+    "人と話す", "誰かを手伝う", "一緒に食べる",
+    "計画を立てる", "旅", "新しい場所", "買い物", "カフェ", "趣味", "勉強",
   ],
 };
 
