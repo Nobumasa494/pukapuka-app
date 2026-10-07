@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { InteractionManager, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,8 +29,9 @@ export default function IslandScreen() {
   // 3D は、画面が切り替わる動きが終わってから準備する（同時に始めると、切り替わりが遅く・ぎこちなくなった）。その間は空の色だけ
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => setReady(true));
-    return () => task.cancel();
+    // InteractionManager は使わない（新しい React Native で「使わなくなる予定」の警告が出た）。画面の切り替え（約0.3秒）を待つだけ
+    const t = setTimeout(() => setReady(true), 350);
+    return () => clearTimeout(t);
   }, []);
 
   const gesture = useMemo(() => {

@@ -20,7 +20,6 @@ WORLD = {
     'island__pool': 'island__pool',
     'island__pond': 'island__pond',
     'island__spring': 'island__spring',
-    'island__spring2': 'island__spring2',
     'design__puddles': 'island__puddles',          # 最初のころの水たまり（1か月）
 }
 KIT = bpy.data.collections['V4Kit']

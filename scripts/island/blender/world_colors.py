@@ -26,14 +26,15 @@ def ss(a, b, x):
     return T['ss'](a, b, x)
 
 
-HORIZON = l2('#f6d8c8')   # 地平線のすぐ上（淡い桃色）
-CREAM = l2('#fbeedd')     # その上のクリーム色
-LOW_BLUE = l2('#cfe5f0')
-MID_BLUE = l2('#acd4ec')
-TOP_BLUE = l2('#93c5e6')
-GLOW = l2('#fff1d2')      # 朝日のまわり
-CLOUD = l2('#fffaf4')
-CLOUD_SH = l2('#f3dfd6')  # 雲の下側（少し桃色）
+HORIZON = l2('#f8c9a8')  # v9：参考の絵のあたたかい朝（桃色 → 藤色 → 淡い青）   # 地平線のすぐ上（淡い桃色）
+CREAM = l2('#f6c7b8')     # その上のクリーム色
+LOW_BLUE = l2('#e7b9c9')
+MID_BLUE = l2('#c9a9d4')
+TOP_BLUE = l2('#a497cf')
+GLOW = l2('#ffe0b4')      # 朝日のまわり
+CLOUD = l2('#fbd3cf')
+SEA_HAZE = l2('#cdb6c6')
+CLOUD_SH = l2('#d9a3be')  # 雲の下側（少し桃色）
 
 
 def sky_color(d):
@@ -41,6 +42,7 @@ def sky_color(d):
     az = math.degrees(math.atan2(d.y, d.x))
     # 開いたときの画面の上の端は高さ約 10°（縦の画角 45°、見下ろす 0.3・上向き 0.09）。青はその中で出す
     c = mix(HORIZON, CREAM, ss(0.2, 1.8, e))
+    c = mix(c, SEA_HAZE, ss(0.0, -3.0, e))  # 地平線の下（海の板の向こう）は、遠くの海のかすみの色（空の色のままだと、海の上に空の帯が見えた）
     c = mix(c, LOW_BLUE, ss(1.6, 5.0, e))
     c = mix(c, MID_BLUE, ss(4.5, 11.0, e))
     c = mix(c, TOP_BLUE, ss(11.0, 40.0, e))
@@ -135,7 +137,7 @@ HAZE = l2('#e9e4da')
 for p in sc.data.polygons:
     c = p.center
     x, z = c.x, -c.y
-    t = 0.26 * ss(6.0, 16.0, T['back'](x, z))
+    t = 0.12 * ss(10.0, 22.0, T['back'](x, z))
     if t <= 0:
         continue
     for li in p.loop_indices:

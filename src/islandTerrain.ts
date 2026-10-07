@@ -1,95 +1,96 @@
-// 島の地形（v7、2026-10-06）。Blender の scripts/island/blender/island_terrain.py と必ず同じ式・同じ数にする
-// （違うと、言葉の植物が浮く・埋まる・小川の上に植わる）。座標はアプリの (x, z)。RN に依存しないので node で確かめられる
-//
-// - 草地の高さ meadow()：ゆるい起伏、奥（230°）ほど少し高い傾き、ワクワクの木の根もとの淵のまわりのくぼ地
-// - 小川・淵・池・湧き水の場所：言葉の植物を、この上には植えない
+// 島の地形（v10、2026-10-07）。形は Blender の scripts/island/blender/island_terrain.py だけで決め、
+// scripts/island/export_terrain.py が数（高さの格子・小川・池）を src/islandTerrainData.ts に書き出す。
+// アプリはその数で、植物を地面に置く・植えない所を決める・水を流す（式を写すと食い違いやすかったため）
+import { G0, GN, GRID, GS, MEADOW_R as MR, PONDS as PD, RIVER as RV, SPRINGS as SP, STREAMS as ST, STREAM_LEVELS, STREAM_WS } from './islandTerrainData';
 
-const AZ0 = 0.7;
-const CAMD = [Math.sin(AZ0), Math.cos(AZ0)] as const; // カメラのいる向き（50°）
-const TILT = 0.03; // 奥ほど高くする傾き（1m あたり）
-const LAND_MIN = 0.12; // 草地の高さの下限（なめらか。海面より上）
+export const MEADOW_R = MR; // 言葉の植物が育つ草地（ワクワクの木のまわりの段）
+export const RIVER = RV; // 湖から海へ出る川（最初のころからいつも流れている）
+export const STREAMS = ST as unknown as [number, number][][];
+type Pond = { name: string; x: number; z: number; A: number; B: number; deg: number; level: number };
+export const PONDS: Pond[] = (PD as unknown as [string, number, number, number, number, number, number][]).map(
+  ([name, x, z, A, B, deg, level]) => ({ name, x, z, A, B, deg, level }),
+);
+const pondOf = (n: string) => PONDS.find((p) => p.name === n)!;
+export const POND: [number, number] = [pondOf('lake').x, pondOf('lake').z];
+export const POOL: [number, number] = [pondOf('pool').x, pondOf('pool').z];
+const SPRINGS = SP as unknown as [number, number][];
+const WATER_PAD = 0.6; // 植えない余白（水の縁から）
 
-export const P = (deg: number, r: number): [number, number] => {
-  const a = (deg * Math.PI) / 180;
-  return [r * Math.cos(a), r * Math.sin(a)];
-};
+// 地面の高さ（格子を4点で補う。Blender の height() と同じ形）
+export function meadow(x: number, z: number): number {
+  const fx = Math.max(0, Math.min(GN - 1.001, (x - G0) / GS));
+  const fz = Math.max(0, Math.min(GN - 1.001, (z - G0) / GS));
+  const i = Math.floor(fx);
+  const j = Math.floor(fz);
+  const tx = fx - i;
+  const tz = fz - j;
+  const h = (a: number, b: number) => GRID[b * GN + a];
+  return (h(i, j) * (1 - tx) + h(i + 1, j) * tx) * (1 - tz) + (h(i, j + 1) * (1 - tx) + h(i + 1, j + 1) * tx) * tz;
+}
 
-export const MEADOW_R = 10.3; // 言葉の植物が育つ草地
-export const POND = P(34, 11.6); // 手前の池（池は言葉ではなく、ほとりに言葉が咲く）
-const POND_R = 3.3;
-export const SPRING = P(230, 11.8); // 奥の丘の湧き水（本流）
-export const SPRING2 = P(298, 11.2); // 右奥の丘の湧き水（支流）
-export const POOL = P(50, 3.7); // ワクワクの木の根もとの淵
-export const POOL_R = 1.2;
-const BASIN = 0.42; // 淵のまわりのくぼ地の深さ
-const BASIN_R = 3.6;
-// 小川の道すじ。0＝本流（湧き水 → 淵）、1＝支流（右奥 → 淵）、2＝淵 → 池、3＝池 → 浜 → 海（たまる一方にしない。拾った言葉は、やがて海へ帰る）
-export const STREAMS: [number, number][][] = [
-  [SPRING, P(225, 9.8), P(213, 7.6), P(196, 5.8), P(170, 4.6), P(132, 4.2), P(92, 4.3), POOL],
-  [SPRING2, P(305, 9.2), P(318, 7.0), P(338, 5.4), P(8, 4.4), POOL],
-  [POOL, P(45, 5.8), P(40, 7.2), POND],
-  [POND, P(33, 14.4), P(29, 16.3), P(33, 18.1), P(29, 19.9), P(31, 21.8), P(31, 23.5)], // 細く曲がりくねる（まっすぐ広い帯は不自然だった）
-];
-const STREAM_WS: [number, number][] = [
-  [0.28, 0.5],
-  [0.2, 0.38],
-  [0.52, 0.68],
-  [0.32, 0.5],
-];
-const WATER_PAD = 0.6; // 水の板は小川の幅よりこれだけ広い（縁は岸の地面の下。island_terrain.py と同じ）
-
-// 水面に貼る絵の場所（u＝道すじの始まりからの長さ m、v＝道すじからの横のずれ m。右が＋）。
-// きらめきの絵を流れの向きに貼り、下流へずらすのに使う（3D で動かすための計算。絵そのものは Blender）
-export function flowUV(x: number, z: number, ks: number[]): [number, number] {
+// 水面に貼る流れの場所（u＝道すじの始まりからの長さ m、v＝横のずれ m、k＝何本目、prog＝進み具合 0〜1）
+export function flowInfo(x: number, z: number, ks: number[]): [number, number, number, number] {
   let best = Infinity;
-  let uv: [number, number] = [0, 0];
+  let out: [number, number, number, number] = [0, 0, 0, 0];
   for (const k of ks) {
     const S = STREAMS[k];
+    const n = S.length - 1;
     let acc = 0;
-    for (let i = 0; i < S.length - 1; i++) {
+    for (let i = 0; i < n; i++) {
       const [ax, az] = S[i];
       const [bx, bz] = S[i + 1];
       const dx = bx - ax;
       const dz = bz - az;
-      const L = Math.hypot(dx, dz);
+      const L = Math.hypot(dx, dz) || 1e-6;
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (L * L)));
       const px = x - (ax + t * dx);
       const pz = z - (az + t * dz);
       const d = Math.hypot(px, pz);
       if (d < best) {
         best = d;
-        uv = [acc + t * L, (px * dz - pz * dx) / L];
+        out = [acc + t * L, (px * dz - pz * dx) / L, k, (i + t) / n];
       }
       acc += L;
     }
   }
-  return uv;
+  return out;
 }
 
-const back = (x: number, z: number) => -(x * CAMD[0] + z * CAMD[1]);
-
-// 草地の高さ（island_terrain.py の meadow() と同じ）
-export function meadow(x: number, z: number): number {
-  const dq2 = (x - POOL[0]) ** 2 + (z - POOL[1]) ** 2;
-  const m =
-    0.6 +
-    0.2 * Math.sin(0.33 * x + 1.3) * Math.cos(0.29 * z - 0.4) +
-    0.1 * Math.sin(0.71 * x - 0.47 * z + 2.0) +
-    TILT * back(x, z) -
-    BASIN * Math.exp(-dq2 / BASIN_R ** 2);
-  // 海面より少し上より下がらない、なめらかな下限（island_terrain.py と同じ）
-  return 0.5 * (m + LAND_MIN + Math.sqrt((m - LAND_MIN) ** 2 + 0.01));
+// 小川の半分の幅
+export function streamHalfW(prog: number, k: number): number {
+  return STREAM_WS[k][0] + (STREAM_WS[k][1] - STREAM_WS[k][0]) * prog;
 }
 
-function pondR(a: number): number {
-  return POND_R * (1 + 0.16 * Math.sin(2 * a + 0.7) + 0.09 * Math.sin(3 * a + 2.1) + 0.05 * Math.sin(5 * a + 0.4));
+// 小川の水面の高さ（滝の所で急に下がる）
+export function streamLevel(prog: number, k: number): number {
+  const L = STREAM_LEVELS[k];
+  const f = Math.max(0, Math.min(1, prog)) * (L.length - 1);
+  const i = Math.min(Math.floor(f), L.length - 2);
+  return L[i] + (L[i + 1] - L[i]) * (f - i);
 }
 
-// 池の中心からの距離 ÷ その向きの縁の半径（1＝縁）
-export function pondU(x: number, z: number): number {
-  const dx = x - POND[0];
-  const dz = z - POND[1];
-  return Math.hypot(dx, dz) / pondR(Math.atan2(dz, dx));
+// 池の中心からの距離 ÷ その向きの縁の半径（1＝縁）。island_terrain.py の pond_shape と同じ
+export function pondShape(p: Pond, x: number, z: number): number {
+  const dx = x - p.x;
+  const dz = z - p.z;
+  const a = Math.atan2(dz, dx);
+  const ph = a - (p.deg * Math.PI) / 180;
+  let r = 1 / Math.sqrt((Math.cos(ph) / p.A) ** 2 + (Math.sin(ph) / p.B) ** 2);
+  r *= 1 + 0.06 * Math.sin(3 * a + 1.1 + p.name.length) + 0.04 * Math.sin(5 * a + 0.3);
+  return Math.hypot(dx, dz) / r;
+}
+
+export function nearestPond(x: number, z: number): Pond {
+  let best = PONDS[0];
+  let bu = Infinity;
+  for (const p of PONDS) {
+    const u = pondShape(p, x, z);
+    if (u < bu) {
+      bu = u;
+      best = p;
+    }
+  }
+  return best;
 }
 
 // いちばん近い小川の縁までの距離（小川の上なら負）
@@ -102,26 +103,22 @@ export function streamGap(x: number, z: number): number {
       const [bx, bz] = S[i + 1];
       const dx = bx - ax;
       const dz = bz - az;
-      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1e-6)));
       const d = Math.hypot(x - (ax + t * dx), z - (az + t * dz));
-      const prog = (i + t) / n;
-      const w = STREAM_WS[k][0] + (STREAM_WS[k][1] - STREAM_WS[k][0]) * prog;
-      best = Math.min(best, d - w);
+      best = Math.min(best, d - streamHalfW((i + t) / n, k));
     }
   });
   return best;
 }
 
-// 言葉の植物を植えてはいけない所までの近さ（正なら植えてよい。値はその所までの余白）
-// 小川・淵・池・湧き水と、ワクワクの木の葉の下（真ん中 TREE_R）
+// 言葉の植物を植えてはいけない所までの近さ（正なら植えてよい）。小川・池・湧き水・段の崖・ワクワクの木の葉の下
 export const TREE_R = 3.0;
 export function plantRoom(x: number, z: number): number {
-  return Math.min(
-    streamGap(x, z) - WATER_PAD - 0.15,
-    Math.hypot(x - POOL[0], z - POOL[1]) - POOL_R - 0.3,
-    (pondU(x, z) - 1) * POND_R - 0.3,
-    Math.hypot(x - SPRING[0], z - SPRING[1]) - 1.6,
-    Math.hypot(x - SPRING2[0], z - SPRING2[1]) - 1.6,
-    Math.hypot(x, z) - TREE_R,
-  );
+  let pond = Infinity;
+  for (const p of PONDS) pond = Math.min(pond, (pondShape(p, x, z) - 1) * Math.min(p.A, p.B) - 0.3);
+  let spring = Infinity;
+  for (const [sx, sz] of SPRINGS) spring = Math.min(spring, Math.hypot(x - sx, z - sz) - 1.6);
+  const h0 = meadow(x, z);
+  const steep = Math.max(...[[0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]].map(([dx, dz]) => Math.abs(meadow(x + dx, z + dz) - h0)));
+  return Math.min(streamGap(x, z) - WATER_PAD - 0.15, pond, spring, Math.hypot(x, z) - TREE_R, (0.2 - steep) * 4);
 }

@@ -31,14 +31,14 @@ pool = bpy.data.objects['island__pool']
 saved = {o.name: [s.material for s in o.material_slots] for o in objs}
 
 
-def shot(name, az, el, dist, target, res=50):
+def shot(name, az, el, dist, target, res=50, tilt=0.09):
     tx, tz = target
     ty = T['height'](tx, tz) + 0.6
     d = mathutils.Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el)))
     tgt = mathutils.Vector((tx, -tz, ty))
     cam.location = tgt + d * dist
     q = (-d).to_track_quat('-Z', 'Y')
-    cam.rotation_euler = (q.to_matrix().to_4x4() @ mathutils.Matrix.Rotation(0.09, 4, 'X')).to_euler()
+    cam.rotation_euler = (q.to_matrix().to_4x4() @ mathutils.Matrix.Rotation(tilt, 4, 'X')).to_euler()
     sky.location = cam.location
     sun.location = cam.location
     sc.render.resolution_percentage = res
@@ -54,11 +54,20 @@ try:
             s.material = SHOW
     sc.camera = cam
     AZ = T['AZ0']
-    OPEN = 42  # 開いたときの距離（島 半径 19 に合わせる。50 では砂浜と海が広く写った）
+    OPEN = 46  # 開いたときの距離（島 半径 19 に合わせる。50 では砂浜と海が広く写った）
+    # 空の半球（半径 140）はカメラについて動くので、遠くから撮ると、その向こうの海・遠くの山が隠れる。この1枚だけ空と太陽を3倍に
+    sky.scale = sun.scale = (3, 3, 3)
+    shot('0_ref', AZ, 0.62, 74, (3.0, 4.0), tilt=0.16)
+    sky.scale = sun.scale = (1, 1, 1)  # 参考の絵と同じ、高い所から島全体と空（上を向けて空と雲も入れる）  # 参考の絵と同じ、高い所から島全体（v10）
     shot('1_open', AZ, 0.3, OPEN, (0, 0))
-    shot('2_above', AZ + 0.35, 0.95, 62, (0, 0))
+    shot('2_above', AZ + 0.35, 0.95, 88, (0, 0))
     shot('3_walk', AZ - 0.5, 0.22, 17, (-1.0, 2.0))
-    shot('5_overview', AZ + 0.55, 0.62, 58, (0, 0))  # 斜め上から島全体（島の形・岸・遠くの山の奥行きを見る）
+    shot('5_overview', AZ + 0.55, 0.62, 82, (0, 0))  # 斜め上から島全体（島の形・岸・遠くの山の奥行きを見る）。島 半径 23 に合わせて 68
+    # 近くからの組（2026-10-07。水の縁・つなぎ目・河口を見る。遠くの1枚だけでは、浮き・ギザギザ・ぷつっと切れるのを見落とした）
+    for nm, tgt, dist, el, daz in [('c1_pool', T['POOL'], 10, 0.95, 0.0), ('c2_pond', T['POND'], 16, 0.5, 0.0),
+                                  ('c3_mouth', T['P'](44, 24.0), 14, 0.5, 0.0), ('c4_falls', T['PONDS']['tarnL'][0], 13, 0.4, 0.3),
+                                  ('c5_west', T['PONDS']['pondW'][0], 14, 0.45, 0.6), ('c6_tarnR', T['PONDS']['tarnR'][0], 13, 0.45, -0.4)]:  # 湧き水・小川は横から（正面からだと木の中に入った）
+        shot(nm, AZ + daz, el, dist, tgt)
     # 最初のころ：ワクワクの若木と芽が少し。小川はまだなく（溝もない地面）、水たまりと湧き水だけ
     for o in D.objects:
         o.hide_render = not o.name.startswith('e_')

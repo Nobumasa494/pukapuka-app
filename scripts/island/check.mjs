@@ -57,14 +57,15 @@ if (want.has('close')) {
   if (!want.has('stages')) await stage('数か月');
   // [名前, 見る点 x, z, 距離, 回りこみ, 見下ろす]（回りこみ 0.7＝開いたときの向き）
   for (const [name, x, z, dist, az, el] of [
-    ['mouth', 15.0, 9.0, 14, 0.7, 0.55],
-    ['stream', 2.5, 1.5, 8, 0.7, 0.32],
-    ['upper', -5.5, -4.5, 9, 1.4, 0.4],
+    ['mouth', 16.0, 18.0, 14, 0.7, 0.55], // v10：橋から海への川 P(48, 24)
+    ['lake', 8.6, -2.6, 14, 0.7, 0.5], // 右寄りの湖 P(343, 9)
+    ['upper', -10.2, -2.9, 13, 2.2, 0.85], // 山のふもとの段の池と滝 P(196, 10.6)
   ]) {
     await p.evaluate(([x, z, dist, az, el]) => {
       const r = globalThis.__islandRigRef;
-      r.goalTarget.set(x, 0.6, z);
-      r.target.set(x, 0.6, z);
+      const y = (globalThis.__islandGroundY?.(x, z) ?? 0) + 0.6; // v10：地面が高い（段）ので、見る点も地面の上に
+      r.goalTarget.set(x, y, z);
+      r.target.set(x, y, z);
       r.goalDist = r.dist = dist;
       r.az = az;
       r.el = el;
@@ -87,7 +88,7 @@ if (want.has('audit')) {
   await p.waitForFunction((w) => document.body.innerText.includes(w), t?.word ?? '', { timeout: 3000 }).catch(() => {});
   const label = await p.evaluate(() => document.body.innerText);
   const r0 = await p.evaluate(() => globalThis.__islandRig.dist);
-  await p.mouse.click(260, 420);
+  await p.mouse.click(100, 650); // 植物のない草地（v8 の島。260,420 は植物の 44px 以内で、歩かずに植物を選んだ）
   await p.waitForTimeout(400);
   await settleCam();
   const r1 = await p.evaluate(() => globalThis.__islandRig.dist);

@@ -8,7 +8,7 @@
 # 書き出し先: assets/island/lm_ground.png（小川を掘った地面）・lm_ground_early.png（最初のころの地面）
 import bpy, bmesh, math, mathutils, os, time
 
-LM_S = 29.0     # 絵が覆う範囲（中心から ±29m。地面の端まで入る）
+LM_S = 33.0     # 絵が覆う範囲（中心から ±33m。v8 の島（手前の岸 約30m）の端まで入る）
 RES = 1024   # 512（1ピクセル約11cm）では、小川の岸の影がにじんで黒いふちになった
 SAMPLES = 64
 LM_FLOOR = 0.32   # 日なた（約1.1）の約3割
@@ -21,7 +21,7 @@ sun = bpy.data.objects['LibSun']
 sun.rotation_euler = (-KEY).to_track_quat('-Z', 'Y').to_euler()
 sun.data.energy = 3.6
 sun.data.angle = math.radians(6)   # 影の縁を少しやわらかく
-sun.data.color = (1.0, 0.94, 0.84)
+sun.data.color = (1.0, 0.88, 0.72)  # v9：あたたかい金色
 sun.hide_render = False
 
 saved = {}

@@ -79,7 +79,8 @@ def add_drivers(o, f, can_hide):
 
 
 made = 0
-for base, ks in (('island__stream', (0, 1, 2)), ('island__river', (3,))):
+RIVER = T['RIVER']
+for base, ks in (('island__stream', tuple(k for k in range(len(T['STREAMS'])) if k != RIVER)), ('island__river', (RIVER,))):
     src = bpy.data.objects[base]
     flows = [flow_along(p.center.x, -p.center.y, ks) for p in src.data.polygons]
     bk0 = src.data.color_attributes['Baked']
@@ -92,7 +93,7 @@ for base, ks in (('island__stream', (0, 1, 2)), ('island__river', (3,))):
         for p, fl, c in zip(me.polygons, flows, base_col):
             w1 = math.sin(fl * K - ph)
             w2 = math.sin(fl * K * 2 - ph * 2 + 1.3)
-            b = ss(0.55, 1.0, w1) * 0.16 + ss(0.8, 1.0, w2) * 0.12
+            b = ss(0.55, 1.0, w1) * 0.05 + ss(0.8, 1.0, w2) * 0.03  # 弱く（0.16＋0.12 では横縞が板を並べたように見えた。アプリはこのコマを使わず光の網目の絵で流す）
             col = (min(1.0, c[0] + GLINT[0] * b), min(1.0, c[1] + GLINT[1] * b), min(1.0, c[2] + GLINT[2] * b), 1.0)
             for li in p.loop_indices:
                 bk.data[li].color = col

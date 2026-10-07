@@ -1,13 +1,16 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react';
-import { Platform } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { Asset } from 'expo-asset';
 import * as THREE from 'three';
 import type { SharedValue } from 'react-native-reanimated';
 import type { IslandLayout, Plant } from '../islandLayout';
-import { flowUV, meadow } from '../islandTerrain';
+import { RIVER, STREAMS, flowInfo, meadow, nearestPond, streamHalfW, streamLevel } from '../islandTerrain';
 import { CATEGORY_COLOR } from '../wordCloud';
 import { ISLAND_KIT, type KitPart } from '../islandKit';
+
+// THREE.Clock の「使わなくなる予定」は @react-three/fiber の中から出る（こちらのコードではない）。動きに影響しないので出さない
+LogBox.ignoreLogs(['THREE.Clock: This module has been deprecated', 'WEBGL_lose_context extension not supported']); // 後者は島を閉じるとき、スマホの GL に「わざと捨てる」機能がないというだけの知らせ
 
 // 島（朝）の3D（2026-10-05、v7 2026-10-06）。見えるものはすべて Blender で作った形と、Blender で焼いた色（光と影）だけ。
 // 島の地面・景色（林・岩・野の花）・池・淵・小川・湧き水・水たまり・海・空・太陽・遠くの山と河口・言葉の植物・根もとの影・種の光・選んだ印の輪、
@@ -144,16 +147,66 @@ function geo(k: KitPart): THREE.BufferGeometry {
 // ---- 光の絵と、流れる水（試し 2026-10-06：川の画面に近い質にする）----
 // 地面：光を焼く前の元の色（三角形ごと）× Blender の Cycles で焼いた光の絵（scripts/island/blender/bake_lightmap.py）。
 //   絵は上から見た向き。位置 (x, z) から絵の場所を出す（bake_lightmap.py の LM_S と同じ）。明るさは半分で入っているので 2 倍に戻す
-// 水：元の水面に、Blender で作ったきらめきの絵（water_glint.py）を足し合わせ、下流へゆっくりずらす（絵は Blender、ずらす動きはアプリ）
-const LM_S = 29;
+// 水：色と光の網目の絵は Blender（水面の色・water_glint.py）、流れの動きはアプリ（下の WATER_FRAG。2026-10-07）
+const LM_S = 33; // 光の絵が覆う範囲（bake_lightmap.py の LM_S と同じ）
 const LM_GAIN = 2 * 1.15; // 2 倍に戻す × 明るさ（前の三角形ごとの光の草地と同じ明るさになるよう、ブラウザで撮った色を数値で比べて合わせた）
 const WATER_FPS = 15; // 水が流れるので、島を見ている間は1秒にこの回数だけ描く（60回より電池を食わない）
-const GLINT_TILE = 3.0; // 光のゆらぎの絵1枚が覆う長さ（m）
-const GLINT_ACROSS = 1.6; // 光のゆらぎの絵1枚が覆う幅（m）
-// 水の流れ：同じ絵を大きさと速さを変えて2枚重ねる。重なりが時間とともに変わり、ゆらいで見える
-// （1枚だけだと、同じ模様が同じ速さでまっすぐ動き、ベルトコンベアのように見えた。ユーザー「違和感ありすぎ」）
-const FLOW_A = { speed: 0.42, repeat: 1, opacity: 0.26 }; // 0.38 では水が白っぽく、海の色とつながらなかった
-const FLOW_B = { speed: 0.26, repeat: 0.62, opacity: 0.22, drift: 0.02 };
+// 水の流れ（2026-10-07、ユーザー「川の流れはアプリで作ったほうが自然かも」）
+// 前は光の網目の絵を2枚、どこでも同じ速さでずらしていて、同じ模様が滑るだけに見えた。今は場所ごとに速さを変える：
+//   細い所・坂は速く、淵・湖に入る所は遅い。速い所では模様が流れの向きに伸びる。岸ぎわと速い所に少し白い泡
+// 動かし方：水面の各点に「上流の始まりからそこまで、水が何秒で着くか」（aFlow.x）を持たせ、模様を（その秒 − 今の時刻）で描く。
+//   どの場所でも、その場所の速さで模様が進み、時間がたっても模様が伸び縮みしない
+//   （「流れの地図」のやり方＝2つの時間を重ねて入れ替える、を最初に試したが、細い光の網目が入れ替わりのたびに薄れて点滅した）
+const FLOW = { speed: 0.5 }; // 基本の速さ（m/秒）
+const WATER_VERT = `
+attribute vec4 aFlow;
+varying vec3 vColor;
+varying vec4 vFlow;
+void main() {
+  vColor = color.rgb;
+  vFlow = aFlow;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+const WATER_FRAG = `
+uniform sampler2D uTex;
+uniform float uTime;
+varying vec3 vColor;
+varying vec4 vFlow;
+float caus(vec2 p) { return texture2D(uTex, p).r; }
+void main() {
+  float s = vFlow.x; // 着くまでの秒
+  float v = vFlow.y; // 横のずれ（m）
+  float sp = vFlow.z;
+  float across = clamp(abs(v) / vFlow.w, 0.0, 1.5);
+  float wob = 0.04 * sin(s * 0.9 + uTime * 1.1) + 0.025 * sin(s * 2.1 - uTime * 1.6 + v * 4.0);
+  // 大きい網目は水と同じ速さ、細かい網目は少し遅く・少し横へ。重なりが変わり続けて、ゆらいで見える
+  // 淵・湖（半分の幅 99 の印）は速さが一定なので、模様の大きさを川と同じに戻す（秒で描くと、遅い水ほど模様が細かくなる）
+  float k = vFlow.w > 50.0 ? sp / ${FLOW.speed.toFixed(2)} : 1.0;
+  // 光の網目の絵は筋が流れの向きに細長い。そのまま流すと、筋が自分の長さの向きに滑るだけで、動いて見えなかった
+  // （ユーザー「川流れてないけど」）。大きい網目は向きを横にして（さざ波の向き）流し、さらに小さな泡の粒を流す
+  float a = (s - uTime) * k * ${FLOW.speed.toFixed(2)}; // 下流へ進む長さの座標（m）。水と同じ速さで動く
+  float c1 = caus(vec2(v / 1.5 + wob, a / 1.6));
+  float c2 = caus(vec2(((s - 0.7 * uTime) * k * ${FLOW.speed.toFixed(2)}) / 1.1 + 0.37, v / 0.8 - wob * 0.5 + uTime * 0.015));
+  float glint = smoothstep(0.1, 0.8, c1) * 0.24 + smoothstep(0.12, 0.85, c2) * 0.12;
+  // 泡の粒：水に乗って流れる小さな白い点（0.4m の升ごとに1つ、3割の升だけ）
+  vec2 g = vec2(a, v + 3.0) / 0.4;
+  vec2 cell = floor(g);
+  float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+  float h2 = fract(sin(dot(cell, vec2(269.5, 183.3))) * 43758.5453);
+  vec2 ctr = cell + 0.25 + 0.5 * vec2(h, h2);
+  float dotv = (1.0 - smoothstep(0.035, 0.075, length((g - ctr) * vec2(0.8, 1.0)))) * step(0.7, h2) * (1.0 - smoothstep(0.75, 1.0, across));
+  float foam = smoothstep(0.7, 1.05, across) * smoothstep(0.35, 0.7, c2) * 0.3 + smoothstep(0.8, 1.4, sp) * smoothstep(0.5, 0.85, c1) * 0.22 + dotv * 0.4 * (vFlow.w > 50.0 ? 0.3 : 1.0);
+  // 遠くからでも流れが見えるよう、大きくやわらかい光の帯（間隔 約2.4m）も水と一緒に流す
+  // （細かい網目と泡の粒は、開いたときの距離では1ピクセルより小さく、止まって見えた）
+  // 帯は規則正しい縞にしない（同じ間隔の縞は機械的に見えた）。光の網目の絵を大きく引きのばして、まだらな明るさとして流す
+  float band = smoothstep(0.45, 0.85, caus(vec2(v / 7.0 + 0.2, a / 4.5))) * (1.0 - smoothstep(0.6, 1.1, across));
+  glint += band * (vFlow.w > 50.0 ? 0.05 : 0.16);
+  // 滝（速い所）：白い泡が強く、筋になって落ちる
+  float fall = smoothstep(1.3, 2.6, sp);
+  foam += fall * (0.35 + 0.4 * smoothstep(0.3, 0.8, caus(vec2(v / 0.5, a / 0.9))));
+  gl_FragColor = vec4(vColor + vec3(0.95, 1.0, 1.0) * glint + vec3(foam), 1.0);
+  #include <colorspace_fragment>
+}`;
 
 const texSrc = (mod: number) => (Platform.OS === 'web' ? Asset.fromModule(mod).uri : (mod as unknown as string));
 const LM_SRC = [texSrc(require('../../assets/island/lm_ground.png')), texSrc(require('../../assets/island/lm_ground_early.png'))];
@@ -172,10 +225,83 @@ function withUV(k: KitPart, uvOf: (x: number, z: number) => [number, number]): T
   return g;
 }
 const planarLM = (x: number, z: number): [number, number] => [(x + LM_S) / (2 * LM_S), (-z + LM_S) / (2 * LM_S)];
-const streamUV = (ks: number[]) => (x: number, z: number): [number, number] => {
-  const [a, c] = flowUV(x, z, ks);
-  return [a / GLINT_TILE, c / GLINT_ACROSS + 0.5];
+const ss = (a: number, b: number, x: number) => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
 };
+
+// 小川の水面に、流れの情報（u＝下流への長さ, v＝横のずれ, 速さ, 半分の幅）を付ける
+function streamGeo(k: KitPart, ks: number[]): THREE.BufferGeometry {
+  const g = geo(k).clone();
+  const pos = g.getAttribute('position');
+  const info = Array.from({ length: pos.count }, (_, i) => flowInfo(pos.getX(i), pos.getZ(i), ks));
+  const lens = new Map<number, number>();
+  for (const kk of ks) {
+    const S = STREAMS[kk];
+    let L = 0;
+    for (let i = 0; i < S.length - 1; i++) L += Math.hypot(S[i + 1][0] - S[i][0], S[i + 1][1] - S[i][1]);
+    lens.set(kk, L);
+  }
+  const speedOf = (u: number, kk: number, prog: number) => {
+    const hw = streamHalfW(prog, kk);
+    // 坂：Blender が決めた水面の高さ（streamLevel）の下がり方。滝では大きく、速く白い流れになる
+    const dp = 0.6 / lens.get(kk)!;
+    const slope = Math.max(0, (streamLevel(prog - dp, kk) - streamLevel(prog + dp, kk)) / 1.2);
+    let sp = FLOW.speed * Math.min(1.5, Math.max(0.7, 0.34 / hw)) * (1 + Math.min(4, slope * 6));
+    if (kk !== RIVER) sp *= 1 - 0.6 * ss(0.9, 1, prog); // 池・湖に入る所で遅く
+    return sp;
+  };
+  // 道すじごとに、0.5m の区切りの速さ（その区切りの点の平均）→ 始まりから各区切りまでの秒
+  const BIN = 0.5;
+  const binSp = new Map<number, number[]>();
+  const sps = info.map(([u, , kk, prog]) => speedOf(u, kk, prog));
+  info.forEach(([u, , kk], i) => {
+    const key = kk * 1000 + Math.floor(u / BIN);
+    const b = binSp.get(key) ?? [0, 0];
+    b[0] += sps[i];
+    b[1] += 1;
+    binSp.set(key, b);
+  });
+  const arrive = new Map<number, number[]>(); // 道すじ → 区切りの始まりの秒
+  const binSpeed = (kk: number, j: number, last: number) => {
+    const b = binSp.get(kk * 1000 + j);
+    return b ? b[0] / b[1] : last;
+  };
+  for (const kk of ks) {
+    const S: number[] = [0];
+    let last = FLOW.speed;
+    for (let j = 0; j < 400; j++) {
+      last = binSpeed(kk, j, last);
+      S.push(S[j] + BIN / last);
+    }
+    arrive.set(kk, S);
+  }
+  const flow = new Float32Array(pos.count * 4);
+  info.forEach(([u, v, kk, prog], i) => {
+    const j = Math.max(0, Math.min(399, Math.floor(u / BIN)));
+    const sp = binSpeed(kk, j, sps[i]);
+    flow.set([arrive.get(kk)![j] + (u - j * BIN) / sp, v, sp, streamHalfW(prog, kk)], i * 4);
+  });
+  g.setAttribute('aFlow', new THREE.BufferAttribute(flow, 4));
+  return g;
+}
+
+// 淵・池・湖：いちばん近い池の向き（流れの向き）にそって、ほぼ止まった水（1つの部品に池がいくつも入っている）
+function stillGeo(k: KitPart, speed: number): THREE.BufferGeometry {
+  const g = geo(k).clone();
+  const pos = g.getAttribute('position');
+  const flow = new Float32Array(pos.count * 4);
+  for (let i = 0; i < pos.count; i++) {
+    const p = nearestPond(pos.getX(i), pos.getZ(i));
+    const a = (p.deg * Math.PI) / 180;
+    const [dx, dz] = [Math.cos(a), Math.sin(a)];
+    const x = pos.getX(i) - p.x;
+    const z = pos.getZ(i) - p.z;
+    flow.set([(x * dx + z * dz) / speed, x * dz - z * dx, speed, 99], i * 4); // 着くまでの秒 ＝ 長さ ÷ 速さ
+  }
+  g.setAttribute('aFlow', new THREE.BufferAttribute(flow, 4));
+  return g;
+}
 
 // ---- 言葉の植物 ----
 // 種類ごとの部品（Poly Pizza の素材を Blender で塗り直し、光を焼いたもの）
@@ -266,38 +392,26 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
       t.colorSpace = THREE.NoColorSpace;
       t.needsUpdate = true;
     }
-    const layer = (repeat: number) => {
-      const t = glintBase.clone();
-      t.colorSpace = THREE.NoColorSpace;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(repeat, repeat);
-      t.needsUpdate = true;
-      return t;
-    };
-    const glintA = layer(FLOW_A.repeat);
-    const glintB = layer(FLOW_B.repeat);
-    const pondA = layer(0.8);
-    const pondB = layer(0.5);
-    const glintMat = (map: THREE.Texture, opacity: number) =>
-      new THREE.MeshBasicMaterial({ map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+    const tex = glintBase.clone();
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.needsUpdate = true;
+    const waterMat = new THREE.ShaderMaterial({
+      vertexShader: WATER_VERT,
+      fragmentShader: WATER_FRAG,
+      vertexColors: true,
+      uniforms: { uTex: { value: tex }, uTime: { value: 0 } },
+    });
     return {
       ground: withUV('island__ground_albedo', planarLM),
       early: withUV('island__ground_early_albedo', planarLM),
       groundMat: new THREE.MeshBasicMaterial({ vertexColors: true, map: lmGround, color: new THREE.Color(LM_GAIN, LM_GAIN, LM_GAIN) }),
       earlyMat: new THREE.MeshBasicMaterial({ vertexColors: true, map: lmEarly, color: new THREE.Color(LM_GAIN, LM_GAIN, LM_GAIN) }),
-      stream: withUV('island__stream', streamUV([0, 1, 2])),
-      river: withUV('island__river', streamUV([3])),
-      pond: withUV('island__pond', (x, z) => [x / 5, z / 5]),
-      pool: withUV('island__pool', (x, z) => [x / 5, z / 5]),
-      glintA,
-      glintB,
-      pondA,
-      pondB,
-      flowMatA: glintMat(glintA, FLOW_A.opacity),
-      flowMatB: glintMat(glintB, FLOW_B.opacity),
-      // 池と淵は流れがないので、ゆっくり・控えめに
-      pondMatA: glintMat(pondA, 0.2),
-      pondMatB: glintMat(pondB, 0.16),
+      stream: streamGeo('island__stream', STREAMS.map((_, k) => k).filter((k) => k !== RIVER)),
+      river: streamGeo('island__river', [RIVER]),
+      pond: stillGeo('island__pond', 0.05),
+      pool: stillGeo('island__pool', 0.07),
+      waterMat,
     };
   }, [lmGround, lmEarly, glintBase]);
   useEffect(() => {
@@ -406,11 +520,7 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
   useFrame((_, dt) => {
     clock.current += Math.min(dt, 0.1);
     const now = clock.current;
-    // 光のゆらぎの絵を下流へずらす（u が大きいほど下流。絵を −u へずらすと、模様は下流へ進む）。2枚は速さが違う
-    look.glintA.offset.x = -(((now * FLOW_A.speed) / GLINT_TILE) * FLOW_A.repeat) % 1;
-    look.glintB.offset.set(-(((now * FLOW_B.speed) / GLINT_TILE) * FLOW_B.repeat) % 1, (now * FLOW_B.drift) % 1);
-    look.pondA.offset.set((now * 0.012) % 1, (now * 0.008) % 1);
-    look.pondB.offset.set(-((now * 0.009) % 1), (now * 0.011) % 1);
+    look.waterMat.uniforms.uTime.value = now; // 水の流れ（WATER_FRAG）
     let moving = false;
 
     // カメラ
@@ -556,6 +666,7 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
       g.__islandFrames = (g.__islandFrames ?? 0) + 1;
       g.__islandRig = { dist: rig.dist, home: rig.home, x: rig.target.x, y: rig.target.y, z: rig.target.z };
       (g as { __islandRigRef?: CameraRig }).__islandRigRef = rig; // 確かめ用：撮るスクリプトがカメラを動かす
+      (g as { __islandGroundY?: (x: number, z: number) => number }).__islandGroundY = groundY; // 確かめ用：地面の高さ
       g.__island = layout.plants.map((p, i) => {
         tmp.v.set(p.x, groundY(p.x, p.z) + plantHeight(p) * scales[i] * 0.5, p.z).project(camera);
         return { word: p.word, x: ((tmp.v.x + 1) / 2) * size.width, y: ((1 - tmp.v.y) / 2) * size.height, scale: scales[i] };
@@ -592,24 +703,13 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
       <mesh geometry={geo('island__scenery')}>
         <meshBasicMaterial vertexColors side={THREE.DoubleSide} />
       </mesh>
-      <mesh geometry={look.pond}>
-        <meshBasicMaterial vertexColors />
-      </mesh>
-      <mesh geometry={look.pond} material={look.pondMatA} />
-      <mesh geometry={look.pond} material={look.pondMatB} />
+      <mesh geometry={look.pond} material={look.waterMat} />
       {/* 池から浜を通って海へ出る川（いつも流れている。たまる一方にしない） */}
-      <mesh geometry={look.river}>
-        <meshBasicMaterial vertexColors />
-      </mesh>
-      <mesh geometry={look.river} material={look.flowMatA} />
-      <mesh geometry={look.river} material={look.flowMatB} />
+      <mesh geometry={look.river} material={look.waterMat} />
       {/* 水の様子：1か月ほどで水たまりと湧き水、データがたまると小川と木の根もとの淵（SPEC 5. の「最初のころ」） */}
       {layout.water !== 'none' && (
         <>
           <mesh geometry={geo('island__spring')}>
-            <meshBasicMaterial vertexColors />
-          </mesh>
-          <mesh geometry={geo('island__spring2')}>
             <meshBasicMaterial vertexColors />
           </mesh>
         </>
@@ -621,16 +721,8 @@ function Scene({ layout, rig, selected, onPick, labelX, labelY, labelOn }: Scene
       )}
       {layout.water === 'streams' && (
         <>
-          <mesh geometry={look.stream}>
-            <meshBasicMaterial vertexColors />
-          </mesh>
-          <mesh geometry={look.stream} material={look.flowMatA} />
-          <mesh geometry={look.stream} material={look.flowMatB} />
-          <mesh geometry={look.pool}>
-            <meshBasicMaterial vertexColors />
-          </mesh>
-          <mesh geometry={look.pool} material={look.pondMatA} />
-          <mesh geometry={look.pool} material={look.pondMatB} />
+          <mesh geometry={look.stream} material={look.waterMat} />
+          <mesh geometry={look.pool} material={look.waterMat} />
         </>
       )}
       <primitive object={built.shadows} />

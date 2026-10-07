@@ -19,7 +19,7 @@ sun = bpy.data.objects['LibSun']
 sun.rotation_euler = (-KEY).to_track_quat('-Z', 'Y').to_euler()
 sun.data.energy = 3.6
 sun.data.angle = math.radians(6)
-sun.data.color = (1.0, 0.94, 0.84)
+sun.data.color = (1.0, 0.88, 0.72)  # v9：あたたかい金色
 
 
 def l2(h):
@@ -143,7 +143,7 @@ try:
     bk = scn.data.color_attributes['Baked']
     for p in scn.data.polygons:
         c = p.center
-        t = 0.26 * T['ss'](6.0, 16.0, T['back'](c.x, -c.y))
+        t = 0.12 * T['ss'](10.0, 22.0, T['back'](c.x, -c.y))
         if t > 0:
             for li in p.loop_indices:
                 cc = bk.data[li].color

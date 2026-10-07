@@ -23,7 +23,7 @@ for o in list(D.objects):
     bpy.data.objects.remove(o, do_unlink=True)
     if me and me.users == 0:
         bpy.data.meshes.remove(me)
-for n in ('island__stream', 'island__river', 'island__pond', 'island__pool', 'island__spring', 'island__spring2', 'design__puddles', 'island__far'):
+for n in ('island__stream', 'island__river', 'island__pond', 'island__pool', 'island__spring', 'island__spring2', 'design__puddles', 'island__far'):  # spring2 は v9 でやめた（湧き水は island__spring に全部）
     o = bpy.data.objects.get(n)
     if o:
         me = o.data
@@ -64,15 +64,25 @@ def finish(name, bm, colfn, coll, lit=False):
 
 
 rnd = random.Random(7)
+from mathutils.bvhtree import BVHTree
+_GT = BVHTree.FromObject(bpy.data.objects['v4__ground'], bpy.context.evaluated_depsgraph_get())
 
-# ---- 小川の水（3本） ----
+
+def ground_h(x, z):
+    # 実際の地面の三角形の高さ（上から光線を当てる）
+    hit = _GT.ray_cast(mathutils.Vector((x, -z, 60.0)), mathutils.Vector((0, 0, -1)))
+    return hit[0].z if hit[0] is not None else None
+
+
+# ---- 小川の水（v9：湧き水4つ → 池・淵 → 湖 → 海） ----
 PX, PZ = T['POND']
 QX, QZ = T['POOL']
+RIVER = T['RIVER']
 W1, W2 = l2('#8fd4d2'), l2('#5fb7c4')
-# 小川（0〜2：言葉の流れ。データがたまってから出る）と、池から海へ出る川（3：いつも流れている）は別の部品にする
+# 小川（言葉の流れ。データがたまってから出る）と、湖から海へ出る川（RIVER：いつも流れている）は別の部品にする
 bms = {'island__stream': bmesh.new(), 'island__river': bmesh.new()}
 for si, S in enumerate(T['STREAMS']):
-    bm = bms['island__river' if si == 3 else 'island__stream']
+    bm = bms['island__river' if si == RIVER else 'island__stream']
     pts = []
     for i in range(len(S) - 1):
         (ax, az), (bx, bz) = S[i], S[i + 1]
@@ -82,61 +92,104 @@ for si, S in enumerate(T['STREAMS']):
             pts.append((ax + (bx - ax) * t, az + (bz - az) * t))
     pts.append(S[-1])
     # 池と淵の中には帯を入れない（縁で終える）
-    pts = [q for q in pts if T['pond_u'](*q) > 0.95 and math.hypot(q[0] - QX, q[1] - QZ) > T['POOL_R'] - 0.25]
-    if si == 3:
-        # 海へ出る川の水の帯は、浜の手前で終える。そこから先は溝が海面より下なので、海の水そのものが入り込む（本物の河口と同じ）
-        pts = [q for q in pts if T['height'](q[0], q[1], False, False) > 0.12]  # 溝を掘る前の地面の高さで見る
-    for _ in range(8):  # 細かくしたので、ならす回数も増やす（角を丸める）
-        pts = [pts[0]] + [((pts[i - 1][0] + 2 * pts[i][0] + pts[i + 1][0]) / 4, (pts[i - 1][1] + 2 * pts[i][1] + pts[i + 1][1]) / 4)
-                          for i in range(1, len(pts) - 1)] + [pts[-1]]
+    # 淵・池の中まで伸ばす（水面の下に重ねて、つなぎ目の切れ目を見せない。前は縁で終えてぷつっと切れて見えた）
+    pts = [q for q in pts if T['pond_near'](*q)[0] > 0.45]
+    # ならさない：道すじはもう曲線（_spline）。ならすと地面の岸の線（同じ道すじから作る）とずれて、すき間や重なりが出た
     rows = []
     N = len(pts)
     for i, (x, z) in enumerate(pts):
-        _, prog, _k = T['stream_near'](x, z)
+        _, prog, _k = T['stream_near'](x, z, (si,))
         j0, j1 = max(0, i - 1), min(N - 1, i + 1)
         tx, tz = pts[j1][0] - pts[j0][0], pts[j1][1] - pts[j0][1]
         L = math.hypot(tx, tz) or 1
         nx, nz = -tz / L, tx / L
-        pr = i / (N - 1)
-        w = T['stream_w'](pr, si) * (1 + 0.12 * math.sin(i * 0.75)) + T['WATER_PAD']  # 溝より広く。縁は岸の地面の下に隠れる
-        y = T['stream_level'](pr, si) + 0.03
+        pr = prog  # 進み具合は地形と同じ求め方で（前は点の番号 i/(N-1) を使い、地形の水面とずれて、川が地面に隠れたり浮いたりした）
+        w = T['stream_w'](pr, si) + 0.02  # 幅は地面の岸の線（build_ground.py の snap）とそろえる（揺らさない）
+        y = T['stream_level'](pr, si) + 0.02
+        if si == RIVER:
+            # 海へ出る川は、海に近づくと水面を少しずつ海の下へ沈め、海に溶け込ませる（前は浜の手前で四角く切れていた）
+            y -= 0.09 * T['ss'](0.02, -0.12, T['height'](x, z, False, False))  # 海に入ってから沈める（早すぎると砂浜の上で途切れた）
+        # 淵・湖の中に伸ばした所は、その水面より少し下へ（同じ高さだと、淵の中に川の帯が透けて重なって見えた）
+        pu_, pn_ = T['pond_near'](x, z)
+        if pu_ < 1.1:
+            y = min(y, T['POND_LEVELS'][pn_] + 0.01)
         row = []
         for s_ in (-1, 0, 1):
             ex, ez = x + nx * w * s_, z + nz * w * s_
             # 縁は、その場所の地面より少し下に（斜面を横切る所で、低い側の縁が宙に浮かないように）。真ん中は水面の高さ
-            yy = y if s_ == 0 else min(y, T['height'](ex, ez) - 0.02)
-            row.append(bm.verts.new((ex, -ez, yy + 0.012 * rnd.uniform(-1, 1))))
-        rows.append(row)
+            row.append([ex, ez, y])
+        # 縁は、実際にできた地面（三角形の面）の高さに貼る。真ん中は水面か、両縁より低くしない
+        # （式の高さと三角形の面の高さは、三角形の間で違う。滝の上では浮き、滝の下では地面に隠れて川が途切れた）
+        if si != RIVER or T['zone'](x, z) < 0.95:
+            for e in (row[0], row[2]):
+                gh = ground_h(e[0], e[1])
+                if gh is not None:
+                    e[2] = min(gh + 0.02, y + 0.25)
+            row[1][2] = max(y, (row[0][2] + row[2][2]) / 2, (ground_h(x, z) or -9) + 0.02)
+        rows.append([bm.verts.new((ex, -ez, yy)) for ex, ez, yy in row])
     for i in range(N - 1):
         a_, b_ = rows[i], rows[i + 1]
         for k in range(2):
             bm.faces.new((a_[k], a_[k + 1], b_[k + 1]))
             bm.faces.new((a_[k], b_[k + 1], b_[k]))
-stream = finish('island__stream', bms['island__stream'], lambda p: [v * (1 + rnd.uniform(-0.05, 0.05)) for v in mix(W1, W2, rnd.random() * 0.6)], W)
+FOAM = l2('#eef8f6')
+
+
+def water_tone(p):
+    # 水の色の濃淡は、場所でゆっくり変える（三角形ごとにばらばらだと、細長い三角形が板を並べたような縞に見えた）
+    c = p.center
+    return mix(W1, W2, 0.3 + 0.2 * math.sin(c.x * 0.7 + 1.3) * math.cos(c.y * 0.6 - 0.4))
+
+
+def stream_col(p):
+    base = water_tone(p)
+    steep = T['ss'](0.95, 0.55, abs(p.normal.z))
+    # 滝つぼ：滝の下の平らな所も少し白く泡立つ（滝から急に青い水に変わると、つながって見えなかった）
+    c = p.center
+    _, prog, k = T['stream_near'](c.x, -c.y)
+    lv, lv2 = T['stream_level'](prog, k), T['stream_level'](max(0.0, prog - 0.03), k)
+    plunge = T['ss'](0.05, 0.5, lv2 - lv)
+    return [v * (1 + rnd.uniform(-0.01, 0.01)) for v in mix(base, FOAM, max(steep * 0.9, plunge * 0.5))]  # 三角形ごとの色のばらつきは小さく（大きいと縞々に見えた）
+
+
+stream = finish('island__stream', bms['island__stream'], stream_col, W)
 SEA_NEAR = l2('#5aaebb')  # 海の浅い所の色（world_colors.py の NEAR に近い）
 
 
 def river_col(p):
     # 海へ出る川は、下流ほど海の浅い所の色へ（白っぽい小川の先に急に濃い海が入り、つながって見えなかった）
     c = p.center
-    _, prog, _k = T['stream_near'](c.x, -c.y, (3,))
-    base = mix(W1, W2, rnd.random() * 0.6)
-    return [v * (1 + rnd.uniform(-0.05, 0.05)) for v in mix(base, SEA_NEAR, T['ss'](0.25, 0.9, prog))]
+    _, prog, _k = T['stream_near'](c.x, -c.y, (RIVER,))
+    base = water_tone(p)
+    return [v * (1 + rnd.uniform(-0.01, 0.01)) for v in mix(base, SEA_NEAR, T['ss'](0.25, 0.9, prog))]
 
 
 finish('island__river', bms['island__river'], river_col, W)
+
+# ---- 岸の帯（2026-10-07）：水の縁を、なめらかな濡れた岸の帯で覆う ----
+# 岸の線を、粗い地面の三角形（0.7m ごと）と水面がぶつかる線で作っていたので、のこぎりの歯のようにギザギザだった（ユーザー「川がギザギザで嫌」）
+# 帯の内側は水面のすぐ上（なめらかな曲線＝見える岸）、外側は地面のすぐ上。淵・池の中と、浜の河口では帯を作らない
+for o in [o for o in W.objects if o.name in ('island__banks', 'island__riverbanks')]:
+    me_ = o.data
+    bpy.data.objects.remove(o, do_unlink=True)
+    bpy.data.meshes.remove(me_)
+
+
+# v8（2026-10-07）：岸の帯は作らない。岸をゆるい坂（island_terrain の溝 w+0.12〜1.1）にしたので、水の縁は地面の三角形で
+# 自然な岸の線になる（海の岸と同じ見え方）。帯があると、水のまわりに二重の縁取り（縁石・プールの縁）に見えた
+RINGS = (0.3, 0.55, 0.75, 0.9, 1.0)  # 水の面の輪（多いほど、真ん中から縁への色の変わり方がなめらか）
 
 
 def disc(name, cx, cz, rad, y, deep, mid, nseg=24, coll=W):
     bm = bmesh.new()
     c0 = bm.verts.new((cx, -cz, y))
     rings = []
-    for ri, f in enumerate((0.45, 0.8, 1.0)):
+    for ri, f in enumerate(RINGS):
         rings.append([bm.verts.new((cx + rad * f * (1 + 0.05 * math.sin(3 * a + ri)) * math.cos(a), -(cz + rad * f * math.sin(a)), y))
                       for a in [k * 2 * math.pi / nseg for k in range(nseg)]])
     for k in range(nseg):
         bm.faces.new((c0, rings[0][k], rings[0][(k + 1) % nseg]))
-        for ri in range(2):
+        for ri in range(len(RINGS) - 1):
             a_, b_ = rings[ri], rings[ri + 1]
             bm.faces.new((a_[k], b_[k], b_[(k + 1) % nseg]))
             bm.faces.new((a_[k], b_[(k + 1) % nseg], a_[(k + 1) % nseg]))
@@ -144,48 +197,67 @@ def disc(name, cx, cz, rad, y, deep, mid, nseg=24, coll=W):
     def col(p):
         c = p.center
         t = min(1.0, math.hypot(c.x - cx, -c.y - cz) / rad)
-        return [v * (1 + rnd.uniform(-0.04, 0.04)) for v in mix(deep, mix(mid, W1, 0.5), t ** 1.5)]
+        return [v * (1 + rnd.uniform(-0.015, 0.015)) for v in mix(deep, mix(mid, W1, 0.5), T['ss'](0.0, 1.0, t))]
     return finish(name, bm, col, coll)
 
 
-# ---- 木の根もとの淵と、湧き水の小さな泉 ----
-disc('island__pool', QX, QZ, T['POOL_R'] + 0.15, T['POOL_LEVEL'] + 0.035, l2('#58aebb'), l2('#86cdcd'), 20)
-SX, SZ = T['SPRING']
-disc('island__spring', SX, SZ, 0.75, T['stream_level'](0.0, 0) + 0.04, l2('#6bbcc4'), l2('#9ad8d3'), 14)
-S2X, S2Z = T['SPRING2']
-disc('island__spring2', S2X, S2Z, 0.65, T['stream_level'](0.0, 1) + 0.04, l2('#6bbcc4'), l2('#9ad8d3'), 14)
+# ---- 池・淵・湖の水の面（真ん中は少し深い青緑、縁ほど明るい浅瀬の色）と、湧き水の小さな泉 ----
+P_DEEP, P_MID = l2('#5fb0bc'), l2('#82cac9')  # 真ん中を濃くしすぎると、輪の段が的のように見えた
 
-# ---- 池の水の面（真ん中は少し深い青緑、縁ほど明るい浅瀬の色） ----
-bm = bmesh.new()
-PX, PZ = T['POND']
-PR = T['POND_R'] + 0.6  # 色の段の目安
-PY = T['POND_LEVEL']  # 海（小さな波 0.035）より上、蓮の葉（0.075）より下
-c0 = bm.verts.new((PX, -PZ, PY))
-rings = []
-for ri, f in enumerate((0.45, 0.8, 1.0)):
-    rings.append([bm.verts.new((PX + (T['pond_r'](a) + 0.55) * f * math.cos(a), -(PZ + (T['pond_r'](a) + 0.55) * f * math.sin(a)), PY))
-                  for a in [k * 2 * math.pi / 28 for k in range(28)]])
-for k in range(28):
-    bm.faces.new((c0, rings[0][k], rings[0][(k + 1) % 28]))
-    for ri in range(2):
-        a, b = rings[ri], rings[ri + 1]
-        bm.faces.new((a[k], b[k], b[(k + 1) % 28]))
-        bm.faces.new((a[k], b[(k + 1) % 28], a[(k + 1) % 28]))
-P_DEEP, P_MID = l2('#4fa6b4'), l2('#7cc6c8')
+
+def pond_disc(bm, name, pad, nseg=28):
+    # 池の形（pond_shape の縁）より pad だけ広い水の面。高さは池の水面 ＋0.035（流れ込む小川の帯の終わりがこの下に隠れる）
+    (cx, cz), A, B, deg = T['PONDS'][name]
+    y = T['POND_LEVELS'][name] + 0.02
+    c0 = bm.verts.new((cx, -cz, y))
+    rings = []
+    for f in RINGS:
+        ring = []
+        for k in range(nseg):
+            a = 2 * math.pi * k / nseg
+            r = 1 / T['pond_shape'](name, cx + math.cos(a), cz + math.sin(a)) + pad
+            ring.append(bm.verts.new((cx + r * f * math.cos(a), -(cz + r * f * math.sin(a)), y)))
+        rings.append(ring)
+    for k in range(nseg):
+        bm.faces.new((c0, rings[0][k], rings[0][(k + 1) % nseg]))
+        for ri in range(len(RINGS) - 1):
+            a_, b_ = rings[ri], rings[ri + 1]
+            bm.faces.new((a_[k], b_[k], b_[(k + 1) % nseg]))
+            bm.faces.new((a_[k], b_[(k + 1) % nseg], a_[(k + 1) % nseg]))
 
 
 def pond_col(p):
     c = p.center
-    t = min(1.0, math.hypot(c.x - PX, -c.y - PZ) / PR)
-    return [v * (1 + rnd.uniform(-0.04, 0.04)) for v in mix(P_DEEP, mix(P_MID, W1, 0.5), t ** 1.5)]
+    t = min(1.0, T['pond_near'](c.x, -c.y)[0] / 1.15)  # 細長い池もあるので、縁までの割合で
+    return [v * (1 + rnd.uniform(-0.015, 0.015)) for v in mix(P_DEEP, mix(P_MID, W1, 0.5), T['ss'](0.0, 1.0, t))]
 
 
-finish('island__pond', bm, pond_col, W)
+bm = bmesh.new()
+pond_disc(bm, 'lake', 0.06)  # 岸の線（snap）のすぐ外まで。広いと岸の上に水が出た
+finish('island__pond', bm, pond_col, W)  # 湖（最初のころからある）
+bm = bmesh.new()
+for nm in T['PONDS']:
+    if nm != 'lake':
+        pond_disc(bm, nm, 0.06, 20)
+finish('island__pool', bm, pond_col, W)  # 淵と小さな池（小川と一緒に出る）
+bm = bmesh.new()
+for k, (sx, sz) in enumerate(T['SPRINGS']):
+    sk = next(i for i, d in enumerate(T['STREAM_DEFS']) if d[0][0] == (sx, sz))
+    y = T['stream_level'](0.0, sk) + 0.04
+    c0 = bm.verts.new((sx, -sz, y))
+    # 縁はその場所の地面のすぐ上に（湧き水は斜面にあるので、平らな円だと低い側が宙に浮いた）
+    ring = []
+    for a in [i * 2 * math.pi / 14 for i in range(14)]:
+        ex, ez = sx + 0.55 * (1 + 0.08 * math.sin(3 * a + k)) * math.cos(a), sz + 0.55 * math.sin(a)
+        ring.append(bm.verts.new((ex, -ez, min(y, T['height'](ex, ez) + 0.03))))
+    for i in range(14):
+        bm.faces.new((c0, ring[i], ring[(i + 1) % 14]))
+finish('island__spring', bm, lambda p: [v * (1 + rnd.uniform(-0.02, 0.02)) for v in mix(l2('#6bbcc4'), l2('#9ad8d3'), 0.5)], W)
 
 # ---- 最初のころの水たまり（ふだんは隠す）。縁に濃い土の輪 ----
-MUD = l2('#8d8a6a')
+MUD = l2('#8fa06c')  # 灰色の土の輪は穴に見えた。草に近い湿った土の色
 bm = bmesh.new()
-for si, prog, rr in [(0, 0.02, 0.9), (0, 0.45, 0.8), (1, 0.5, 0.8), (2, 0.0, 0.95)]:
+for si, prog, rr in [(1, 0.3, 0.9), (2, 0.45, 0.8), (4, 0.5, 0.8), (6, 0.4, 0.85)]:
     S = T['STREAMS'][si]
     f = prog * (len(S) - 1)
     i = min(int(f), len(S) - 2)
@@ -214,7 +286,7 @@ A0, A1, GAP = 196.0, 264.0, 230.0
 NA = 46
 DEPTH = 7.0
 KEYV = mathutils.Vector(KEY).normalized()
-for layer, (dist, hmax, seed) in enumerate([(FAR + 9, 9.5, 2.1), (FAR, 6.0, 5.3)]):
+for layer, (dist, hmax, seed) in enumerate([(FAR + 9, 6.5, 2.1), (FAR, 4.2, 5.3)]):  # v10：低く淡く（参考の絵の遠い山）
     front, ridge, back_ = [], [], []
     for k in range(NA + 1):
         a = A0 + (A1 - A0) * k / NA
@@ -245,12 +317,29 @@ for k in range(NR):
         return bm.verts.new((d * math.cos(a), -d * math.sin(a), 0.06 + 0.25 * (1 - t)))
     for w0, w1 in ((-1.0, 1.0),):  # 両側の砂の岸は、遠くで浮いた板に見えたのでやめた
         bm.faces.new((pt(t0, w0), pt(t0, w1), pt(t1, w1), pt(t1, w0)))
-M_LO, M_HI, HAZE = l2('#8fb0b8'), l2('#b3c6cf'), l2('#efd8cc')
+# 遠くの小島と灯台（参考の絵の右奥。v10）
+N_RIVER = len(bm.faces)
+LX, LZ = T['P'](292, 58.0)
+isl = [bm.verts.new((LX + 3.2 * math.cos(a) * (1 + 0.15 * math.sin(3 * a)), -(LZ + 2.2 * math.sin(a)), 0.5)) for a in [k * 2 * math.pi / 10 for k in range(10)]]
+ic = bm.verts.new((LX, -LZ, 1.1))
+for k in range(10):
+    bm.faces.new((isl[k], isl[(k + 1) % 10], ic))
+N_ISLE = len(bm.faces)
+for (y0, y1, r0, r1) in ((1.0, 3.2, 0.42, 0.32), (3.2, 3.9, 0.36, 0.0)):
+    ring0 = [bm.verts.new((LX + r0 * math.cos(a), -(LZ + r0 * math.sin(a)), y0)) for a in [k * 2 * math.pi / 6 for k in range(6)]]
+    ring1 = [bm.verts.new((LX + max(r1, 0.01) * math.cos(a), -(LZ + max(r1, 0.01) * math.sin(a)), y1)) for a in [k * 2 * math.pi / 6 for k in range(6)]]
+    for k in range(6):
+        bm.faces.new((ring0[k], ring0[(k + 1) % 6], ring1[(k + 1) % 6], ring1[k]))
+M_LO, M_HI, HAZE = l2('#d0b4c0'), l2('#e4cccc'), l2('#f4d6c6')  # v10：あたたかい朝のかすみ（藤色〜桃色）
 RIV, BANK = l2('#a9dad9'), l2('#ead8b4')
 
 
 def far_col(p):
     c = p.center
+    if p.index >= N_ISLE:
+        return l2('#c8504a') if c.z > 2.6 and c.z < 3.3 or c.z > 3.3 else l2('#f4eee6')  # 灯台：白に赤い帯と屋根
+    if p.index >= N_RIVER:
+        return l2('#8a9f6e')  # 遠くの小島
     if p.index >= N_MOUNT:
         # 河口の帯（前は「低くて上向きの面」で見分け、低い山の面まで砂の色に塗って、浮いた板に見えた）
         return RIV
@@ -338,9 +427,10 @@ def ok(x, z, pad=0.35):
     d, prog, k = T['stream_near'](x, z)
     if d < T['stream_w'](prog, k) + pad:
         return False
-    if math.hypot(x - QX, z - QZ) < T['POOL_R'] + pad:
-        return False
-    return T['pond_u'](x, z) > 1 + pad / T['POND_R']
+    h0 = T['height'](x, z)
+    if max(abs(T['height'](x + dx, z + dz) - h0) for dx, dz in ((0.4, 0), (-0.4, 0), (0, 0.4), (0, -0.4))) > 0.15:
+        return False  # 段の崖の上には植えない
+    return T['pond_near'](x, z)[0] > 1.15
 
 
 def patch(cx, cz, items, spread=0.55):
@@ -359,20 +449,20 @@ objs = plant('tree_big', 0.0, 0.0, 2.9, GOLD, rot=0.4)
 F = 'flower'
 # 木のそばにいつも咲く花（わくわくした日に一緒に拾う言葉）：淵の両側の岸に
 FS = 2.6  # 花畑の花の大きさ（全体の絵で色の塊に見えるように）
-objs += patch(*T['P'](74, 5.6), [(F, 'emotion', FS)] * 6 + [(F, 'value', FS)] * 3, 0.42)
-objs += patch(*T['P'](24, 5.4), [(F, 'value', FS)] * 5 + [(F, 'emotion', FS)] * 2, 0.42)
-# 本流の上流のほとり：「していること」（計画を立てる など）。木へ流れ込む小川の上に、いつも咲く
-objs += patch(*T['P'](196, 6.8), [('fruitbush', 'doing', 1.3)] * 3 + [(F, 'doing', FS)] * 6, 0.5)
-# 支流の上流のほとり：好奇心の芽と花
-objs += patch(*T['P'](318, 7.0), [(F, 'curiosity', FS)] * 6 + [('sprout', 'curiosity', 1.5)] * 2, 0.45)
-# 池のほとり：流れをたどると行き着きやすい言葉（例：ほっとした）
+objs += patch(*T['P'](80, 5.4), [(F, 'emotion', FS)] * 6 + [(F, 'value', FS)] * 3, 0.42)
+objs += patch(*T['P'](40, 6.4), [(F, 'value', FS)] * 5 + [(F, 'emotion', FS)] * 2, 0.42)
+# 山の湧き水からの小川の上流のほとり：「していること」（計画を立てる など）
+objs += patch(*T['P'](168, 8.6), [('fruitbush', 'doing', 1.3)] * 3 + [(F, 'doing', FS)] * 6, 0.5)
+# 右の小川のほとり：好奇心の芽と花
+objs += patch(*T['P'](322, 7.4), [(F, 'curiosity', FS)] * 6 + [('sprout', 'curiosity', 1.5)] * 2, 0.45)
+# 湖のほとり：流れをたどると行き着きやすい言葉（例：ほっとした）
 px_, pz_ = T['POND']
-objs += patch(px_ - 1.2, pz_ + 4.3, [(F, 'emotion', FS)] * 7, 0.42)
+objs += patch(*T['P'](62, 14.6), [(F, 'emotion', FS)] * 7, 0.42)
 # 草地のほかのまとまり（場面の茂み、体の感じの草、したいことの若木）
-objs += patch(6.6, -2.4, [('bush', 'situation', 1.3), ('bush', 'situation', 1.1)] + [(F, 'situation', FS)] * 5, 0.5)
-objs += patch(-3.0, -7.0, [('tree_small', 'value', 1.0), ('tree_small', 'value', 0.85)] + [(F, 'value', FS)] * 4, 0.55)
-objs += patch(-7.4, 3.0, [('grass', 'body', 1.2), ('grass', 'body', 1.0)] + [(F, 'body', FS)] * 6, 0.45)
-objs += patch(3.0, 7.4, [(F, 'emotion', FS)] * 5 + [('bush', 'situation', 1.1)], 0.45)
+objs += patch(*T['P'](295, 4.2), [('bush', 'situation', 1.3), ('bush', 'situation', 1.1)] + [(F, 'situation', FS)] * 5, 0.5)
+objs += patch(*T['P'](225, 7.2), [('tree_small', 'value', 1.0), ('tree_small', 'value', 0.85)] + [(F, 'value', FS)] * 4, 0.55)
+objs += patch(*T['P'](140, 7.6), [('grass', 'body', 1.2), ('grass', 'body', 1.0)] + [(F, 'body', FS)] * 6, 0.45)
+objs += patch(*T['P'](20, 8.4), [(F, 'emotion', FS)] * 5 + [('bush', 'situation', 1.1)], 0.45)
 
 # 最初のころ：ワクワクの若木（1日目から立っている）と芽が少し（ふだんは隠す）
 early = plant('tree_big', 0.0, 0.0, 1.3, GOLD, rot=0.4, prefix='e_')
