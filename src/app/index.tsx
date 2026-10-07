@@ -10,8 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 
 import { router, useFocusEffect } from 'expo-router';
-import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { useAddCapture } from '../useCaptures';
 import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
@@ -686,7 +685,7 @@ function CaptureToast({ ref }: { ref: React.Ref<ToastHandle> }) {
 export default function Home() {
   const { width, height } = useWindowDimensions();
   const toastRef = useRef<ToastHandle>(null);
-  const addCapture = useMutation(api.captures.add);
+  const addCapture = useAddCapture();
 
   const P = useMemo(() => buildPathData(width, height), [width, height]);
 
@@ -720,7 +719,7 @@ export default function Home() {
       ambientRef.current?.chime(strength);
       toastRef.current?.show(word);
       try {
-        await addCapture({ word, strength });
+        await addCapture(word, strength);
       } catch {
         // エラー時は継続
       }

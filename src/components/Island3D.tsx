@@ -307,8 +307,8 @@ function stillGeo(k: KitPart, speed: number): THREE.BufferGeometry {
 // 種類ごとの部品（Poly Pizza の素材を Blender で塗り直し、光を焼いたもの）
 //   base＝葉・幹など（焼いた色のまま）、accent＝花びら・実（白で焼いてある。種類の色を掛ける）
 type Kind = 'sprout' | 'flower' | 'grass' | 'bush' | 'tree_small' | 'tree_big' | 'fruitbush';
-const KIND_OF: Record<Plant['category'], Kind> = { emotion: 'flower', body: 'grass', situation: 'bush', value: 'tree_small', curiosity: 'tree_big' };
-// fruitbush（実のなる低木）は6つ目の種類「していること」用（言葉の一覧に足したら KIND_OF に入れる）
+const KIND_OF: Record<Plant['category'], Kind> = { emotion: 'flower', body: 'grass', situation: 'bush', value: 'tree_small', curiosity: 'tree_big', doing: 'fruitbush' };
+// fruitbush（実のなる低木）は6つ目の種類「していること」用
 const KINDS: Kind[] = ['sprout', 'flower', 'grass', 'bush', 'tree_small', 'tree_big', 'fruitbush'];
 const PARTS_OF = Object.fromEntries(
   KINDS.map((kind) => [kind, (Object.keys(ISLAND_KIT) as KitPart[]).filter((k) => k.startsWith(kind + '__'))]),

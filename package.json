@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@convex-dev/auth": "^0.0.96",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-three/fiber": "^9.8.1",
     "convex": "^1.46.0",
     "expo": "~57.0.26",

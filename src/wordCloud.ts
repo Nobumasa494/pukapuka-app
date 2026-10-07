@@ -27,6 +27,7 @@ export const CATEGORY_COLOR: Record<Category, [number, number, number]> = {
   situation: [170, 204, 238],
   value: [242, 222, 150],
   curiosity: [178, 232, 208],
+  doing: [201, 182, 239],
 };
 
 export const LEGEND = (Object.keys(CATEGORY_LABEL) as Category[]).map((c) => ({
@@ -42,7 +43,7 @@ const MAX_SIZE = 40;
 const HALO_MIN_R = 16;
 const HALO_EXTRA_R = 40;
 // 青は空と同系色で強く光って見えやすい（NG「強い青発光」）ので控えめにする
-const HALO_TINT: Record<Category, number> = { emotion: 1, body: 1, situation: 0.75, value: 1, curiosity: 1 };
+const HALO_TINT: Record<Category, number> = { emotion: 1, body: 1, situation: 0.75, value: 1, curiosity: 1, doing: 1 };
 // 光の4分の3ほどは隣と重なってよい（全部避けると間が空きすぎる）
 const HALO_KEEP = 0.25;
 
