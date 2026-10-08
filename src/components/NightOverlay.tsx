@@ -285,9 +285,6 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
       )}
       {showSample && (
         <>
-          <View style={styles.sampleBadge} pointerEvents="none">
-            <Text style={styles.sampleBadgeText}>見本</Text>
-          </View>
           <Pressable style={styles.sampleClose} hitSlop={16} onPress={() => { setShowSample(false); setSelected(null); }}>
             <Text style={styles.backText}>見本をとじる</Text>
           </Pressable>
@@ -350,8 +347,6 @@ const styles = StyleSheet.create({
   empty: { fontSize: 13, color: 'rgba(255,246,232,0.7)', letterSpacing: 1 },
   sampleBtn: { marginTop: 14, paddingHorizontal: 18, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.55)' },
   sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
-  sampleBadge: { position: 'absolute', top: 82, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 20 },
-  sampleBadgeText: { fontSize: 11, color: 'rgba(255,215,140,0.85)', letterSpacing: 0.5, textAlign: 'center' },
   sampleClose: { position: 'absolute', top: 56, right: 64, zIndex: 10 },
   help: { position: 'absolute', top: 52, right: 20, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   helpText: { fontSize: 14, color: 'rgba(255,246,232,0.8)' },
