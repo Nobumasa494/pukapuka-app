@@ -116,13 +116,21 @@ function overlaps(a: Rect, b: Rect, k: number) {
   return a.x < b.x + b.w + gx && b.x < a.x + a.w + gx && a.y < b.y + b.h + gy && b.y < a.y + a.h + gy;
 }
 
-// 大きい言葉から順に、中心から渦を巻くように空いている場所へ置く。位置に意味は持たせない。
-// 入りきらないときは全体を同じ割合で縮める（大きさの比は変えない）
+// 種類（色）ごとに、画面を6つに分けた区画の中心（面積に対する割合。左右 0〜1、上下 0〜1）。決定 2026-10-09
+// 同じ色の言葉が、近くに集まる。区画の境目はなく、言葉が多い種類は、まわりへ広がる
+const CATEGORY_CENTER: Record<Category, [number, number]> = {
+  emotion: [0.27, 0.22],
+  body: [0.73, 0.22],
+  situation: [0.27, 0.52],
+  value: [0.73, 0.52],
+  curiosity: [0.27, 0.82],
+  doing: [0.73, 0.82],
+};
+
+// 大きい言葉から順に、その言葉の種類の区画の中心から、渦を巻くように空いている場所へ置く。
+// 位置は「種類」の目安（くわしい意味はない）。入りきらないときは全体を同じ割合で縮める（大きさの比は変えない）
 export function layoutWords(stats: WordStat[], area: Area): { placed: Placed[]; scale: number; dropped: string[] } {
   const order = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
-  const cx = area.x + area.w / 2;
-  const cy = area.y + area.h / 2;
-  const aspect = area.w / area.h;
 
   let scale = 1;
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -140,11 +148,14 @@ export function layoutWords(stats: WordStat[], area: Area): { placed: Placed[]; 
       const px = Math.max(0, haloR - w / 2) * HALO_KEEP;
       const py = Math.max(0, haloR - h / 2) * HALO_KEEP;
       const phase = hash(s.word) * Math.PI * 2;
+      const [fx, fy] = CATEGORY_CENTER[s.category];
+      const cx = area.x + area.w * fx;
+      const cy = area.y + area.h * fy;
       let found = false;
       for (let i = 0; i < 2400 && !found; i++) {
         const r = 9 * Math.sqrt(i);
         const ang = phase + i * 2.399963;
-        const x = cx + Math.cos(ang) * r * aspect * 1.25 - w / 2;
+        const x = cx + Math.cos(ang) * r * 1.5 - w / 2;
         const y = cy + Math.sin(ang) * r - h / 2;
         if (x < area.x || y < area.y || x + w > area.x + area.w || y + h > area.y + area.h) continue;
         const box = { x: x - px, y: y - py, w: w + px * 2, h: h + py * 2 };
