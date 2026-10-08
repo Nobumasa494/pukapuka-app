@@ -27,7 +27,7 @@ const TWINKLE_GROUPS = 3;
 const INTRO_KEY = 'pukapuka.nightIntroSeen';
 const INTRO_LINES: [string, string][] = [
   ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
-  ['線', 'いっしょによく拾った言葉を、つないでいます。'],
+  ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。'],
   ['星座', '線でつながった星の集まりです。いっしょに出やすい言葉たちです。'],
   ['点線', '小さなつながりです。'],
 ];
@@ -267,8 +267,8 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         }`
       : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
     : showSample
-      ? '見本です。大きな星ほど、よく拾った言葉　線は、いっしょによく拾った言葉　点線は、小さなつながり'
-      : '大きな星ほど、よく拾った言葉　線は、よく一緒に拾った言葉';
+      ? '見本です。大きな星ほど、よく拾った言葉　太い線ほど、いっしょによく拾った言葉　点線は、小さなつながり'
+      : '大きな星ほど、よく拾った言葉　太い線ほど、よく一緒に拾った言葉';
   // 読み込みが終わって、星が1つも出ないとき（使い始め）
   const isEmpty = !showSample && real !== undefined && lines.length === 0;
 
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   introBody: { flex: 1, fontSize: 14, lineHeight: 22, color: 'rgba(255,246,232,0.85)' },
   introEnd: { marginTop: 10, fontSize: 13, lineHeight: 21, color: 'rgba(255,246,232,0.7)', textAlign: 'center' },
   introClose: { marginTop: 26, fontSize: 14, color: 'rgba(255,232,170,0.95)', textAlign: 'center', letterSpacing: 2 },
-  hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
+  hint: { position: 'absolute', bottom: 76, left: 0, right: 0, paddingHorizontal: 12, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
   river: { position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10 },
   riverText: { fontSize: 13, color: 'rgba(255,246,232,0.75)' },
 });
