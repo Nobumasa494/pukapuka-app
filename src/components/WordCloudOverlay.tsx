@@ -176,7 +176,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       </Pressable>
 
       <Pressable style={styles.next} hitSlop={16} onPress={() => onOpenArchive()}>
-        <Text style={styles.nextText}>つながりを見る</Text>
+        <Text style={styles.nextText}>夜空へ →</Text>
       </Pressable>
     </View>
   );
@@ -199,6 +199,7 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 10, color: 'rgba(255,246,232,0.65)' },
   hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
   empty: { position: 'absolute', top: '30%', left: 0, right: 0, textAlign: 'center', fontSize: 14, color: 'rgba(255,246,232,0.8)', letterSpacing: 1 },
-  next: { position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10 },
-  nextText: { fontSize: 13, color: 'rgba(255,246,232,0.75)' },
+  // 右上：左上の「← 川へ」と対になる、次の画面（夜空）への入口
+  next: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
+  nextText: { fontSize: 14, color: 'rgba(255,246,232,0.7)' },
 });

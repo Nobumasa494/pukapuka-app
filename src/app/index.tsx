@@ -843,7 +843,7 @@ export default function Home() {
     }
   };
 
-  // 拾ったことばの画面（つながりを見る）から戻ってきた: 裏に回っている間に動画の描画面が捨てられているので、もう一度流し直す
+  // 拾ったことばの画面（夜空へ）から戻ってきた: 裏に回っている間に動画の描画面が捨てられているので、もう一度流し直す
   const onReturn = () => {
     if (stageRef.current === 'cloud') playClip('cloud');
   };
