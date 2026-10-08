@@ -22,7 +22,7 @@ import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 const TWINKLE_MS = 3200;
 const TWINKLE_GROUPS = 3;
 // 星座の上と下に空ける高さ（上: タイトル、下: 期間・ヒント・川へ戻る）
-// 夜空の見かた（右上の「？」を押したときだけ出す）
+// 星の見方（右上の「星の見方」を押したときだけ出す）
 const INTRO_LINES: [string, string][] = [
   ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
   ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。'],
@@ -300,14 +300,14 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         <Text style={styles.backText}>← ことばへ</Text>
       </Pressable>
 
-      <Pressable style={styles.help} hitSlop={12} onPress={() => setIntroOpen(true)} accessibilityLabel="夜空の見かた">
-        <Text style={styles.helpText}>？</Text>
+      <Pressable style={styles.help} hitSlop={12} onPress={() => setIntroOpen(true)}>
+        <Text style={styles.helpText}>星の見方</Text>
       </Pressable>
 
       {introOpen && (
         <Pressable style={styles.intro} onPress={closeIntro}>
           <View style={styles.introCard}>
-            <Text style={styles.introTitle}>夜空の見かた</Text>
+            <Text style={styles.introTitle}>星の見方</Text>
             {INTRO_LINES.map(([label, body]) => (
               <View key={label} style={styles.introRow}>
                 <Text style={styles.introLabel}>{label}</Text>
@@ -347,9 +347,9 @@ const styles = StyleSheet.create({
   empty: { fontSize: 13, color: 'rgba(255,246,232,0.7)', letterSpacing: 1 },
   sampleBtn: { marginTop: 14, paddingHorizontal: 18, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.55)' },
   sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
-  sampleClose: { position: 'absolute', top: 56, right: 64, zIndex: 10 },
-  help: { position: 'absolute', top: 52, right: 20, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  helpText: { fontSize: 14, color: 'rgba(255,246,232,0.8)' },
+  sampleClose: { position: 'absolute', top: 92, right: 20, zIndex: 10 },
+  help: { position: 'absolute', top: 54, right: 20, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', zIndex: 10 },
+  helpText: { fontSize: 12, color: 'rgba(255,246,232,0.8)', letterSpacing: 1 },
   intro: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(6,12,28,0.82)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, zIndex: 30 },
   introCard: { width: '100%', maxWidth: 360 },
   introTitle: { fontSize: 17, color: 'rgba(255,246,232,0.95)', letterSpacing: 2, textAlign: 'center', marginBottom: 22 },
