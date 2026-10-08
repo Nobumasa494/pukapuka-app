@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
   Easing,
@@ -23,8 +22,7 @@ import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 const TWINKLE_MS = 3200;
 const TWINKLE_GROUPS = 3;
 // 星座の上と下に空ける高さ（上: タイトル、下: 期間・ヒント・川へ戻る）
-// 夜空の見かた（初めて開いたときに1回だけ出す。右上の「？」でいつでも見られる）
-const INTRO_KEY = 'pukapuka.nightIntroSeen';
+// 夜空の見かた（右上の「？」を押したときだけ出す）
 const INTRO_LINES: [string, string][] = [
   ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
   ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。'],
@@ -228,17 +226,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [showSample, setShowSample] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
-  useEffect(() => {
-    AsyncStorage.getItem(INTRO_KEY)
-      .then((v) => {
-        if (!v) setIntroOpen(true);
-      })
-      .catch(() => {});
-  }, []);
-  const closeIntro = () => {
-    setIntroOpen(false);
-    AsyncStorage.setItem(INTRO_KEY, '1').catch(() => {});
-  };
+  const closeIntro = () => setIntroOpen(false);
 
   // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
   const real = useCaptures(NIGHT_DAYS);
@@ -268,7 +256,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         }`
       : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
     : showSample
-      ? '見本です。大きな星ほど、よく拾った言葉　太い線ほど、いっしょによく拾った言葉　星に触れると、小さなつながりが点線で出ます'
+      ? '見本です'
       : '大きな星＝よく拾った言葉　太い線＝よく一緒に拾った言葉';
   // 読み込みが終わって、星が1つも出ないとき（使い始め）
   const isEmpty = !showSample && real !== undefined && lines.length === 0;
