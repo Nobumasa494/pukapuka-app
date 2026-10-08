@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as captures from "../captures.js";
+import type * as demo from "../demo.js";
 
 import type {
   ApiFromModules,
@@ -20,6 +21,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   captures: typeof captures;
+  demo: typeof demo;
 }>;
 
 /**

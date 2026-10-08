@@ -8,6 +8,10 @@ import type { Capture } from './sampleCaptures';
 const KEY = 'pukapuka.deviceId';
 let cached: string | null = null;
 
+// 開発用：web で ?demo=1 をつけて開くと、ダミーの人の記録（convex/demo.ts）で動く。この間は、拾っても保存しない
+const DEMO_DEVICE_ID = 'demo-persona-0000000000000001';
+const isDemo = typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]demo=1\b/.test(window.location.search);
+
 function newId(): string {
   const a = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let s = '';
@@ -17,9 +21,9 @@ function newId(): string {
 
 // 端末ごとの仮の ID（最初の1回だけ作って端末に覚える）
 export function useDeviceId(): string | null {
-  const [id, setId] = useState<string | null>(cached);
+  const [id, setId] = useState<string | null>(isDemo ? DEMO_DEVICE_ID : cached);
   useEffect(() => {
-    if (cached) return;
+    if (isDemo || cached) return;
     let alive = true;
     (async () => {
       let v: string | null = null;
@@ -52,5 +56,5 @@ export function useCaptures(days: number): Capture[] | undefined {
 export function useAddCapture() {
   const deviceId = useDeviceId();
   const add = useMutation(api.captures.add);
-  return (word: string, strength: number) => (deviceId ? add({ deviceId, word, strength }) : Promise.resolve(null));
+  return (word: string, strength: number) => (deviceId && !isDemo ? add({ deviceId, word, strength }) : Promise.resolve(null));
 }

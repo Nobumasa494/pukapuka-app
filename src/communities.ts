@@ -112,16 +112,15 @@ export function significantLinks(captures: { word: string; capturedAt: number }[
   return links;
 }
 
-// 同じ日に一緒に拾った組から、まとまりを見つける（重み付きのラベル伝播。順番を固定して毎回同じ結果にする）。
-// 一緒の日数そのままだと、よく拾う言葉がどれとも強くつながる。拾った日数で割って「偶然より多いか」に近づける
-export function findGroups(stats: WordStat[], captures: { word: string; capturedAt: number }[]): Map<string, number> {
-  const words = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word)).map((s) => s.word);
+// つながりの強さを重みにした、ラベル伝播（となりの組の強さを足して、いちばん大きい組に入る。順番を固定して毎回同じ結果にする）。
+// words は、並べる順番（回数の多い順にしておく）。戻り値は、言葉 → まとまりの番号（大きいまとまりが 0）
+export function labelGroups(words: string[], links: { a: string; b: string; strength: number }[], weightOf: (w: string) => number): Map<string, number> {
   const nb = new Map<string, Map<string, number>>(words.map((w) => [w, new Map()]));
-  for (const { a, b, strength } of strongLinks(captures, new Set(words))) {
+  for (const { a, b, strength } of links) {
+    if (!nb.has(a) || !nb.has(b)) continue;
     nb.get(a)!.set(b, strength);
     nb.get(b)!.set(a, strength);
   }
-
   const label = new Map(words.map((w, i) => [w, i]));
   for (let round = 0; round < 20; round++) {
     let changed = false;
@@ -140,7 +139,15 @@ export function findGroups(stats: WordStat[], captures: { word: string; captured
   }
   // 番号を、まとまりの大きい順に 0, 1, 2… に振り直す
   const total = new Map<number, number>();
-  for (const s of stats) total.set(label.get(s.word)!, (total.get(label.get(s.word)!) ?? 0) + s.count);
+  for (const w of words) total.set(label.get(w)!, (total.get(label.get(w)!) ?? 0) + weightOf(w));
   const order = [...total].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([l]) => l);
   return new Map(words.map((w) => [w, order.indexOf(label.get(w)!)]));
+}
+
+// 同じ日に一緒に拾った組から、まとまりを見つける（島の植え方）。
+// 一緒の日数そのままだと、よく拾う言葉がどれとも強くつながる。拾った日数で割って「偶然より多いか」に近づける
+export function findGroups(stats: WordStat[], captures: { word: string; capturedAt: number }[]): Map<string, number> {
+  const words = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word)).map((s) => s.word);
+  const count = new Map(stats.map((s) => [s.word, s.count]));
+  return labelGroups(words, strongLinks(captures, new Set(words)), (w) => count.get(w) ?? 0);
 }

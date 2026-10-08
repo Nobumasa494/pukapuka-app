@@ -64,6 +64,17 @@ export function aggregate(captures: { word: string; strength: number }[]): WordS
   return out;
 }
 
+// 画面に出す言葉の上限（言葉が多いと、文字が小さくなったり、入りきらずに消えたりするため。仮の値）
+export const MAX_WORDS = 30;
+// 上限を超えるときの選び方：回数の多い言葉（口ぐせ）を2/3、残りから強く押した言葉（本音かも）を1/3
+export function selectWords(stats: WordStat[], max = MAX_WORDS): WordStat[] {
+  if (stats.length <= max) return stats;
+  const byCount = [...stats].sort((a, b) => b.count - a.count || b.avgStrength - a.avgStrength || a.word.localeCompare(b.word));
+  const habit = byCount.slice(0, Math.ceil((max * 2) / 3));
+  const rest = byCount.slice(habit.length).sort((a, b) => b.avgStrength - a.avgStrength || b.count - a.count || a.word.localeCompare(b.word));
+  return [...habit, ...rest.slice(0, max - habit.length)];
+}
+
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 // 文字の大きさ＝回数（1回ごとに2px、上限あり）

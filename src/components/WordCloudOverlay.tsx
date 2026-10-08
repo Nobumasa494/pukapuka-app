@@ -10,7 +10,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import { CATEGORY_COLOR, LEGEND, SPARKLE_GROUPS, aggregate, layoutWords, type Placed } from '../wordCloud';
+import { CATEGORY_COLOR, LEGEND, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, type Placed } from '../wordCloud';
 import { useCaptures } from '../useCaptures';
 import type { Category } from '../words';
 
@@ -120,7 +120,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
 
   // 空（画面の上約6割。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝回数・キラキラと周りの光＝強さ・色＝カテゴリ
   const { placed } = useMemo(
-    () => layoutWords(aggregate(captures ?? []), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.6) - 96 }),
+    () => layoutWords(selectWords(aggregate(captures ?? [])), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.6) - 96 }),
     [captures, width, height],
   );
 

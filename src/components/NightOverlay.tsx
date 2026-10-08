@@ -11,7 +11,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
-import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type Link, type Star } from '../constellation';
+import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
 import { useCaptures } from '../useCaptures';
 
 // ふりかえり（夜）。川の画面の上に重ねて出す。背景（夜の静止画）は川の画面が持つ。
@@ -21,6 +21,9 @@ import { useCaptures } from '../useCaptures';
 const TWINKLE_MS = 3200;
 const TWINKLE_GROUPS = 3;
 // 星座の上と下に空ける高さ（上: タイトル、下: 期間・ヒント・川へ戻る）
+// 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
+const CROSS_WIDTH = 0.7;
+const CROSS_OPACITY = 0.6;
 // 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
 const NIGHT_DAYS = 42;
 const AREA_TOP = 100;
@@ -86,7 +89,7 @@ function GlowLayer({ group, clock, stars, lit, width, height }: {
 // 星座。期間を変えたら作り直し、星が浮かんでから線が引かれる
 function Constellation({ stars, lines, selected, onSelect, width, height }: {
   stars: Star[];
-  lines: Link[];
+  lines: StarLink[];
   selected: string | null;
   onSelect: (word: string) => void;
   width: number;
@@ -137,9 +140,10 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
                 x2={b.x}
                 y2={b.y}
                 stroke={LINE_COLOR}
-                strokeWidth={lineWidth(l.strength)}
-                strokeOpacity={lineOpacity(l.strength) * (on ? (selected ? 1.5 : 1) : DIM)}
+                strokeWidth={lineWidth(l.strength) * (l.cross ? CROSS_WIDTH : 1)}
+                strokeOpacity={lineOpacity(l.strength) * (l.cross ? CROSS_OPACITY : 1) * (on ? (selected ? 1.5 : 1) : DIM)}
                 strokeLinecap="round"
+                strokeDasharray={l.cross ? '3 4' : undefined}
               />
             );
           })}
