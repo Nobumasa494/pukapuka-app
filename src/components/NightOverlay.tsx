@@ -286,7 +286,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
       {showSample && (
         <>
           <View style={styles.sampleBadge} pointerEvents="none">
-            <Text style={styles.sampleBadgeText}>見本（ダミーの人の夜空です。あなたの記録ではありません）</Text>
+            <Text style={styles.sampleBadgeText}>見本</Text>
           </View>
           <Pressable style={styles.sampleClose} hitSlop={16} onPress={() => { setShowSample(false); setSelected(null); }}>
             <Text style={styles.backText}>見本をとじる</Text>
