@@ -12,8 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
 import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type Line, type Star } from '../constellation';
-import { PERIODS, filterByPeriod, type Period } from '../period';
-import { SAMPLE_CAPTURES, SAMPLE_NOW } from '../sampleCaptures';
+import { useCaptures } from '../useCaptures';
 
 // ふりかえり（夜）。川の画面の上に重ねて出す。背景（夜の静止画）は川の画面が持つ。
 // 拾った言葉を星、同じ日に一緒に拾った関係を細い金色の線で結ぶ（共起ネットワーク）。
@@ -195,16 +194,15 @@ type Props = {
 };
 
 export default function NightOverlay({ width, height, focus, onBack, onRiver }: Props) {
-  const [period, setPeriod] = useState<Period>('all');
   const [selected, setSelected] = useState<string | null>(focus ?? null);
 
-  // TODO(本物の記録): SAMPLE_CAPTURES を captures.listByUser に置き換える
+  // 夜空は直近ひと月の本物の記録（決定 2026-10-06）。読み込み中は何も置かない
+  const captures = useCaptures(30);
   const { stars, lines } = useMemo(() => {
-    const captures = filterByPeriod(SAMPLE_CAPTURES, period, SAMPLE_NOW);
-    const picked = selectConstellation(captures, focus);
+    const picked = selectConstellation(captures ?? [], focus);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };
     return { stars: layoutConstellation(picked.stats, picked.lines, area, focus), lines: picked.lines };
-  }, [period, focus, width, height]);
+  }, [captures, focus, width, height]);
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
   const degree = current ? lines.filter((l) => l.a === current.word || l.b === current.word).length : 0;
@@ -221,7 +219,6 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
       <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelected(null)} />
 
       <Constellation
-        key={period}
         stars={stars}
         lines={lines}
         selected={current ? current.word : null}
@@ -238,21 +235,12 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
-        <Text style={styles.title}>ふりかえり</Text>
+        <Text style={styles.title}>夜空</Text>
       </View>
 
       <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
         <Text style={styles.backText}>← ことばへ</Text>
       </Pressable>
-
-      <View style={styles.periods} pointerEvents="box-none">
-        {PERIODS.map(({ key, label }) => (
-          <Pressable key={key} hitSlop={8} onPress={() => setPeriod(key)} style={styles.periodItem}>
-            <Text style={[styles.periodText, key === period && styles.periodOn]}>{label}</Text>
-            <View style={[styles.periodBar, key === period && styles.periodBarOn]} />
-          </Pressable>
-        ))}
-      </View>
 
       <Text style={styles.hint} pointerEvents="none">
         {hint}
@@ -279,12 +267,6 @@ const styles = StyleSheet.create({
   },
   emptyRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   empty: { fontSize: 13, color: 'rgba(255,246,232,0.7)', letterSpacing: 1 },
-  periods: { position: 'absolute', bottom: 100, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', columnGap: 22 },
-  periodItem: { alignItems: 'center' },
-  periodText: { fontSize: 12, color: 'rgba(255,246,232,0.5)', letterSpacing: 1 },
-  periodOn: { color: 'rgba(255,232,170,0.95)' },
-  periodBar: { marginTop: 4, width: 16, height: 1, backgroundColor: 'transparent' },
-  periodBarOn: { backgroundColor: 'rgba(255,215,140,0.7)' },
   hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
   river: { position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10 },
   riverText: { fontSize: 13, color: 'rgba(255,246,232,0.75)' },
