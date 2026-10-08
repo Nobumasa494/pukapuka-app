@@ -49,6 +49,8 @@ function sampleCaptures() {
 
 // 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
 const NIGHT_DAYS = 42;
+const SKY_WINDOW_TOP = 90; // 星の層の窓の上（見出しの下）
+const SKY_WINDOW_BOTTOM = 130;
 const AREA_TOP = 100;
 const AREA_BOTTOM = 150;
 // 選んだ星とつながらない星・線の濃さ
@@ -184,7 +186,9 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
     <View style={StyleSheet.absoluteFill}>
     {/* 画面いっぱいを、なぞる操作の受け皿にする。空いているところを押すと、選んだ星を外す */}
     <Pressable style={StyleSheet.absoluteFill} onPress={onClear} />
-    <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width, height }, canvasStyle]} pointerEvents="box-none">
+    {/* 星の層は、木や山（下の背景）の上までの窓で切る。下の背景は、そのまま見せる */}
+    <View style={styles.skyWindow} pointerEvents="box-none">
+    <Animated.View style={[{ position: 'absolute', left: 0, top: -SKY_WINDOW_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
       <Animated.View style={[StyleSheet.absoluteFill, linesStyle]} pointerEvents="none">
         <Svg width={width} height={height}>
           {lines.filter((l) => !l.cross || l.a === selected || l.b === selected).map((l) => {
@@ -245,13 +249,14 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
         })}
       </Animated.View>
     </Animated.View>
-    {/* 画面より大きい夜空のときは、上と下の端を暗くして、固定のボタンや説明と重ならないようにする */}
+    {/* 画面より大きい夜空のときは、窓の上と下の端を暗くして、星が、固定のボタンや説明と重ならないようにする */}
     {pannable && (
       <>
-        <LinearGradient colors={['rgba(8,14,30,1)', 'rgba(8,14,30,0.96)', 'rgba(8,14,30,0)']} locations={[0, 0.55, 1]} style={styles.fadeTop} pointerEvents="none" />
-        <LinearGradient colors={['rgba(8,14,30,0)', 'rgba(8,14,30,0.96)', 'rgba(8,14,30,1)']} locations={[0, 0.45, 1]} style={styles.fadeBottom} pointerEvents="none" />
+        <LinearGradient colors={['rgba(8,14,30,0.6)', 'rgba(8,14,30,0)']} style={styles.fadeTop} pointerEvents="none" />
+        <LinearGradient colors={['rgba(8,14,30,0)', 'rgba(8,14,30,0.6)']} style={styles.fadeBottom} pointerEvents="none" />
       </>
     )}
+    </View>
     </View>
     </GestureDetector>
   );
@@ -384,8 +389,10 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 }
 
 const styles = StyleSheet.create({
-  fadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 118 },
-  fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 170 },
+  // 星の層の窓。上は見出しの下から、下は、説明・ボタン・木や山が見える所（下から130px）を空ける。窓の外は切る（画面を、なぞって動かすため）
+  skyWindow: { position: 'absolute', left: 0, right: 0, top: SKY_WINDOW_TOP, bottom: SKY_WINDOW_BOTTOM, overflow: 'hidden' },
+  fadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 28 },
+  fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 28 },
   back: { position: 'absolute', top: 56, left: 20, zIndex: 10 },
   backText: { fontSize: 14, color: 'rgba(255,246,232,0.7)' },
   titleRow: { position: 'absolute', top: 54, left: 0, right: 0, alignItems: 'center' },
