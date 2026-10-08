@@ -256,7 +256,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         }`
       : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
     : showSample
-      ? '見本です'
+      ? '星に触れてみてください'
       : '大きな星＝よく拾った言葉　太い線＝よく一緒に拾った言葉';
   // 読み込みが終わって、星が1つも出ないとき（使い始め）
   const isEmpty = !showSample && real !== undefined && lines.length === 0;
