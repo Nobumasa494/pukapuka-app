@@ -30,6 +30,7 @@ const INTRO_LINES: [string, string][] = [
   ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。'],
   ['星座', '線でつながった星の集まりです。いっしょに出やすい言葉たちです。'],
   ['点線', '星に触れると出る、小さなつながりです。'],
+  ['動かす', '星が多いときは、なぞって動かせます。2本指で、拡大・縮小もできます。'],
 ];
 
 // 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
@@ -206,6 +207,15 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
       ty.set(clampY(e.focalY - cy0.get() * k, k));
     });
   const gesture = Gesture.Simultaneous(pan, pinch);
+  // 続きがある向きに、しるしを出す（残りの距離が 24px 以上あるとき。近づくと、ふわっと消える）
+  const more = (gap: number) => {
+    'worklet';
+    return Math.min(0.75, Math.max(0, gap / 60));
+  };
+  const edgeLeftStyle = useAnimatedStyle(() => ({ opacity: more(-tx.get() - 24) }));
+  const edgeRightStyle = useAnimatedStyle(() => ({ opacity: more(width * sc.get() + tx.get() - viewW - 24) }));
+  const edgeUpStyle = useAnimatedStyle(() => ({ opacity: more(-ty.get() - 24) }));
+  const edgeDownStyle = useAnimatedStyle(() => ({ opacity: more(height * sc.get() + ty.get() - (winH + SKY_WINDOW_TOP) - 24) }));
   const canvasStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.get() }, { translateY: ty.get() }, { scale: sc.get() }] }));
 
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
@@ -291,6 +301,15 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
         })}
       </Animated.View>
     </Animated.View>
+    {/* 画面の外に続きがあるとき、その端に、小さなしるしを出す */}
+    {wide && (
+      <>
+        <Animated.Text style={[styles.edgeMark, styles.edgeLeft, edgeLeftStyle]} pointerEvents="none">‹</Animated.Text>
+        <Animated.Text style={[styles.edgeMark, styles.edgeRight, edgeRightStyle]} pointerEvents="none">›</Animated.Text>
+        <Animated.Text style={[styles.edgeMark, styles.edgeUp, edgeUpStyle]} pointerEvents="none">⌃</Animated.Text>
+        <Animated.Text style={[styles.edgeMark, styles.edgeDown, edgeDownStyle]} pointerEvents="none">⌄</Animated.Text>
+      </>
+    )}
     {/* 画面より大きい夜空のときは、窓の上と下の端を暗くして、星が、固定のボタンや説明と重ならないようにする */}
     {wide && (
       <>
@@ -433,6 +452,11 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 const styles = StyleSheet.create({
   // 星の層の窓。上は見出しの下から、下は、説明・ボタン・木や山が見える所（下から130px）を空ける。窓の外は切る（画面を、なぞって動かすため）
   skyWindow: { position: 'absolute', left: 0, right: 0, top: SKY_WINDOW_TOP, bottom: SKY_WINDOW_BOTTOM, overflow: 'hidden' },
+  edgeMark: { position: 'absolute', fontSize: 26, lineHeight: 30, color: 'rgba(255,232,170,0.9)', textAlign: 'center', width: 30 },
+  edgeLeft: { left: 4, top: '45%' },
+  edgeRight: { right: 4, top: '45%' },
+  edgeUp: { top: 30, alignSelf: 'center', left: '50%', marginLeft: -15 },
+  edgeDown: { bottom: 30, left: '50%', marginLeft: -15 },
   fadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 64 },
   fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 64 },
   back: { position: 'absolute', top: 56, left: 20, zIndex: 10 },

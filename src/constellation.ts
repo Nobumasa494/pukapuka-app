@@ -23,7 +23,7 @@ export type StarLink = Link & { cross: boolean };
 export type Caps = { stars: number; lines: number; perStar: number };
 export const NORMAL_CAPS: Caps = { stars: 26, lines: 38, perStar: 5 }; // 1画面に収める
 // 上限を超える記録のとき（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）
-export const WIDE_CAPS: Caps = { stars: 120, lines: 300, perStar: 8 };
+export const WIDE_CAPS: Caps = { stars: 60, lines: 150, perStar: 8 };
 const MAX_STARS = NORMAL_CAPS.stars;
 
 // 見せる星と線を選ぶ。偶然では起きにくい組（検定）だけを線の候補にして、つながりの強さ（コサイン類似度）の強い順に採り、星の数・1つの星の線の数が上限を超えるものは飛ばす。
