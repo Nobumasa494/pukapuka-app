@@ -13,6 +13,7 @@ import Animated, {
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
 import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
 import { useCaptures } from '../useCaptures';
+import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
 // ふりかえり（夜）。川の画面の上に重ねて出す。背景（夜の静止画）は川の画面が持つ。
 // 拾った言葉を星、同じ日に一緒に拾った関係を細い金色の線で結ぶ（共起ネットワーク）。
@@ -24,6 +25,18 @@ const TWINKLE_GROUPS = 3;
 // 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
 const CROSS_WIDTH = 0.7;
 const CROSS_OPACITY = 0.6;
+// 「見本」：星がまだ出ない間に見られる、ダミーの人の夜空（6週間ぶん。自分の記録ではない）
+function sampleCaptures() {
+  const days: DemoDay[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let d = NIGHT_DAYS - 1; d >= 0; d--) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - d);
+    days.push({ start: day.getTime(), dow: day.getDay() });
+  }
+  return makeDemoCaptures(days, 5, Date.now());
+}
+
 // 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
 const NIGHT_DAYS = 42;
 const AREA_TOP = 100;
@@ -201,23 +214,31 @@ type Props = {
 
 export default function NightOverlay({ width, height, focus, onBack, onRiver }: Props) {
   const [selected, setSelected] = useState<string | null>(focus ?? null);
+  const [showSample, setShowSample] = useState(false);
 
   // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
-  const captures = useCaptures(NIGHT_DAYS);
+  const real = useCaptures(NIGHT_DAYS);
+  const sample = useMemo(() => (showSample ? sampleCaptures() : null), [showSample]);
+  const captures = showSample ? sample : real;
   const { stars, lines } = useMemo(() => {
-    const picked = selectConstellation(captures ?? [], focus);
+    const picked = selectConstellation(captures ?? [], showSample ? undefined : focus);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };
-    return { stars: layoutConstellation(picked.stats, picked.lines, area, focus), lines: picked.lines };
-  }, [captures, focus, width, height]);
+    return { stars: layoutConstellation(picked.stats, picked.lines, area, showSample ? undefined : focus), lines: picked.lines };
+  }, [captures, focus, showSample, width, height]);
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
   const degree = current ? lines.filter((l) => l.a === current.word || l.b === current.word).length : 0;
   // 画面に数字を出さない（分析されている感じを出さない。docs/SPEC.md「大事にすること」2026-10-05 決定）
+  const hasCross = current ? lines.some((l) => l.cross && (l.a === current.word || l.b === current.word)) : false;
   const hint = current
     ? degree > 0
-      ? `「${current.word}」とよく一緒の星が、光っています`
+      ? `「${current.word}」とよく一緒の星が、光っています${hasCross ? '（点線は、ちがうまとまりとのつながり）' : ''}`
       : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
-    : '大きな星ほど、よく拾った言葉　線は、よく一緒に拾った言葉';
+    : showSample
+      ? '見本です。大きな星ほど、よく拾った言葉　線は、よく一緒に拾った言葉　点線は、ちがうまとまりとのつながり'
+      : '大きな星ほど、よく拾った言葉　線は、よく一緒に拾った言葉';
+  // 読み込みが終わって、星が1つも出ないとき（使い始め）
+  const isEmpty = !showSample && real !== undefined && lines.length === 0;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -233,10 +254,23 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         height={height}
       />
 
-      {lines.length === 0 && (
-        <View style={[styles.emptyRow, { top: AREA_TOP + (height - AREA_TOP - AREA_BOTTOM) / 2 + 24 }]} pointerEvents="none">
+      {isEmpty && (
+        <View style={[styles.emptyRow, { top: AREA_TOP + (height - AREA_TOP - AREA_BOTTOM) / 2 + 24 }]} pointerEvents="box-none">
           <Text style={styles.empty}>もう少し拾うと見えてきます</Text>
+          <Pressable hitSlop={12} onPress={() => setShowSample(true)} style={styles.sampleBtn}>
+            <Text style={styles.sampleBtnText}>見本を見る</Text>
+          </Pressable>
         </View>
+      )}
+      {showSample && (
+        <>
+          <View style={styles.sampleBadge} pointerEvents="none">
+            <Text style={styles.sampleBadgeText}>見本（ダミーの人の夜空です。あなたの記録ではありません）</Text>
+          </View>
+          <Pressable style={styles.sampleClose} hitSlop={16} onPress={() => { setShowSample(false); setSelected(null); }}>
+            <Text style={styles.backText}>見本をとじる</Text>
+          </Pressable>
+        </>
       )}
 
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
@@ -273,6 +307,11 @@ const styles = StyleSheet.create({
   },
   emptyRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   empty: { fontSize: 13, color: 'rgba(255,246,232,0.7)', letterSpacing: 1 },
+  sampleBtn: { marginTop: 14, paddingHorizontal: 18, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.55)' },
+  sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
+  sampleBadge: { position: 'absolute', top: 82, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 20 },
+  sampleBadgeText: { fontSize: 11, color: 'rgba(255,215,140,0.85)', letterSpacing: 0.5, textAlign: 'center' },
+  sampleClose: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
   hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
   river: { position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10 },
   riverText: { fontSize: 13, color: 'rgba(255,246,232,0.75)' },
