@@ -283,26 +283,27 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
           </Pressable>
         </View>
       )}
-      {showSample && (
-        <>
-          <Pressable style={styles.sampleClose} hitSlop={16} onPress={() => { setShowSample(false); setSelected(null); }}>
-            <Text style={styles.backText}>見本をとじる</Text>
-          </Pressable>
-        </>
-      )}
-
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
         <Text style={styles.title}>夜空</Text>
       </View>
 
-      <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
-        <Text style={styles.backText}>← ことばへ</Text>
-      </Pressable>
+      {/* 左上：ふだんは「← ことばへ」。見本を見ているときは、見本をとじる「×」になる */}
+      {introOpen ? null : showSample ? (
+        <Pressable style={[styles.closeBtn, styles.closeLeft]} hitSlop={14} onPress={() => { setShowSample(false); setSelected(null); }} accessibilityLabel="とじる">
+          <Text style={styles.closeBtnText}>×</Text>
+        </Pressable>
+      ) : (
+        <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
+          <Text style={styles.backText}>← ことばへ</Text>
+        </Pressable>
+      )}
 
-      <Pressable style={styles.help} hitSlop={12} onPress={() => setIntroOpen(true)}>
-        <Text style={styles.helpText}>星の見方</Text>
-      </Pressable>
+      {!introOpen && (
+        <Pressable style={styles.help} hitSlop={12} onPress={() => setIntroOpen(true)}>
+          <Text style={styles.helpText}>星の見方</Text>
+        </Pressable>
+      )}
 
       {introOpen && (
         <Pressable style={styles.intro} onPress={closeIntro}>
@@ -315,7 +316,9 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
               </View>
             ))}
             <Text style={styles.introEnd}>どんな言葉が、いっしょに出てくるか、ながめてみてください。</Text>
-            <Text style={styles.introClose}>とじる</Text>
+          </View>
+          <View style={[styles.closeBtn, styles.closeRight]}>
+            <Text style={styles.closeBtnText}>×</Text>
           </View>
         </Pressable>
       )}
@@ -347,7 +350,6 @@ const styles = StyleSheet.create({
   empty: { fontSize: 13, color: 'rgba(255,246,232,0.7)', letterSpacing: 1 },
   sampleBtn: { marginTop: 14, paddingHorizontal: 18, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.55)' },
   sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
-  sampleClose: { position: 'absolute', top: 92, right: 20, zIndex: 10 },
   help: { position: 'absolute', top: 54, right: 20, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', zIndex: 10 },
   helpText: { fontSize: 12, color: 'rgba(255,246,232,0.8)', letterSpacing: 1 },
   intro: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(6,12,28,0.82)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, zIndex: 30 },
@@ -357,7 +359,10 @@ const styles = StyleSheet.create({
   introLabel: { width: 48, fontSize: 14, color: 'rgba(255,215,140,0.95)' },
   introBody: { flex: 1, fontSize: 14, lineHeight: 22, color: 'rgba(255,246,232,0.85)' },
   introEnd: { marginTop: 10, fontSize: 13, lineHeight: 21, color: 'rgba(255,246,232,0.7)', textAlign: 'center' },
-  introClose: { marginTop: 26, fontSize: 14, color: 'rgba(255,232,170,0.95)', textAlign: 'center', letterSpacing: 2 },
+  closeBtn: { position: 'absolute', top: 52, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  closeBtnText: { fontSize: 18, lineHeight: 20, color: 'rgba(255,246,232,0.85)' },
+  closeLeft: { left: 20 },
+  closeRight: { right: 20 },
   hint: { position: 'absolute', bottom: 76, left: 0, right: 0, paddingHorizontal: 12, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
   river: { position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10 },
   riverText: { fontSize: 13, color: 'rgba(255,246,232,0.75)' },
