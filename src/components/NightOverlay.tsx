@@ -146,30 +146,67 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   const starsStyle = useAnimatedStyle(() => ({ opacity: starsIn.get() }));
   const linesStyle = useAnimatedStyle(() => ({ opacity: linesIn.get() }));
 
-  // なぞって動かす（キャンバスが画面より大きいときだけ）
-  const minX = Math.min(0, viewW - width);
-  const minY = Math.min(0, viewH - height);
-  const pannable = minX < -1 || minY < -1;
+  // つまんで拡大・縮小、なぞって動かす（試作 2026-10-09）。キャンバスの左上を基準に、位置(tx,ty)と倍率(sc)で動かす
+  const winH = viewH - SKY_WINDOW_TOP - SKY_WINDOW_BOTTOM; // 星の窓の高さ
+  const wide = width > viewW + 1 || height > viewH - SKY_WINDOW_BOTTOM + 1; // 画面より大きな夜空か
+  // いちばん引いたとき：大きな夜空は、全体が窓に入る倍率まで。収まる夜空は、いまの大きさより小さくしない
+  const minScale = wide ? Math.min(1, viewW / width, (winH + SKY_WINDOW_TOP) / height) : 1;
+  const MAX_SCALE = 2.5;
+  const sc = useSharedValue(1);
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
-  const startX = useSharedValue(0);
-  const startY = useSharedValue(0);
+  const s0 = useSharedValue(1);
+  const x0 = useSharedValue(0);
+  const y0 = useSharedValue(0);
+  const cx0 = useSharedValue(0);
+  const cy0 = useSharedValue(0);
+  const pinchStarted = useSharedValue(0);
   useEffect(() => {
+    sc.set(1);
     tx.set(0);
     ty.set(0);
-  }, [stars, tx, ty]);
+  }, [stars, sc, tx, ty]);
+  // 動かせる範囲：夜空が窓より大きいときは、端まで。小さいときは、動かさない
+  const clampX = (v: number, k: number) => {
+    'worklet';
+    return Math.min(0, Math.max(viewW - width * k, v));
+  };
+  const clampY = (v: number, k: number) => {
+    'worklet';
+    return Math.min(0, Math.max(winH + SKY_WINDOW_TOP - height * k, v));
+  };
   const pan = Gesture.Pan()
-    .enabled(pannable)
     .minDistance(8)
+    .maxPointers(1)
     .onBegin(() => {
-      startX.set(tx.get());
-      startY.set(ty.get());
+      x0.set(tx.get());
+      y0.set(ty.get());
     })
     .onUpdate((e) => {
-      tx.set(Math.min(0, Math.max(minX, startX.get() + e.translationX)));
-      ty.set(Math.min(0, Math.max(minY, startY.get() + e.translationY)));
+      tx.set(clampX(x0.get() + e.translationX, sc.get()));
+      ty.set(clampY(y0.get() + e.translationY, sc.get()));
     });
-  const canvasStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.get() }, { translateY: ty.get() }] }));
+  const pinch = Gesture.Pinch()
+    .onBegin(() => {
+      s0.set(sc.get());
+      x0.set(tx.get());
+      y0.set(ty.get());
+      pinchStarted.set(0);
+    })
+    .onUpdate((e) => {
+      // つまんだ中心の下にある、夜空の点（開始のときは、中心が取れないので、最初の更新で決める）
+      if (pinchStarted.get() === 0) {
+        cx0.set((e.focalX - tx.get()) / sc.get());
+        cy0.set((e.focalY - ty.get()) / sc.get());
+        pinchStarted.set(1);
+      }
+      const k = Math.min(MAX_SCALE, Math.max(minScale, s0.get() * e.scale));
+      sc.set(k);
+      tx.set(clampX(e.focalX - cx0.get() * k, k));
+      ty.set(clampY(e.focalY - cy0.get() * k, k));
+    });
+  const gesture = Gesture.Simultaneous(pan, pinch);
+  const canvasStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.get() }, { translateY: ty.get() }, { scale: sc.get() }] }));
 
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
   // 太さの基準は、ふだん出ている線（星座の中の線）だけで決める。点線は、触れたときに出るだけなので、基準に入れない（触れたとき、ほかの線の太さが変わらないように）
@@ -187,13 +224,13 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   const lit = (word: string) => !selected || neighbors.has(word);
 
   return (
-    <GestureDetector gesture={pan}>
+    <GestureDetector gesture={gesture}>
     <View style={StyleSheet.absoluteFill}>
     {/* 画面いっぱいを、なぞる操作の受け皿にする。空いているところを押すと、選んだ星を外す */}
     <Pressable style={StyleSheet.absoluteFill} onPress={onClear} />
     {/* 星の層は、木や山（下の背景）の上までの窓で切る。下の背景は、そのまま見せる */}
     <View style={styles.skyWindow} pointerEvents="box-none">
-    <Animated.View style={[{ position: 'absolute', left: 0, top: -SKY_WINDOW_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
+    <Animated.View style={[{ position: 'absolute', left: 0, top: -SKY_WINDOW_TOP, width, height, transformOrigin: 'top left' }, canvasStyle]} pointerEvents="box-none">
       <Animated.View style={[StyleSheet.absoluteFill, linesStyle]} pointerEvents="none">
         <Svg width={width} height={height}>
           {lines.filter((l) => !l.cross || l.a === selected || l.b === selected).map((l) => {
@@ -255,7 +292,7 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
       </Animated.View>
     </Animated.View>
     {/* 画面より大きい夜空のときは、窓の上と下の端を暗くして、星が、固定のボタンや説明と重ならないようにする */}
-    {pannable && (
+    {wide && (
       <>
         <LinearGradient colors={[SKY_TOP_COLOR, SKY_TOP_CLEAR]} style={styles.fadeTop} pointerEvents="none" />
         <LinearGradient colors={[SKY_BOTTOM_CLEAR, SKY_BOTTOM_COLOR]} style={styles.fadeBottom} pointerEvents="none" />
@@ -294,7 +331,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
     if (picked.truncated) picked = selectConstellation(captures ?? [], f, WIDE_CAPS);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };
     const sky = layoutSky(picked.stats, picked.lines, area, f);
-    return { stars: sky.stars, lines: picked.lines, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height, sky.extentH) };
+    return { stars: sky.stars, lines: picked.lines, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height - SKY_WINDOW_BOTTOM, sky.extentH) };
   }, [captures, focus, showSample, width, height]);
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
