@@ -49,6 +49,11 @@ function sampleCaptures() {
 
 // 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
 const NIGHT_DAYS = 42;
+// 窓の端の色は、夜の背景の、その場所の色に合わせる（なじませるため。背景の絵を変えたら、合わせ直す）
+const SKY_TOP_COLOR = 'rgb(7,19,36)';
+const SKY_TOP_CLEAR = 'rgba(7,19,36,0)';
+const SKY_BOTTOM_COLOR = 'rgb(24,38,64)';
+const SKY_BOTTOM_CLEAR = 'rgba(24,38,64,0)';
 const SKY_WINDOW_TOP = 90; // 星の層の窓の上（見出しの下）
 const SKY_WINDOW_BOTTOM = 130;
 const AREA_TOP = 100;
@@ -252,8 +257,8 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
     {/* 画面より大きい夜空のときは、窓の上と下の端を暗くして、星が、固定のボタンや説明と重ならないようにする */}
     {pannable && (
       <>
-        <LinearGradient colors={['rgba(8,14,30,0.6)', 'rgba(8,14,30,0)']} style={styles.fadeTop} pointerEvents="none" />
-        <LinearGradient colors={['rgba(8,14,30,0)', 'rgba(8,14,30,0.6)']} style={styles.fadeBottom} pointerEvents="none" />
+        <LinearGradient colors={[SKY_TOP_COLOR, SKY_TOP_CLEAR]} style={styles.fadeTop} pointerEvents="none" />
+        <LinearGradient colors={[SKY_BOTTOM_CLEAR, SKY_BOTTOM_COLOR]} style={styles.fadeBottom} pointerEvents="none" />
       </>
     )}
     </View>
@@ -391,8 +396,8 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 const styles = StyleSheet.create({
   // 星の層の窓。上は見出しの下から、下は、説明・ボタン・木や山が見える所（下から130px）を空ける。窓の外は切る（画面を、なぞって動かすため）
   skyWindow: { position: 'absolute', left: 0, right: 0, top: SKY_WINDOW_TOP, bottom: SKY_WINDOW_BOTTOM, overflow: 'hidden' },
-  fadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 28 },
-  fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 28 },
+  fadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 64 },
+  fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 64 },
   back: { position: 'absolute', top: 56, left: 20, zIndex: 10 },
   backText: { fontSize: 14, color: 'rgba(255,246,232,0.7)' },
   titleRow: { position: 'absolute', top: 54, left: 0, right: 0, alignItems: 'center' },
