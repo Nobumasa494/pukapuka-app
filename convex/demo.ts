@@ -11,7 +11,7 @@ const JST = 9 * 60 * 60 * 1000;
 
 // ダミーの人の記録の作り方は src/demoPersona.ts（夜空の「見本」と共通）
 export const seedDemo = internalMutation({
-  args: { days: v.optional(v.number()), seed: v.optional(v.number()) },
+  args: { days: v.optional(v.number()), seed: v.optional(v.number()), heavy: v.optional(v.boolean()) },
   returns: v.object({ deleted: v.number(), inserted: v.number() }),
   handler: async (ctx, args) => {
     const days = Math.min(120, Math.max(7, args.days ?? 60));
@@ -29,7 +29,10 @@ export const seedDemo = internalMutation({
       list.push({ start, dow: new Date(start + JST).getUTCDay() });
     }
     let inserted = 0;
-    for (const c of makeDemoCaptures(list, args.seed ?? 5, now)) {
+    // heavy：たくさん記録する人（記録が2倍）。夜空が1画面に収まらないときの見え方を確かめるため
+    const seed = args.seed ?? 5;
+    const made = args.heavy ? [...makeDemoCaptures(list, seed, now), ...makeDemoCaptures(list, seed + 6, now)] : makeDemoCaptures(list, seed, now);
+    for (const c of made) {
       await ctx.db.insert("captures", { deviceId: DEMO_DEVICE_ID, word: c.word, strength: c.strength, capturedAt: c.capturedAt });
       inserted++;
     }

@@ -10,8 +10,10 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
-import { layoutConstellation, lineOpacity, lineWidth, relativeStrength, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { WIDE_CAPS, layoutSky, lineOpacity, lineWidth, relativeStrength, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
 import { useCaptures } from '../useCaptures';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
@@ -108,13 +110,18 @@ function GlowLayer({ group, clock, stars, lit, width, height }: {
 }
 
 // 星座。期間を変えたら作り直し、星が浮かんでから線が引かれる
-function Constellation({ stars, lines, selected, onSelect, width, height }: {
+function Constellation({ stars, lines, selected, onSelect, onClear, width, height, viewW, viewH }: {
   stars: Star[];
   lines: StarLink[];
   selected: string | null;
   onSelect: (word: string) => void;
+  // 空いているところを押したとき（選んだ星を外す）
+  onClear: () => void;
+  // 夜空（キャンバス）の大きさ。画面（viewW・viewH）より大きいときは、なぞって動かせる
   width: number;
   height: number;
+  viewW: number;
+  viewH: number;
 }) {
   const clock = useSharedValue(0);
   const starsIn = useSharedValue(0);
@@ -132,6 +139,31 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
   const starsStyle = useAnimatedStyle(() => ({ opacity: starsIn.get() }));
   const linesStyle = useAnimatedStyle(() => ({ opacity: linesIn.get() }));
 
+  // なぞって動かす（キャンバスが画面より大きいときだけ）
+  const minX = Math.min(0, viewW - width);
+  const minY = Math.min(0, viewH - height);
+  const pannable = minX < -1 || minY < -1;
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  useEffect(() => {
+    tx.set(0);
+    ty.set(0);
+  }, [stars, tx, ty]);
+  const pan = Gesture.Pan()
+    .enabled(pannable)
+    .minDistance(8)
+    .onBegin(() => {
+      startX.set(tx.get());
+      startY.set(ty.get());
+    })
+    .onUpdate((e) => {
+      tx.set(Math.min(0, Math.max(minX, startX.get() + e.translationX)));
+      ty.set(Math.min(0, Math.max(minY, startY.get() + e.translationY)));
+    });
+  const canvasStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.get() }, { translateY: ty.get() }] }));
+
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
   // 太さの基準は、ふだん出ている線（星座の中の線）だけで決める。点線は、触れたときに出るだけなので、基準に入れない（触れたとき、ほかの線の太さが変わらないように）
   const rel = useMemo(() => relativeStrength(lines.filter((l) => !l.cross)), [lines]);
@@ -148,7 +180,11 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
   const lit = (word: string) => !selected || neighbors.has(word);
 
   return (
-    <>
+    <GestureDetector gesture={pan}>
+    <View style={StyleSheet.absoluteFill}>
+    {/* 画面いっぱいを、なぞる操作の受け皿にする。空いているところを押すと、選んだ星を外す */}
+    <Pressable style={StyleSheet.absoluteFill} onPress={onClear} />
+    <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width, height }, canvasStyle]} pointerEvents="box-none">
       <Animated.View style={[StyleSheet.absoluteFill, linesStyle]} pointerEvents="none">
         <Svg width={width} height={height}>
           {lines.filter((l) => !l.cross || l.a === selected || l.b === selected).map((l) => {
@@ -208,7 +244,16 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
           );
         })}
       </Animated.View>
-    </>
+    </Animated.View>
+    {/* 画面より大きい夜空のときは、上と下の端を暗くして、固定のボタンや説明と重ならないようにする */}
+    {pannable && (
+      <>
+        <LinearGradient colors={['rgba(8,14,30,1)', 'rgba(8,14,30,0.96)', 'rgba(8,14,30,0)']} locations={[0, 0.55, 1]} style={styles.fadeTop} pointerEvents="none" />
+        <LinearGradient colors={['rgba(8,14,30,0)', 'rgba(8,14,30,0.96)', 'rgba(8,14,30,1)']} locations={[0, 0.45, 1]} style={styles.fadeBottom} pointerEvents="none" />
+      </>
+    )}
+    </View>
+    </GestureDetector>
   );
 }
 
@@ -232,10 +277,14 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
   const real = useCaptures(NIGHT_DAYS);
   const sample = useMemo(() => (showSample ? sampleCaptures() : null), [showSample]);
   const captures = showSample ? sample : real;
-  const { stars, lines } = useMemo(() => {
-    const picked = selectConstellation(captures ?? [], showSample ? undefined : focus);
+  const { stars, lines, canvasW, canvasH } = useMemo(() => {
+    const f = showSample ? undefined : focus;
+    // 1画面に収まらないほど星があるときは、上限をゆるめて、画面より大きな夜空にする（なぞって動かす）
+    let picked = selectConstellation(captures ?? [], f);
+    if (picked.truncated) picked = selectConstellation(captures ?? [], f, WIDE_CAPS);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };
-    return { stars: layoutConstellation(picked.stats, picked.lines, area, showSample ? undefined : focus), lines: picked.lines };
+    const sky = layoutSky(picked.stats, picked.lines, area, f);
+    return { stars: sky.stars, lines: picked.lines, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height, sky.extentH) };
   }, [captures, focus, showSample, width, height]);
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
@@ -263,16 +312,16 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* 空いているところを押すと、選んだ星を外す */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelected(null)} />
-
       <Constellation
         stars={stars}
         lines={lines}
         selected={current ? current.word : null}
         onSelect={(w) => setSelected((prev) => (prev === w ? null : w))}
-        width={width}
-        height={height}
+        onClear={() => setSelected(null)}
+        width={canvasW}
+        height={canvasH}
+        viewW={width}
+        viewH={height}
       />
 
       {isEmpty && (
@@ -335,6 +384,8 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 }
 
 const styles = StyleSheet.create({
+  fadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 118 },
+  fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 170 },
   back: { position: 'absolute', top: 56, left: 20, zIndex: 10 },
   backText: { fontSize: 14, color: 'rgba(255,246,232,0.7)' },
   titleRow: { position: 'absolute', top: 54, left: 0, right: 0, alignItems: 'center' },

@@ -19,18 +19,20 @@ export type Area = { x: number; y: number; w: number; h: number };
 export { MIN_CO, cooccurrence, type Line, type Link };
 // cross: 別のまとまりをつなぐ線。画面にはうすい点線で出し、星は引き寄せない
 export type StarLink = Link & { cross: boolean };
-// 星の数と線の数の上限（画面で名前が読める量。仮の値：6週間の記録で上限が効き始めるため、26・38に増やした。画面で見て調整する）
-const MAX_STARS = 26;
-const MAX_LINES = 38;
-// 1つの星から出す線の上限。よく拾う言葉が全部とつながる「団子」を防ぐ
-const MAX_LINES_PER_STAR = 5;
+// 星の数と線の数の上限（1画面に、名前が読める量。仮の値：6週間の記録で上限が効き始めるため、26・38に増やした。画面で見て調整する）
+export type Caps = { stars: number; lines: number; perStar: number };
+export const NORMAL_CAPS: Caps = { stars: 26, lines: 38, perStar: 5 }; // 1画面に収める
+// 上限を超える記録のとき（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）
+export const WIDE_CAPS: Caps = { stars: 120, lines: 300, perStar: 8 };
+const MAX_STARS = NORMAL_CAPS.stars;
 
 // 見せる星と線を選ぶ。偶然では起きにくい組（検定）だけを線の候補にして、つながりの強さ（コサイン類似度）の強い順に採り、星の数・1つの星の線の数が上限を超えるものは飛ばす。
 // focus（拾ったことばでタップした言葉）は線がなくても必ず出し、その言葉の線を先に採る
 export function selectConstellation(
   captures: { word: string; strength: number; capturedAt: number }[],
   focus?: string,
-): { stats: WordStat[]; lines: StarLink[] } {
+  caps: Caps = NORMAL_CAPS,
+): { stats: WordStat[]; lines: StarLink[]; truncated: boolean } {
   const all = aggregate(captures);
   const statOf = new Map(all.map((s) => [s.word, s]));
   // まとまりは、上限で切る前の、偶然ではない線の全部で決める。回数の多い言葉から順に見る
@@ -48,11 +50,21 @@ export function selectConstellation(
   const words = new Set<string>(focus && statOf.has(focus) ? [focus] : []);
   const degree = new Map<string, number>();
   const lines: StarLink[] = [];
+  let truncated = false; // 上限で切った線があるか
   for (const l of candidates) {
-    if (lines.length >= MAX_LINES) break;
-    if ((degree.get(l.a) ?? 0) >= MAX_LINES_PER_STAR || (degree.get(l.b) ?? 0) >= MAX_LINES_PER_STAR) continue;
+    if (lines.length >= caps.lines) {
+      truncated = true;
+      break;
+    }
+    if ((degree.get(l.a) ?? 0) >= caps.perStar || (degree.get(l.b) ?? 0) >= caps.perStar) {
+      truncated = true;
+      continue;
+    }
     const added = (words.has(l.a) ? 0 : 1) + (words.has(l.b) ? 0 : 1);
-    if (words.size + added > MAX_STARS) continue;
+    if (words.size + added > caps.stars) {
+      truncated = true;
+      continue;
+    }
     words.add(l.a);
     words.add(l.b);
     degree.set(l.a, (degree.get(l.a) ?? 0) + 1);
@@ -63,7 +75,44 @@ export function selectConstellation(
   const inConstellation = new Set(lines.filter((l) => !l.cross).flatMap((l) => [l.a, l.b]));
   if (focus && statOf.has(focus)) inConstellation.add(focus);
   const kept = lines.filter((l) => inConstellation.has(l.a) && inConstellation.has(l.b));
-  return { stats: [...inConstellation].map((w) => statOf.get(w)!), lines: kept };
+  return { stats: [...inConstellation].map((w) => statOf.get(w)!), lines: kept, truncated };
+}
+
+// 夜空の配置。星が1画面に収まるときは、いつもの配置。収まらないとき（星が MAX_STARS より多い）は、
+// 星座ごとに区画をとって、2列の格子に並べた、画面より大きな夜空にする。画面は、なぞって動かす（試作 2026-10-09）
+const SKY_COLS = 2;
+export function layoutSky(
+  stats: WordStat[],
+  lines: StarLink[],
+  area: Area,
+  focus?: string,
+): { stars: Star[]; extentW: number; extentH: number } {
+  const solid = lines.filter((l) => !l.cross);
+  const parent = new Map<string, string>(stats.map((s) => [s.word, s.word]));
+  const find = (x: string): string => (parent.get(x) === x ? x : (parent.set(x, find(parent.get(x)!)), parent.get(x)!));
+  for (const l of solid) parent.set(find(l.a), find(l.b));
+  const comps = new Map<string, WordStat[]>();
+  for (const s of stats) comps.set(find(s.word), [...(comps.get(find(s.word)) ?? []), s]);
+  const list = [...comps.values()];
+  if (stats.length <= MAX_STARS || list.length <= 3) {
+    return { stars: layoutConstellation(stats, lines, area, focus), extentW: area.x + area.w + area.x, extentH: area.y + area.h };
+  }
+  // 拾ったことばから来た言葉の星座を最初に、あとは星の多い順
+  const hasFocus = (g: WordStat[]) => (focus && g.some((s) => s.word === focus) ? 1 : 0);
+  list.sort((a, b) => hasFocus(b) - hasFocus(a) || b.length - a.length);
+  const cellW = Math.min(360, area.w);
+  const cellH = Math.min(300, Math.round(area.h * 0.72));
+  const gutter = 16;
+  const stars: Star[] = [];
+  list.forEach((g, i) => {
+    const col = i % SKY_COLS;
+    const row = Math.floor(i / SKY_COLS);
+    const set = new Set(g.map((s) => s.word));
+    const cell = { x: area.x + col * (cellW + gutter), y: area.y + row * cellH, w: cellW, h: cellH - 36 };
+    stars.push(...layoutConstellation(g, lines.filter((l) => set.has(l.a) && set.has(l.b)), cell, focus && set.has(focus) ? focus : undefined));
+  });
+  const rows = Math.ceil(list.length / SKY_COLS);
+  return { stars, extentW: area.x + SKY_COLS * (cellW + gutter) + area.x - gutter, extentH: area.y + rows * cellH + 40 };
 }
 
 // 星の芯の半径＝回数（1回 1.75px、20回で上限 5px）
