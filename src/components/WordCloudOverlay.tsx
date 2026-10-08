@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { CATEGORY_COLOR, LEGEND, SPARKLE_GROUPS, aggregate, layoutWords, type Placed } from '../wordCloud';
-import { SAMPLE_CAPTURES } from '../sampleCaptures';
+import { useCaptures } from '../useCaptures';
 import type { Category } from '../words';
 
 // 拾ったことば（ワードクラウド）。川の画面の上に重ねて出す。背景（空のループ動画）は川の画面の1本のプレーヤーが流す
@@ -115,10 +115,13 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
     return () => cancelAnimation(clock);
   }, [clock]);
 
+  // 最近（今日〜今週）の本物の記録。読み込み中は何も置かない
+  const captures = useCaptures(7);
+
   // 空（画面の上約6割。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝回数・キラキラと周りの光＝強さ・色＝カテゴリ
   const { placed } = useMemo(
-    () => layoutWords(aggregate(SAMPLE_CAPTURES), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.6) - 96 }),
-    [width, height],
+    () => layoutWords(aggregate(captures ?? []), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.6) - 96 }),
+    [captures, width, height],
   );
 
   return (
@@ -158,6 +161,12 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
         ))}
       </View>
 
+      {captures?.length === 0 && (
+        <Text style={styles.empty} pointerEvents="none">
+          まだ言葉がありません。川で拾ってみましょう
+        </Text>
+      )}
+
       <Text style={styles.hint} pointerEvents="none">
         文字の大きさ＝拾った回数　キラキラ・光＝気持ちの強さ
       </Text>
@@ -189,6 +198,7 @@ const styles = StyleSheet.create({
   legendDot: { width: 7, height: 7, borderRadius: 3.5 },
   legendText: { fontSize: 10, color: 'rgba(255,246,232,0.65)' },
   hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
+  empty: { position: 'absolute', top: '30%', left: 0, right: 0, textAlign: 'center', fontSize: 14, color: 'rgba(255,246,232,0.8)', letterSpacing: 1 },
   next: { position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10 },
   nextText: { fontSize: 13, color: 'rgba(255,246,232,0.75)' },
 });
