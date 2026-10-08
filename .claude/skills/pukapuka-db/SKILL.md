@@ -35,6 +35,7 @@ Convex の表と保存する項目を決めるためのスキル。**Convex の�
 - 端末の ID は `src/useCaptures.ts` が作って AsyncStorage（ブラウザは localStorage）に覚える。**ブラウザは開くアドレスごとに別 ID になる**（`localhost` と `127.0.0.1` は別。127.0.0.1 で開く）
 - 日付は保存しない（決定 2026-10-09）。時刻だけ残し、「同じ日」は端末の時計で0時切り。海外の人が使う公開のときに決め直す
 - 保存の確認は済み（ブラウザ・スマホ。2026-10-08）
+- 開発用のダミーの人：`convex/demo.ts` の `seedDemo`（`npx convex run demo:seedDemo '{"days":60}'`）で、専用の目印に60日ぶんを入れる。web で `?demo=1` をつけて開くと、その記録で動く（保存はしない）。夜空など、数週間たまった後の見え方を確かめるため
 - いまの保存先は**開発用**の Convex。本番用は公開前に別に用意する
 
 ## 迷っていること（決まったら SPEC に移し、ここから消す）
@@ -51,6 +52,7 @@ Convex の表と保存する項目を決めるためのスキル。**Convex の�
 npx convex dev --once                         # 関数と表を送る
 npx convex data captures --limit 10           # 保存の中身を見る
 npx convex run captures:listRecent '{"deviceId":"<ID>","days":7}'
+npx convex run demo:seedDemo '{"days":60}'   # ダミーの人を入れ直す（開発用）
 ```
 
 開発サーバーは 8081（ユーザー用）に触らない。確認用は 8091（`CI=1` なし）。
