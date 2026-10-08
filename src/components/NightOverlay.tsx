@@ -29,7 +29,7 @@ const INTRO_LINES: [string, string][] = [
   ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
   ['線', 'いっしょによく拾った言葉を、つないでいます。'],
   ['星座', '線でつながった星の集まりです。いっしょに出やすい言葉たちです。'],
-  ['点線', 'はなれた星との、つながりです。'],
+  ['点線', '小さなつながりです。'],
 ];
 
 // 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
@@ -252,7 +252,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
   const degree = current ? lines.filter((l) => l.a === current.word || l.b === current.word).length : 0;
   // 画面に数字を出さない（分析されている感じを出さない。docs/SPEC.md「大事にすること」2026-10-05 決定）
-  // 点線でつながる、ちがう星座の言葉（強い順に2つまで）
+  // 点線でつながる言葉（強い順に2つまで）
   const crossPartners = current
     ? lines
         .filter((l) => l.cross && (l.a === current.word || l.b === current.word))
@@ -263,11 +263,11 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
   const hint = current
     ? degree > 0
       ? `「${current.word}」とよく一緒の星が、光っています${
-          crossPartners.length > 0 ? `\n「${current.word}」は、はなれた星の${crossPartners.map((w) => `「${w}」`).join('')}とも、つながっています` : ''
+          crossPartners.length > 0 ? `\n「${current.word}」は、${crossPartners.map((w) => `「${w}」`).join('')}とも、小さくつながっています` : ''
         }`
       : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
     : showSample
-      ? '見本です。大きな星ほど、よく拾った言葉　線は、いっしょによく拾った言葉　点線は、はなれた星とのつながり'
+      ? '見本です。大きな星ほど、よく拾った言葉　線は、いっしょによく拾った言葉　点線は、小さなつながり'
       : '大きな星ほど、よく拾った言葉　線は、よく一緒に拾った言葉';
   // 読み込みが終わって、星が1つも出ないとき（使い始め）
   const isEmpty = !showSample && real !== undefined && lines.length === 0;
