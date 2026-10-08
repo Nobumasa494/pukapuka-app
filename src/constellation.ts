@@ -72,14 +72,31 @@ export function labelSizeFor(count: number): number {
   return Math.min(13, 9.5 + 0.25 * count);
 }
 
-// 線の太さ＝つながりの強さ（コサイン類似度 0〜1。0.6px〜2.2px）
-export function lineWidth(strength: number): number {
-  return 0.6 + 1.6 * Math.min(1, Math.max(0, strength));
+// 線の太さ・濃さは、「いま画面に出ている線の中での強さ」（0〜1）で決める。
+// 出ている線の強さは 0.5〜0.8 くらいに集まるので、0〜1 のままだと、太さの違いが見えない（2026-10-09）。
+// 出ている線の強さの幅が 0.25 より小さいときは、差を大きく見せすぎないよう、真ん中に寄せる
+const MIN_SPAN = 0.25;
+export function relativeStrength(lines: { strength: number }[]): (strength: number) => number {
+  if (lines.length === 0) return () => 0.5;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const l of lines) {
+    lo = Math.min(lo, l.strength);
+    hi = Math.max(hi, l.strength);
+  }
+  const mid = (lo + hi) / 2;
+  const span = Math.max(hi - lo, MIN_SPAN);
+  return (strength) => Math.min(1, Math.max(0, 0.5 + (strength - mid) / span));
 }
 
-// 線の濃さ（0.25〜0.55）。強いほど濃い
-export function lineOpacity(strength: number): number {
-  return 0.25 + 0.3 * Math.min(1, Math.max(0, strength));
+// 線の太さ（0.5〜3.6px）。rel は relativeStrength の値
+export function lineWidth(rel: number): number {
+  return 0.5 + 3.1 * rel;
+}
+
+// 線の濃さ（0.2〜0.75）。強いほど濃い
+export function lineOpacity(rel: number): number {
+  return 0.2 + 0.55 * rel;
 }
 
 function textWidth(word: string, size: number): number {

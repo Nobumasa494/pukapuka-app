@@ -12,7 +12,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
-import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
+import { layoutConstellation, lineOpacity, lineWidth, relativeStrength, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
 import { useCaptures } from '../useCaptures';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
@@ -135,6 +135,7 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
   const linesStyle = useAnimatedStyle(() => ({ opacity: linesIn.get() }));
 
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
+  const rel = useMemo(() => relativeStrength(lines), [lines]);
   const neighbors = useMemo(() => {
     const set = new Set<string>();
     if (!selected) return set;
@@ -163,8 +164,8 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
                 x2={b.x}
                 y2={b.y}
                 stroke={LINE_COLOR}
-                strokeWidth={lineWidth(l.strength) * (l.cross ? CROSS_WIDTH : 1)}
-                strokeOpacity={lineOpacity(l.strength) * (l.cross ? CROSS_OPACITY : 1) * (on ? (selected ? 1.5 : 1) : DIM)}
+                strokeWidth={lineWidth(rel(l.strength)) * (l.cross ? CROSS_WIDTH : 1)}
+                strokeOpacity={lineOpacity(rel(l.strength)) * (l.cross ? CROSS_OPACITY : 1) * (on ? (selected ? 1.5 : 1) : DIM)}
                 strokeLinecap="round"
                 strokeDasharray={l.cross ? '3 4' : undefined}
               />
