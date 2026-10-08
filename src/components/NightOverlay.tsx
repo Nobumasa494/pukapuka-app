@@ -11,7 +11,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
-import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type Line, type Star } from '../constellation';
+import { layoutConstellation, lineOpacity, lineWidth, selectConstellation, starBox, type Link, type Star } from '../constellation';
 import { useCaptures } from '../useCaptures';
 
 // ふりかえり（夜）。川の画面の上に重ねて出す。背景（夜の静止画）は川の画面が持つ。
@@ -21,6 +21,8 @@ import { useCaptures } from '../useCaptures';
 const TWINKLE_MS = 3200;
 const TWINKLE_GROUPS = 3;
 // 星座の上と下に空ける高さ（上: タイトル、下: 期間・ヒント・川へ戻る）
+// 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
+const NIGHT_DAYS = 42;
 const AREA_TOP = 100;
 const AREA_BOTTOM = 150;
 // 選んだ星とつながらない星・線の濃さ
@@ -84,7 +86,7 @@ function GlowLayer({ group, clock, stars, lit, width, height }: {
 // 星座。期間を変えたら作り直し、星が浮かんでから線が引かれる
 function Constellation({ stars, lines, selected, onSelect, width, height }: {
   stars: Star[];
-  lines: Line[];
+  lines: Link[];
   selected: string | null;
   onSelect: (word: string) => void;
   width: number;
@@ -135,8 +137,8 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
                 x2={b.x}
                 y2={b.y}
                 stroke={LINE_COLOR}
-                strokeWidth={lineWidth(l.count)}
-                strokeOpacity={lineOpacity(l.count) * (on ? (selected ? 1.5 : 1) : DIM)}
+                strokeWidth={lineWidth(l.strength)}
+                strokeOpacity={lineOpacity(l.strength) * (on ? (selected ? 1.5 : 1) : DIM)}
                 strokeLinecap="round"
               />
             );
@@ -196,8 +198,8 @@ type Props = {
 export default function NightOverlay({ width, height, focus, onBack, onRiver }: Props) {
   const [selected, setSelected] = useState<string | null>(focus ?? null);
 
-  // 夜空は直近ひと月の本物の記録（決定 2026-10-06）。読み込み中は何も置かない
-  const captures = useCaptures(30);
+  // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
+  const captures = useCaptures(NIGHT_DAYS);
   const { stars, lines } = useMemo(() => {
     const picked = selectConstellation(captures ?? [], focus);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };

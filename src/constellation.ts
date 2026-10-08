@@ -1,10 +1,9 @@
-import { dayKey } from './period';
+import { MIN_CO, cooccurrence, significantLinks, type Line, type Link } from './communities';
 import { aggregate, type WordStat } from './wordCloud';
 
 // ふりかえり（共起ネットワーク）の計算。RN に依存しないので node で検証できる。
-// 言葉＝星、同じ日に一緒に拾った関係＝細い金色の線。星の大きさ＝拾った回数、線の太さ＝共起回数
+// 言葉＝星、偶然では起きにくい「同じ日に一緒に拾った」関係＝細い金色の線。星の大きさ＝拾った回数、線の太さ・星どうしの引き合う力＝つながりの強さ
 
-export type Line = { a: string; b: string; count: number };
 
 export type Star = WordStat & {
   x: number;
@@ -17,57 +16,32 @@ export type Star = WordStat & {
 
 export type Area = { x: number; y: number; w: number; h: number };
 
-// 線を出す共起回数の下限（1回だけ一緒だった組は偶然が多いので出さない）
-export const MIN_CO = 2;
-// 星の数と線の数の上限（SE の画面で名前が読める量）
-const MAX_STARS = 22;
-const MAX_LINES = 34;
+export { MIN_CO, cooccurrence, type Line, type Link };
+// 星の数と線の数の上限（画面で名前が読める量。仮の値：6週間の記録で上限が効き始めるため、26・38に増やした。画面で見て調整する）
+const MAX_STARS = 26;
+const MAX_LINES = 38;
 // 1つの星から出す線の上限。よく拾う言葉が全部とつながる「団子」を防ぐ
 const MAX_LINES_PER_STAR = 5;
 
-// 共起回数: 同じ日に2つの言葉を両方拾った日の数（1日に何回拾っても1日は1回）
-export function cooccurrence(captures: { word: string; capturedAt: number }[]): Line[] {
-  const byDay = new Map<string, Set<string>>();
-  for (const c of captures) {
-    const k = dayKey(c.capturedAt);
-    let s = byDay.get(k);
-    if (!s) byDay.set(k, (s = new Set()));
-    s.add(c.word);
-  }
-  const counts = new Map<string, number>();
-  for (const words of byDay.values()) {
-    const list = [...words].sort();
-    for (let i = 0; i < list.length; i++)
-      for (let j = i + 1; j < list.length; j++) {
-        const key = `${list[i]}\n${list[j]}`;
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-  }
-  return [...counts].map(([key, count]) => {
-    const [a, b] = key.split('\n');
-    return { a, b, count };
-  });
-}
-
-// 見せる星と線を選ぶ。強い線から順に採り、星の数・1つの星の線の数が上限を超えるものは飛ばす。
+// 見せる星と線を選ぶ。偶然では起きにくい組（検定）だけを線の候補にして、つながりの強さ（コサイン類似度）の強い順に採り、星の数・1つの星の線の数が上限を超えるものは飛ばす。
 // focus（拾ったことばでタップした言葉）は線がなくても必ず出し、その言葉の線を先に採る
 export function selectConstellation(
   captures: { word: string; strength: number; capturedAt: number }[],
   focus?: string,
-): { stats: WordStat[]; lines: Line[] } {
+): { stats: WordStat[]; lines: Link[] } {
   const all = aggregate(captures);
   const statOf = new Map(all.map((s) => [s.word, s]));
-  const candidates = cooccurrence(captures)
-    .filter((l) => l.count >= MIN_CO && statOf.has(l.a) && statOf.has(l.b))
+  const candidates = significantLinks(captures)
+    .filter((l) => statOf.has(l.a) && statOf.has(l.b))
     .sort((p, q) => {
       const pf = p.a === focus || p.b === focus ? 1 : 0;
       const qf = q.a === focus || q.b === focus ? 1 : 0;
-      return qf - pf || q.count - p.count || `${p.a}${p.b}`.localeCompare(`${q.a}${q.b}`);
+      return qf - pf || q.strength - p.strength || q.count - p.count || `${p.a}${p.b}`.localeCompare(`${q.a}${q.b}`);
     });
 
   const words = new Set<string>(focus && statOf.has(focus) ? [focus] : []);
   const degree = new Map<string, number>();
-  const lines: Line[] = [];
+  const lines: Link[] = [];
   for (const l of candidates) {
     if (lines.length >= MAX_LINES) break;
     if ((degree.get(l.a) ?? 0) >= MAX_LINES_PER_STAR || (degree.get(l.b) ?? 0) >= MAX_LINES_PER_STAR) continue;
@@ -92,14 +66,14 @@ export function labelSizeFor(count: number): number {
   return Math.min(13, 9.5 + 0.25 * count);
 }
 
-// 線の太さ＝共起回数（2回 0.6px から、1回ごとに太く、上限 2px）
-export function lineWidth(count: number): number {
-  return Math.min(2, 0.6 + 0.28 * (count - MIN_CO));
+// 線の太さ＝つながりの強さ（コサイン類似度 0〜1。0.6px〜2.2px）
+export function lineWidth(strength: number): number {
+  return 0.6 + 1.6 * Math.min(1, Math.max(0, strength));
 }
 
-// 線の濃さ（0.28〜0.5）
-export function lineOpacity(count: number): number {
-  return Math.min(0.5, 0.28 + 0.05 * (count - MIN_CO));
+// 線の濃さ（0.25〜0.55）。強いほど濃い
+export function lineOpacity(strength: number): number {
+  return 0.25 + 0.3 * Math.min(1, Math.max(0, strength));
 }
 
 function textWidth(word: string, size: number): number {
@@ -133,7 +107,7 @@ const GRAVITY = 0.12;
 // 力指向の配置: 線でつながる星は引き合い、どの星も押し合う。共起が強い組ほど近くに寄る。
 // 壁の中で動かすと星が画面の端に貼りつくので、まず広さを気にせず動かし、入りきらないときだけ全体を縮めて真ん中に置く。
 // 毎回同じ結果になるよう、最初の位置は言葉の hash で決める。focus は動かさず、ほかの星がそのまわりに並ぶ
-export function layoutConstellation(stats: WordStat[], lines: Line[], area: Area, focus?: string): Star[] {
+export function layoutConstellation(stats: WordStat[], lines: Link[], area: Area, focus?: string): Star[] {
   const cx = area.x + area.w / 2;
   const cy = area.y + area.h / 2;
   const k = Math.min(IDEAL_LEN, 0.8 * Math.sqrt((area.w * area.h) / Math.max(1, stats.length)));
@@ -160,7 +134,7 @@ export function layoutConstellation(stats: WordStat[], lines: Line[], area: Area
     stars[pinned].y = 0;
   }
 
-  const edges = lines.map((l) => ({ i: index.get(l.a)!, j: index.get(l.b)!, w: 0.6 + 0.4 * Math.min(1, (l.count - 1) / 5) }));
+  const edges = lines.map((l) => ({ i: index.get(l.a)!, j: index.get(l.b)!, w: 0.6 + 0.4 * Math.min(1, Math.max(0, l.strength)) }));
   // 縦長の画面に合わせ、縦方向は押し合いを強め、中心へ引く力を弱める
   const aspect = Math.min(1.8, Math.max(1, area.h / area.w));
 

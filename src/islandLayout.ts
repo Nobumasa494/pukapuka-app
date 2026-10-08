@@ -1,4 +1,4 @@
-import { MIN_CO, cooccurrence } from './constellation';
+import { findGroups } from './communities';
 import { dayKey } from './period';
 import { makeSampleCaptures, type Capture } from './sampleCaptures';
 import { MEADOW_R, TREE_R, plantRoom } from './islandTerrain';
@@ -34,57 +34,6 @@ export const isTreeWord = (s: WordStat) => s.category === 'curiosity' || WOW_FEE
 // 木の大きさ：集まった言葉の回数の合計で育つ（何もなくても若木）
 export function treeSize(total: number): number {
   return VIEW * Math.min(1.9, 0.75 + 0.16 * Math.sqrt(total));
-}
-
-// 1つの言葉から残すつながりの数（よく拾う言葉が全部とつながって、島じゅうが1つのまとまりになるのを防ぐ）
-const MAX_LINKS = 3;
-// つながりとみなす強さの下限（コサイン：一緒の日数 ÷ √(片方の日数 × もう片方の日数)）
-const MIN_ASSOC = 0.3;
-
-// 同じ日に一緒に拾った組から、まとまりを見つける（重み付きのラベル伝播。順番を固定して毎回同じ結果にする）。
-// 一緒の日数そのままだと、よく拾う言葉がどれとも強くつながる。拾った日数で割って「偶然より多いか」に近づける
-export function findGroups(stats: WordStat[], captures: Capture[]): Map<string, number> {
-  const words = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word)).map((s) => s.word);
-  const days = new Map<string, Set<string>>();
-  for (const c of captures) {
-    if (!days.has(c.word)) days.set(c.word, new Set());
-    days.get(c.word)!.add(dayKey(c.capturedAt));
-  }
-  const links = new Map<string, [string, number][]>(words.map((w) => [w, []]));
-  for (const { a, b, count } of cooccurrence(captures)) {
-    if (count < MIN_CO || !links.has(a) || !links.has(b)) continue;
-    const w = count / Math.sqrt(days.get(a)!.size * days.get(b)!.size);
-    if (w < MIN_ASSOC) continue;
-    links.get(a)!.push([b, w]);
-    links.get(b)!.push([a, w]);
-  }
-  // お互いの上位 MAX_LINKS に入る組だけ残す
-  const top = new Map([...links].map(([w, l]) => [w, new Set(l.sort((x, y) => y[1] - x[1]).slice(0, MAX_LINKS).map(([o]) => o))]));
-  const nb = new Map<string, Map<string, number>>(words.map((w) => [w, new Map()]));
-  for (const [a, l] of links)
-    for (const [b, w] of l) if (top.get(a)!.has(b) && top.get(b)!.has(a)) nb.get(a)!.set(b, w);
-
-  const label = new Map(words.map((w, i) => [w, i]));
-  for (let round = 0; round < 20; round++) {
-    let changed = false;
-    for (const w of words) {
-      const score = new Map<number, number>();
-      for (const [o, c] of nb.get(w)!) score.set(label.get(o)!, (score.get(label.get(o)!) ?? 0) + c);
-      let best = label.get(w)!;
-      let bestScore = score.get(best) ?? 0;
-      for (const [l, s] of score) if (s > bestScore || (s === bestScore && l < best)) [best, bestScore] = [l, s];
-      if (best !== label.get(w)) {
-        label.set(w, best);
-        changed = true;
-      }
-    }
-    if (!changed) break;
-  }
-  // 番号を、まとまりの大きい順に 0, 1, 2… に振り直す
-  const total = new Map<number, number>();
-  for (const s of stats) total.set(label.get(s.word)!, (total.get(label.get(s.word)!) ?? 0) + s.count);
-  const order = [...total].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([l]) => l);
-  return new Map(words.map((w) => [w, order.indexOf(label.get(w)!)]));
 }
 
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
