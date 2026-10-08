@@ -59,7 +59,11 @@ export function selectConstellation(
     degree.set(l.b, (degree.get(l.b) ?? 0) + 1);
     lines.push(l);
   }
-  return { stats: [...words].map((w) => statOf.get(w)!), lines };
+  // 点線（星座をまたぐ線）は、星に触れたときだけ出す。星座の線が1本もない星は、ふだんは出さない（点線の相手の星が、1つだけ浮かないように）
+  const inConstellation = new Set(lines.filter((l) => !l.cross).flatMap((l) => [l.a, l.b]));
+  if (focus && statOf.has(focus)) inConstellation.add(focus);
+  const kept = lines.filter((l) => inConstellation.has(l.a) && inConstellation.has(l.b));
+  return { stats: [...inConstellation].map((w) => statOf.get(w)!), lines: kept };
 }
 
 // 星の芯の半径＝回数（1回 1.75px、20回で上限 5px）

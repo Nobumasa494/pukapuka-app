@@ -29,7 +29,7 @@ const INTRO_LINES: [string, string][] = [
   ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
   ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。'],
   ['星座', '線でつながった星の集まりです。いっしょに出やすい言葉たちです。'],
-  ['点線', '小さなつながりです。'],
+  ['点線', '星に触れると出る、小さなつながりです。'],
 ];
 
 // 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
@@ -135,7 +135,8 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
   const linesStyle = useAnimatedStyle(() => ({ opacity: linesIn.get() }));
 
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
-  const rel = useMemo(() => relativeStrength(lines), [lines]);
+  // 太さの基準は、ふだん出ている線（星座の中の線）だけで決める。点線は、触れたときに出るだけなので、基準に入れない（触れたとき、ほかの線の太さが変わらないように）
+  const rel = useMemo(() => relativeStrength(lines.filter((l) => !l.cross)), [lines]);
   const neighbors = useMemo(() => {
     const set = new Set<string>();
     if (!selected) return set;
@@ -152,7 +153,7 @@ function Constellation({ stars, lines, selected, onSelect, width, height }: {
     <>
       <Animated.View style={[StyleSheet.absoluteFill, linesStyle]} pointerEvents="none">
         <Svg width={width} height={height}>
-          {lines.map((l) => {
+          {lines.filter((l) => !l.cross || l.a === selected || l.b === selected).map((l) => {
             const a = at.get(l.a)!;
             const b = at.get(l.b)!;
             const on = !selected || l.a === selected || l.b === selected;
@@ -267,8 +268,8 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         }`
       : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
     : showSample
-      ? '見本です。大きな星ほど、よく拾った言葉　太い線ほど、いっしょによく拾った言葉　点線は、小さなつながり'
-      : '大きな星ほど、よく拾った言葉　太い線ほど、よく一緒に拾った言葉';
+      ? '見本です。大きな星ほど、よく拾った言葉　太い線ほど、いっしょによく拾った言葉　星に触れると、小さなつながりが点線で出ます'
+      : '大きな星＝よく拾った言葉　太い線＝よく一緒に拾った言葉';
   // 読み込みが終わって、星が1つも出ないとき（使い始め）
   const isEmpty = !showSample && real !== undefined && lines.length === 0;
 
