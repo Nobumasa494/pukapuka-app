@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
   Easing,
@@ -22,6 +23,15 @@ import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 const TWINKLE_MS = 3200;
 const TWINKLE_GROUPS = 3;
 // 星座の上と下に空ける高さ（上: タイトル、下: 期間・ヒント・川へ戻る）
+// 夜空の見かた（初めて開いたときに1回だけ出す。右上の「？」でいつでも見られる）
+const INTRO_KEY = 'pukapuka.nightIntroSeen';
+const INTRO_LINES: [string, string][] = [
+  ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
+  ['線', 'いっしょによく拾った言葉を、つないでいます。'],
+  ['星座', '線でつながった星の集まりです。いっしょに出やすい言葉たちです。'],
+  ['点線', 'ちがう星座との、つながりです。'],
+];
+
 // 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
 const CROSS_WIDTH = 0.7;
 const CROSS_OPACITY = 0.6;
@@ -215,6 +225,18 @@ type Props = {
 export default function NightOverlay({ width, height, focus, onBack, onRiver }: Props) {
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [showSample, setShowSample] = useState(false);
+  const [introOpen, setIntroOpen] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(INTRO_KEY)
+      .then((v) => {
+        if (!v) setIntroOpen(true);
+      })
+      .catch(() => {});
+  }, []);
+  const closeIntro = () => {
+    setIntroOpen(false);
+    AsyncStorage.setItem(INTRO_KEY, '1').catch(() => {});
+  };
 
   // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
   const real = useCaptures(NIGHT_DAYS);
@@ -291,6 +313,26 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         <Text style={styles.backText}>← ことばへ</Text>
       </Pressable>
 
+      <Pressable style={styles.help} hitSlop={12} onPress={() => setIntroOpen(true)} accessibilityLabel="夜空の見かた">
+        <Text style={styles.helpText}>？</Text>
+      </Pressable>
+
+      {introOpen && (
+        <Pressable style={styles.intro} onPress={closeIntro}>
+          <View style={styles.introCard}>
+            <Text style={styles.introTitle}>夜空の見かた</Text>
+            {INTRO_LINES.map(([label, body]) => (
+              <View key={label} style={styles.introRow}>
+                <Text style={styles.introLabel}>{label}</Text>
+                <Text style={styles.introBody}>{body}</Text>
+              </View>
+            ))}
+            <Text style={styles.introEnd}>どんな言葉が、いっしょに出てくるか、ながめてみてください。</Text>
+            <Text style={styles.introClose}>とじる</Text>
+          </View>
+        </Pressable>
+      )}
+
       <Text style={styles.hint} pointerEvents="none">
         {hint}
       </Text>
@@ -320,7 +362,17 @@ const styles = StyleSheet.create({
   sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
   sampleBadge: { position: 'absolute', top: 82, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 20 },
   sampleBadgeText: { fontSize: 11, color: 'rgba(255,215,140,0.85)', letterSpacing: 0.5, textAlign: 'center' },
-  sampleClose: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
+  sampleClose: { position: 'absolute', top: 56, right: 64, zIndex: 10 },
+  help: { position: 'absolute', top: 52, right: 20, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  helpText: { fontSize: 14, color: 'rgba(255,246,232,0.8)' },
+  intro: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(6,12,28,0.82)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, zIndex: 30 },
+  introCard: { width: '100%', maxWidth: 360 },
+  introTitle: { fontSize: 17, color: 'rgba(255,246,232,0.95)', letterSpacing: 2, textAlign: 'center', marginBottom: 22 },
+  introRow: { flexDirection: 'row', marginBottom: 14 },
+  introLabel: { width: 48, fontSize: 14, color: 'rgba(255,215,140,0.95)' },
+  introBody: { flex: 1, fontSize: 14, lineHeight: 22, color: 'rgba(255,246,232,0.85)' },
+  introEnd: { marginTop: 10, fontSize: 13, lineHeight: 21, color: 'rgba(255,246,232,0.7)', textAlign: 'center' },
+  introClose: { marginTop: 26, fontSize: 14, color: 'rgba(255,232,170,0.95)', textAlign: 'center', letterSpacing: 2 },
   hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
   river: { position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10 },
   riverText: { fontSize: 13, color: 'rgba(255,246,232,0.75)' },
