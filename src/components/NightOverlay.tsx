@@ -37,16 +37,25 @@ const INTRO_LINES: [string, string][] = [
 // 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
 const CROSS_WIDTH = 0.7;
 const CROSS_OPACITY = 0.6;
-// 「見本」：星がまだ出ない間に見られる、ダミーの人の夜空（6週間ぶん。自分の記録ではない）
+// 「見本」：星がまだ出ない間に見られる、ダミーの人の夜空（6週間ぶん。自分の記録ではない）。
+// 毎日同じ形にする：決まった日（SAMPLE_ANCHOR）までの6週間を決まった種（SAMPLE_SEED）で作り、今日までずらす。
+// 種は、300通りから星座がはっきり分かれるものを選んだ（17番：星22・5つの星座・2つ組なし。ユーザー「見本がさみしい」→ 案A「はい」2026-10-10）
+const SAMPLE_SEED = 17;
+const SAMPLE_ANCHOR = new Date(2026, 9, 9);
 function sampleCaptures() {
   const days: DemoDay[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
   for (let d = NIGHT_DAYS - 1; d >= 0; d--) {
-    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - d);
+    const day = new Date(SAMPLE_ANCHOR.getFullYear(), SAMPLE_ANCHOR.getMonth(), SAMPLE_ANCHOR.getDate() - d);
     days.push({ start: day.getTime(), dow: day.getDay() });
   }
-  return makeDemoCaptures(days, 5, Date.now());
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const shift = Math.round((today.getTime() - SAMPLE_ANCHOR.getTime()) / 86400000);
+  return makeDemoCaptures(days, SAMPLE_SEED).map((c) => {
+    const t = new Date(c.capturedAt);
+    t.setDate(t.getDate() + shift);
+    return { ...c, capturedAt: t.getTime() };
+  });
 }
 
 // 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
