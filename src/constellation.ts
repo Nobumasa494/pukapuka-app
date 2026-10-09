@@ -23,7 +23,7 @@ export type StarLink = Link & { cross: boolean };
 export type Caps = { stars: number; lines: number; perStar: number };
 export const NORMAL_CAPS: Caps = { stars: 26, lines: 38, perStar: 5 }; // 1画面に収める
 // 上限を超える記録のとき（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）
-export const WIDE_CAPS: Caps = { stars: 60, lines: 150, perStar: 8 };
+export const WIDE_CAPS: Caps = { stars: 60, lines: 150, perStar: 3 };
 const MAX_STARS = NORMAL_CAPS.stars;
 
 // 見せる星と線を選ぶ。偶然では起きにくい組（検定）だけを線の候補にして、つながりの強さ（コサイン類似度）の強い順に採り、星の数・1つの星の線の数が上限を超えるものは飛ばす。
@@ -79,14 +79,16 @@ export function selectConstellation(
 }
 
 // 夜空の配置。星が1画面に収まるときは、いつもの配置。収まらないとき（星が MAX_STARS より多い）は、
-// 星座ごとに区画をとって、2列の格子に並べた、画面より大きな夜空にする。画面は、なぞって動かす（試作 2026-10-09）
-const SKY_COLS = 2;
+// 星座ごとに形を決めてから、本物の夜空のように、空に散らして置く。画面より大きな夜空になり、なぞって動かす（試作 2026-10-09）
+// home：開いたときに、画面の真ん中に見せる点（いちばん大きな星座。拾ったことばから来たときは、その言葉の星座）
+const SKY_GAP = 44; // 星座どうしの、いちばん近いところの間
+const SKY_ASPECT = 1.15; // 散らす広がりの、横÷縦（横に少し広く。上下にも左右にも動かせる夜空に）
 export function layoutSky(
   stats: WordStat[],
   lines: StarLink[],
   area: Area,
   focus?: string,
-): { stars: Star[]; extentW: number; extentH: number } {
+): { stars: Star[]; extentW: number; extentH: number; home?: { x: number; y: number } } {
   const solid = lines.filter((l) => !l.cross);
   const parent = new Map<string, string>(stats.map((s) => [s.word, s.word]));
   const find = (x: string): string => (parent.get(x) === x ? x : (parent.set(x, find(parent.get(x)!)), parent.get(x)!));
@@ -97,22 +99,60 @@ export function layoutSky(
   if (stats.length <= MAX_STARS || list.length <= 3) {
     return { stars: layoutConstellation(stats, lines, area, focus), extentW: area.x + area.w + area.x, extentH: area.y + area.h };
   }
-  // 拾ったことばから来た言葉の星座を最初に、あとは星の多い順
+  // 拾ったことばから来た言葉の星座を最初に、あとは星の多い順（大きいものから置くと、すき間に小さいものが入る）
   const hasFocus = (g: WordStat[]) => (focus && g.some((s) => s.word === focus) ? 1 : 0);
-  list.sort((a, b) => hasFocus(b) - hasFocus(a) || b.length - a.length);
-  const cellW = Math.min(360, area.w);
-  const cellH = Math.min(300, Math.round(area.h * 0.72));
-  const gutter = 16;
-  const stars: Star[] = [];
-  list.forEach((g, i) => {
-    const col = i % SKY_COLS;
-    const row = Math.floor(i / SKY_COLS);
+  list.sort((a, b) => hasFocus(b) - hasFocus(a) || b.length - a.length || a[0].word.localeCompare(b[0].word));
+
+  // 1. 星座ごとに、星の数に合った広さで形を決め、名前まで含めた外側の箱を測る
+  const shapes = list.map((g) => {
     const set = new Set(g.map((s) => s.word));
-    const cell = { x: area.x + col * (cellW + gutter), y: area.y + row * cellH, w: cellW, h: cellH - 36 };
-    stars.push(...layoutConstellation(g, lines.filter((l) => set.has(l.a) && set.has(l.b)), cell, focus && set.has(focus) ? focus : undefined));
+    const side = 150 + 80 * Math.sqrt(g.length);
+    const local = layoutConstellation(g, lines.filter((l) => set.has(l.a) && set.has(l.b)), { x: 0, y: 0, w: side, h: side }, focus && set.has(focus) ? focus : undefined);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const s of local) {
+      const b = starBox(s, 4);
+      x0 = Math.min(x0, b.x);
+      y0 = Math.min(y0, b.y);
+      x1 = Math.max(x1, b.x + b.w);
+      y1 = Math.max(y1, b.y + b.h);
+    }
+    return { local, x0, y0, w: x1 - x0, h: y1 - y0, seed: hash(g[0].word + '~') };
   });
-  const rows = Math.ceil(list.length / SKY_COLS);
-  return { stars, extentW: area.x + SKY_COLS * (cellW + gutter) + area.x - gutter, extentH: area.y + rows * cellH + 40 };
+
+  // 2. 大きい星座から順に、真ん中のまわりを、うず巻き状にたどって、ほかと重ならない最初の場所に置く
+  //    （たどり始める向きを星座ごとにずらして、格子のように並ばないようにする）
+  const placed: { x: number; y: number; w: number; h: number }[] = [];
+  const hits = (x: number, y: number, w: number, h: number) =>
+    placed.some((p) => x < p.x + p.w + SKY_GAP && p.x < x + w + SKY_GAP && y < p.y + p.h + SKY_GAP && p.y < y + h + SKY_GAP);
+  for (const sh of shapes) {
+    let t = 0;
+    const turn = sh.seed * Math.PI * 2;
+    for (;;) {
+      const r = 9 * t;
+      const x = Math.cos(t + turn) * r * Math.sqrt(SKY_ASPECT) - sh.w / 2;
+      const y = Math.sin(t + turn) * r / Math.sqrt(SKY_ASPECT) - sh.h / 2;
+      if (!hits(x, y, sh.w, sh.h) || t > 400) {
+        placed.push({ x, y, w: sh.w, h: sh.h });
+        break;
+      }
+      t += 0.15;
+    }
+  }
+
+  // 3. 全体の左上が、area の左上に来るようにずらす
+  const minX = Math.min(...placed.map((p) => p.x));
+  const minY = Math.min(...placed.map((p) => p.y));
+  const maxX = Math.max(...placed.map((p) => p.x + p.w));
+  const maxY = Math.max(...placed.map((p) => p.y + p.h));
+  const stars: Star[] = [];
+  shapes.forEach((sh, i) => {
+    const dx = area.x + placed[i].x - minX - sh.x0;
+    const dy = area.y + placed[i].y - minY - sh.y0;
+    for (const s of sh.local) stars.push({ ...s, x: s.x + dx, y: s.y + dy });
+  });
+  const first = placed[0];
+  const home = { x: area.x + first.x - minX + first.w / 2, y: area.y + first.y - minY + first.h / 2 };
+  return { stars, extentW: area.x + (maxX - minX) + area.x, extentH: area.y + (maxY - minY) + 40, home };
 }
 
 // 星の芯の半径＝回数（1回 1.75px、20回で上限 5px）

@@ -5,6 +5,7 @@ import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDecay,
   withDelay,
   withRepeat,
   withTiming,
@@ -37,7 +38,8 @@ const INTRO_LINES: [string, string][] = [
 const CROSS_WIDTH = 0.7;
 const CROSS_OPACITY = 0.6;
 // 「見本」：星がまだ出ない間に見られる、ダミーの人の夜空（6週間ぶん。自分の記録ではない）
-function sampleCaptures() {
+// full：開発用。記録を4倍にした、上限近くまで星と線が出る見本（動かせる夜空の重さ・見え方を確かめる）
+function sampleCaptures(full = false) {
   const days: DemoDay[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -45,7 +47,8 @@ function sampleCaptures() {
     const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - d);
     days.push({ start: day.getTime(), dow: day.getDay() });
   }
-  return makeDemoCaptures(days, 5, Date.now());
+  if (!full) return makeDemoCaptures(days, 5, Date.now());
+  return [0, 1, 2, 3].flatMap((i) => makeDemoCaptures(days, 5 + 6 * i, Date.now()));
 }
 
 // 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
@@ -91,7 +94,7 @@ function GlowLayer({ group, clock, stars, lit, width, height }: {
 }) {
   const style = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * twinkle(clock.get() + group / TWINKLE_GROUPS) }));
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+    <Animated.View style={[StyleSheet.absoluteFill, style]} pointerEvents="none" renderToHardwareTextureAndroid>
       <Svg width={width} height={height}>
         <Defs>
           <RadialGradient id={`star-glow-${group}`} cx="50%" cy="50%" r="50%">
@@ -118,7 +121,7 @@ function GlowLayer({ group, clock, stars, lit, width, height }: {
 }
 
 // 星座。期間を変えたら作り直し、星が浮かんでから線が引かれる
-function Constellation({ stars, lines, selected, onSelect, onClear, width, height, viewW, viewH }: {
+function Constellation({ stars, lines, selected, onSelect, onClear, width, height, viewW, viewH, home }: {
   stars: Star[];
   lines: StarLink[];
   selected: string | null;
@@ -130,6 +133,8 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   height: number;
   viewW: number;
   viewH: number;
+  // 開いたときに、画面の真ん中に見せる、夜空の点（大きな夜空のとき）
+  home?: { x: number; y: number };
 }) {
   const clock = useSharedValue(0);
   const starsIn = useSharedValue(0);
@@ -150,8 +155,11 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   // つまんで拡大・縮小、なぞって動かす（試作 2026-10-09）。キャンバスの左上を基準に、位置(tx,ty)と倍率(sc)で動かす
   const winH = viewH - SKY_WINDOW_TOP - SKY_WINDOW_BOTTOM; // 星の窓の高さ
   const wide = width > viewW + 1 || height > viewH - SKY_WINDOW_BOTTOM + 1; // 画面より大きな夜空か
+  // 夜空を見せる範囲（画面の座標）。大きな夜空は窓の中。収まる夜空は、これまでどおり画面の上から
+  const topEdge = wide ? SKY_WINDOW_TOP : 0;
+  const bottomEdge = SKY_WINDOW_TOP + winH;
   // いちばん引いたとき：大きな夜空は、全体が窓に入る倍率まで。収まる夜空は、いまの大きさより小さくしない
-  const minScale = wide ? Math.min(1, viewW / width, (winH + SKY_WINDOW_TOP) / height) : 1;
+  const minScale = wide ? Math.min(1, viewW / width, (bottomEdge - topEdge) / height) : 1;
   const MAX_SCALE = 2.5;
   const sc = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -161,50 +169,113 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   const y0 = useSharedValue(0);
   const cx0 = useSharedValue(0);
   const cy0 = useSharedValue(0);
-  const pinchStarted = useSharedValue(0);
+
+  // 倍率 k のときに、位置を置ける範囲。夜空が窓より小さい向きは、真ん中に置く
+  const lowX = (k: number) => {
+    'worklet';
+    const room = viewW - width * k;
+    return room >= 0 ? room / 2 : room;
+  };
+  const highX = (k: number) => {
+    'worklet';
+    const room = viewW - width * k;
+    return room >= 0 ? room / 2 : 0;
+  };
+  const lowY = (k: number) => {
+    'worklet';
+    const room = bottomEdge - topEdge - height * k;
+    return room >= 0 ? topEdge + room / 2 : topEdge + room;
+  };
+  const highY = (k: number) => {
+    'worklet';
+    const room = bottomEdge - topEdge - height * k;
+    return room >= 0 ? topEdge + room / 2 : topEdge;
+  };
+  const clamp = (v: number, lo: number, hi: number) => {
+    'worklet';
+    return Math.min(hi, Math.max(lo, v));
+  };
   useEffect(() => {
+    cancelAnimation(sc);
+    cancelAnimation(tx);
+    cancelAnimation(ty);
     sc.set(1);
-    tx.set(0);
-    ty.set(0);
+    // 開いたときは、home を窓の真ん中に。home がないときは、これまでどおり（夜空の上の余白は、見出しの裏に隠れる）
+    tx.set(home ? clamp(viewW / 2 - home.x, lowX(1), highX(1)) : 0);
+    ty.set(home ? clamp((topEdge + bottomEdge) / 2 - home.y, lowY(1), highY(1)) : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stars, sc, tx, ty]);
-  // 動かせる範囲：夜空が窓より大きいときは、端まで。小さいときは、動かさない
-  const clampX = (v: number, k: number) => {
+  // 指で動かしている間は、端を越えても、少しだけ（重く）ついてくる。離すと戻る
+  const rubber = (v: number, lo: number, hi: number) => {
     'worklet';
-    return Math.min(0, Math.max(viewW - width * k, v));
+    if (v < lo) return lo - (lo - v) * 0.3;
+    if (v > hi) return hi + (v - hi) * 0.3;
+    return v;
   };
-  const clampY = (v: number, k: number) => {
+  const rubberScale = (k: number) => {
     'worklet';
-    return Math.min(0, Math.max(winH + SKY_WINDOW_TOP - height * k, v));
+    if (k < minScale) return minScale * Math.pow(k / minScale, 0.3);
+    if (k > MAX_SCALE) return MAX_SCALE * Math.pow(k / MAX_SCALE, 0.3);
+    return k;
   };
+  const SETTLE = { duration: 260, easing: Easing.out(Easing.cubic) };
+
+  // なぞる：始めの位置からの動きで決める。離したあとは、勢いで少し滑って止まる
   const pan = Gesture.Pan()
     .minDistance(8)
     .maxPointers(1)
-    .onBegin(() => {
+    .onStart(() => {
+      cancelAnimation(tx);
+      cancelAnimation(ty);
       x0.set(tx.get());
       y0.set(ty.get());
     })
     .onUpdate((e) => {
-      tx.set(clampX(x0.get() + e.translationX, sc.get()));
-      ty.set(clampY(y0.get() + e.translationY, sc.get()));
+      const k = sc.get();
+      tx.set(rubber(x0.get() + e.translationX, lowX(k), highX(k)));
+      ty.set(rubber(y0.get() + e.translationY, lowY(k), highY(k)));
+    })
+    .onEnd((e, success) => {
+      if (!success) return;
+      const k = sc.get();
+      const settle = (v: SharedValue<number>, lo: number, hi: number, velocity: number) => {
+        const now = v.get();
+        if (now < lo || now > hi) v.set(withTiming(clamp(now, lo, hi), SETTLE));
+        else v.set(withDecay({ velocity, deceleration: 0.996, clamp: [lo, hi] }));
+      };
+      settle(tx, lowX(k), highX(k), e.velocityX);
+      settle(ty, lowY(k), highY(k), e.velocityY);
     });
+  // つまむ：つまみ始めの倍率と、指の中心の下にある夜空の点を覚えて、毎回そこから計算する（誤差がたまらない）
+  // 指の中心が動けば、夜空もいっしょに動く。端や倍率の限界は、離したときに、なめらかに戻す
   const pinch = Gesture.Pinch()
-    .onBegin(() => {
-      s0.set(sc.get());
-      x0.set(tx.get());
-      y0.set(ty.get());
-      pinchStarted.set(0);
+    .onStart((e) => {
+      cancelAnimation(sc);
+      cancelAnimation(tx);
+      cancelAnimation(ty);
+      // つまみが始まったと分かるのは、指が少し開いてから。その分は倍率に入れない
+      s0.set(sc.get() / e.scale);
+      cx0.set((e.focalX - tx.get()) / sc.get());
+      cy0.set((e.focalY - ty.get()) / sc.get());
+      x0.set(e.focalX);
+      y0.set(e.focalY);
     })
     .onUpdate((e) => {
-      // つまんだ中心の下にある、夜空の点（開始のときは、中心が取れないので、最初の更新で決める）
-      if (pinchStarted.get() === 0) {
-        cx0.set((e.focalX - tx.get()) / sc.get());
-        cy0.set((e.focalY - ty.get()) / sc.get());
-        pinchStarted.set(1);
-      }
-      const k = Math.min(MAX_SCALE, Math.max(minScale, s0.get() * e.scale));
+      const k = rubberScale(s0.get() * e.scale);
       sc.set(k);
-      tx.set(clampX(e.focalX - cx0.get() * k, k));
-      ty.set(clampY(e.focalY - cy0.get() * k, k));
+      tx.set(e.focalX - cx0.get() * k);
+      ty.set(e.focalY - cy0.get() * k);
+      x0.set(e.focalX);
+      y0.set(e.focalY);
+    })
+    .onEnd(() => {
+      // 倍率を限界の中に戻すときも、最後に指があった点を、なるべくその場に残す
+      const k = clamp(sc.get(), minScale, MAX_SCALE);
+      const nx = clamp(x0.get() - cx0.get() * k, lowX(k), highX(k));
+      const ny = clamp(y0.get() - cy0.get() * k, lowY(k), highY(k));
+      sc.set(withTiming(k, SETTLE));
+      tx.set(withTiming(nx, SETTLE));
+      ty.set(withTiming(ny, SETTLE));
     });
   const gesture = Gesture.Simultaneous(pan, pinch);
   // 続きがある向きに、しるしを出す（残りの距離が 24px 以上あるとき。近づくと、ふわっと消える）
@@ -212,11 +283,22 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
     'worklet';
     return Math.min(0.75, Math.max(0, gap / 60));
   };
-  const edgeLeftStyle = useAnimatedStyle(() => ({ opacity: more(-tx.get() - 24) }));
-  const edgeRightStyle = useAnimatedStyle(() => ({ opacity: more(width * sc.get() + tx.get() - viewW - 24) }));
-  const edgeUpStyle = useAnimatedStyle(() => ({ opacity: more(-ty.get() - 24) }));
-  const edgeDownStyle = useAnimatedStyle(() => ({ opacity: more(height * sc.get() + ty.get() - (winH + SKY_WINDOW_TOP) - 24) }));
-  const canvasStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.get() }, { translateY: ty.get() }, { scale: sc.get() }] }));
+  const edgeLeftStyle = useAnimatedStyle(() => ({ opacity: more(highX(sc.get()) - tx.get() - 24) }));
+  const edgeRightStyle = useAnimatedStyle(() => ({ opacity: more(tx.get() - lowX(sc.get()) - 24) }));
+  const edgeUpStyle = useAnimatedStyle(() => ({ opacity: more(highY(sc.get()) - ty.get() - 24) }));
+  const edgeDownStyle = useAnimatedStyle(() => ({ opacity: more(ty.get() - lowY(sc.get()) - 24) }));
+  // 拡大は、夜空の真ん中を中心にかかる（左上を中心にする指定は、スマホで効かないことがある）。
+  // その分を位置でずらして、夜空の点 p が、画面の (tx + k·p) に来るようにする
+  const canvasStyle = useAnimatedStyle(() => {
+    const k = sc.get();
+    return {
+      transform: [
+        { translateX: tx.get() - (width / 2) * (1 - k) },
+        { translateY: ty.get() - (height / 2) * (1 - k) },
+        { scale: k },
+      ],
+    };
+  });
 
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
   // 太さの基準は、ふだん出ている線（星座の中の線）だけで決める。点線は、触れたときに出るだけなので、基準に入れない（触れたとき、ほかの線の太さが変わらないように）
@@ -240,7 +322,7 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
     <Pressable style={StyleSheet.absoluteFill} onPress={onClear} />
     {/* 星の層は、木や山（下の背景）の上までの窓で切る。下の背景は、そのまま見せる */}
     <View style={styles.skyWindow} pointerEvents="box-none">
-    <Animated.View style={[{ position: 'absolute', left: 0, top: -SKY_WINDOW_TOP, width, height, transformOrigin: 'top left' }, canvasStyle]} pointerEvents="box-none">
+    <Animated.View style={[{ position: 'absolute', left: 0, top: -SKY_WINDOW_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
       <Animated.View style={[StyleSheet.absoluteFill, linesStyle]} pointerEvents="none">
         <Svg width={width} height={height}>
           {lines.filter((l) => !l.cross || l.a === selected || l.b === selected).map((l) => {
@@ -336,21 +418,22 @@ type Props = {
 export default function NightOverlay({ width, height, focus, onBack, onRiver }: Props) {
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [showSample, setShowSample] = useState(false);
+  const [sampleFull, setSampleFull] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
   const closeIntro = () => setIntroOpen(false);
 
   // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
   const real = useCaptures(NIGHT_DAYS);
-  const sample = useMemo(() => (showSample ? sampleCaptures() : null), [showSample]);
+  const sample = useMemo(() => (showSample ? sampleCaptures(sampleFull) : null), [showSample, sampleFull]);
   const captures = showSample ? sample : real;
-  const { stars, lines, canvasW, canvasH } = useMemo(() => {
+  const { stars, lines, canvasW, canvasH, home } = useMemo(() => {
     const f = showSample ? undefined : focus;
     // 1画面に収まらないほど星があるときは、上限をゆるめて、画面より大きな夜空にする（なぞって動かす）
     let picked = selectConstellation(captures ?? [], f);
     if (picked.truncated) picked = selectConstellation(captures ?? [], f, WIDE_CAPS);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };
     const sky = layoutSky(picked.stats, picked.lines, area, f);
-    return { stars: sky.stars, lines: picked.lines, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height - SKY_WINDOW_BOTTOM, sky.extentH) };
+    return { stars: sky.stars, lines: picked.lines, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height - SKY_WINDOW_BOTTOM, sky.extentH), home: sky.home };
   }, [captures, focus, showSample, width, height]);
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
@@ -388,6 +471,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         height={canvasH}
         viewW={width}
         viewH={height}
+        home={home}
       />
 
       {isEmpty && (
@@ -405,12 +489,19 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
       {/* 左上：ふだんは「← ことばへ」。見本を見ているときは、見本をとじる「×」になる */}
       {introOpen ? null : showSample ? (
-        <Pressable style={[styles.closeBtn, styles.closeLeft]} hitSlop={14} onPress={() => { setShowSample(false); setSelected(null); }} accessibilityLabel="とじる">
+        <Pressable style={[styles.closeBtn, styles.closeLeft]} hitSlop={14} onPress={() => { setShowSample(false); setSampleFull(false); setSelected(null); }} accessibilityLabel="とじる">
           <Text style={styles.closeBtnText}>×</Text>
         </Pressable>
       ) : (
         <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
           <Text style={styles.backText}>← ことばへ</Text>
+        </Pressable>
+      )}
+
+      {/* 開発中だけ：上限近くまで星と線が出る見本 */}
+      {__DEV__ && !introOpen && !showSample && (
+        <Pressable style={[styles.help, { top: 88 }]} hitSlop={8} onPress={() => { setSampleFull(true); setShowSample(true); setSelected(null); }}>
+          <Text style={styles.helpText}>見本（多め）</Text>
         </Pressable>
       )}
 
