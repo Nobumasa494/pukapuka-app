@@ -76,7 +76,7 @@ export function strongLinks(captures: { word: string; capturedAt: number }[], kn
 // 夜空の線：偶然では起きにくい組だけ残す。
 // 「偶然なら何日いっしょになるか」を超幾何分布で数え、実際の日数以上になる確率（フィッシャーの正確確率検定の片側）が alpha 未満の組を線にする。
 // 全体の日数は、記録のある日の数。日数が少ない間は、どの組も偶然を超えにくく、線がほとんど出ない
-export const ALPHA = 0.05;
+export const ALPHA = 0.01;
 function logFactorials(n: number): number[] {
   const lf = [0];
   for (let i = 1; i <= n; i++) lf[i] = lf[i - 1] + Math.log(i);
