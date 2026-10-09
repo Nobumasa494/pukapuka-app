@@ -10,7 +10,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import { CATEGORY_COLOR, LEGEND, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, type Placed } from '../wordCloud';
+import { CATEGORY_COLOR, LEGEND, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, type Placed } from '../wordCloud';
 import { useCaptures } from '../useCaptures';
 import type { Category } from '../words';
 
@@ -118,9 +118,11 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   // 最近（今日〜今週）の本物の記録。読み込み中は何も置かない
   const captures = useCaptures(7);
 
-  // 空（画面の上約6割。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝回数・キラキラと周りの光＝強さ・色＝カテゴリ
+  // 空（画面の上62%。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝回数・キラキラと周りの光＝強さ・色＝カテゴリ。
+  // 2026-10-10：70%に広げたら、下の段の言葉が木に重なって読みにくかったので、木のてっぺん（約63%）の手前まで。
+  // 小さい画面（高さ750未満）は、言葉を20語までにする（それでも文字が10pxを下回るため）
   const { placed } = useMemo(
-    () => layoutWords(selectWords(aggregate(captures ?? [])), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.6) - 96 }),
+    () => layoutWords(selectWords(aggregate(captures ?? []), height < 750 ? 20 : MAX_WORDS), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 }),
     [captures, width, height],
   );
 

@@ -77,9 +77,31 @@ export function selectWords(stats: WordStat[], max = MAX_WORDS): WordStat[] {
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-// 文字の大きさ＝回数（1回ごとに2px、上限あり）
+// 文字の大きさ＝回数（1回ごとに2px、上限あり）。2026-10-10 から夕空では使わず、下の段階（sizeTiers）にした
 export function fontSizeFor(count: number): number {
   return Math.min(MAX_SIZE, MIN_SIZE + count * 2);
+}
+
+// 文字の大きさの段階：その夕空の中で、拾った回数の順位で3段階（上位15%＝大、次の35%＝中、残り＝小）。
+// 少しずつ大きくすると、場所に合わせて縮んだとき差が見えなかった（ユーザー「ワードクラウドだと、かなり大きいことばも出る」「それでいこうか」2026-10-10）。
+// 星空の星の等級と同じ考え方。大きさは、Galaxy S20 で一番小さい文字が12px以上・大きい文字がその約2倍になるように測って決めた
+export const SIZE_TIER = { big: 28, mid: 19, small: 15 } as const;
+export function sizeTiers(stats: WordStat[]): (s: WordStat) => number {
+  const ranked = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
+  const top = Math.ceil(ranked.length * 0.15);
+  const mid = Math.ceil(ranked.length * 0.5);
+  const size = new Map(ranked.map((s, i) => [s.word, i < top ? SIZE_TIER.big : i < mid ? SIZE_TIER.mid : SIZE_TIER.small]));
+  return (s) => size.get(s.word) ?? SIZE_TIER.small;
+}
+
+// 光の段階：水辺で長押ししたときの「光の粒」の数（強さ 0〜1 を5つの粒に。2秒で5つ）にそろえる。強さは1回あたりの平均。
+// 粒1〜2つ＝光らない、粒3つ＝小さく光る、粒4〜5つ＝大きく光ってキラキラ（ユーザー「川辺で拾う言葉のつよさ５だんかいあるよね」→「それでいいかな」2026-10-10）
+export function dotsFor(avgStrength: number): number {
+  return Math.min(5, Math.floor(clamp01(avgStrength) * 5) + 1);
+}
+export function glowTier(avgStrength: number): number {
+  const d = dotsFor(avgStrength);
+  return d >= 4 ? 1 : d === 3 ? 0.45 : 0;
 }
 
 // 文字はカテゴリの色。読みやすさを優先し、強さはほんのり濃さに出すだけ
@@ -146,7 +168,9 @@ function regionsFor(boxes: Map<Category, { w: number; h: number }[]>, area: Area
 
 // 大きい言葉から順に、その言葉の種類の区画の真ん中から、渦を巻くように空いている場所へ置く。
 // 位置は「種類」の目安（くわしい意味はない）。入りきらないときは全体を同じ割合で縮める（大きさの比は変えない）
-export function layoutWords(stats: WordStat[], area: Area): { placed: Placed[]; scale: number; dropped: string[] } {
+// look：文字の大きさ（size）と光（glow 0〜1）の決め方を外から変える（見比べるため。ないときは今の決め方）
+export type CloudLook = { size: (s: WordStat) => number; glow: (s: WordStat) => number };
+export function layoutWords(stats: WordStat[], area: Area, look: CloudLook = { size: sizeTiers(stats), glow: (s) => glowTier(s.avgStrength) }): { placed: Placed[]; scale: number; dropped: string[] } {
   const order = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
 
   let scale = 1;
@@ -156,17 +180,17 @@ export function layoutWords(stats: WordStat[], area: Area): { placed: Placed[]; 
     const dropped: string[] = [];
     const sizes = new Map<Category, { w: number; h: number }[]>();
     for (const s of order) {
-      const size = fontSizeFor(s.count) * scale;
+      const size = look.size(s) * scale;
       const list = sizes.get(s.category) ?? [];
       list.push({ w: textWidth(s.word, size) + 4, h: size * 1.4 });
       sizes.set(s.category, list);
     }
     const regions = regionsFor(sizes, area);
     for (const s of order) {
-      const size = fontSizeFor(s.count) * scale;
+      const size = look.size(s) * scale;
       const w = textWidth(s.word, size) + 4;
       const h = size * 1.4;
-      const k = sparkleLevel(s.avgStrength);
+      const k = look.glow(s);
       const haloR = k > 0 ? (HALO_MIN_R + HALO_EXTRA_R * k) * scale : 0;
       const haloOpacity = 0.7 * k * HALO_TINT[s.category];
       // 光が文字より外へ出る分の一部を、置き場所の判定に含める（どの言葉の光か分からなくならないように）
