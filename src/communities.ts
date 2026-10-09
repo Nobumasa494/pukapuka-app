@@ -112,6 +112,63 @@ export function significantLinks(captures: { word: string; capturedAt: number }[
   return links;
 }
 
+// FDR（偽発見率）で線を選ぶ方法。試しの道具（scripts/night/fdr-test.ts・crosscheck）で使う。アプリの夜空は1%（significantLinks）のまま
+// （2026-10-10：FDR 20%に一度変えたが、正しく計算すると6週間の記録では1%より線が少なく、点線も出にくかったので、1%に戻した）。
+// 「出した線のうち、たまたまの線（偽物）は、多くても FDR_Q まで」になるように選ぶ。ダミーで測ると、実際の偽物は約1割（10本に1本くらい）。
+// 1. 組ごとに、偶然でもこれ以上重なる確率 p を出す（significantLinks と同じ検定）
+// 2. 試した組の数は、タロンの方法で数える：言葉ごとの日数だけを見て、どれだけ重なっても基準に届かない組は数えない（一緒になった日数は見ないので、ずるくない）
+// 3. ベンジャミニ・ホッホベルク法：試す組（2. で数えた組）だけを p の小さい順に並べ、k 番目が (k/試した組の数)·FDR_Q 以下になる、いちばん大きい k までを線にする
+//    （試す組の外の組を並べてはいけない。2026-10-10、記録4日の人で、外の組まで並べて線が82本出た間違いを直した）
+// 4. 一緒の日が MIN_CO（2日）以上の組だけ
+// 決まった「1%」より、記録の様子に合わせて基準が変わる：でたらめな人では厳しく（偽の線 1人0.2本）、つながりがある人ではゆるく（本当の線 15→24本）。
+// 比べた試し：scripts/night/fdr-test.ts
+export const FDR_Q = 0.2;
+export function fdrLinks(captures: { word: string; capturedAt: number }[], q = FDR_Q): Link[] {
+  const days = new Map<string, Set<string>>();
+  const active = new Set<string>();
+  for (const c of captures) {
+    const k = dayKey(c.capturedAt);
+    active.add(k);
+    if (!days.has(c.word)) days.set(c.word, new Set());
+    days.get(c.word)!.add(k);
+  }
+  const lf = logFactorials(active.size);
+  // タロンの方法：「いちばん重なったときの p が q/k 以下の組が、k 組以下になる、いちばん小さい k」を、試した組の数にする
+  const words = [...days.keys()];
+  // 組ごとの「いちばん重なったときの p」（言葉ごとの日数だけで決まる）
+  const minP = (da: number, db: number) => {
+    const most = Math.min(da, db);
+    return most < MIN_CO ? 1 : chanceOfAtLeast(lf, active.size, da, db, most);
+  };
+  const best: number[] = [];
+  for (let i = 0; i < words.length; i++)
+    for (let j = i + 1; j < words.length; j++) best.push(minP(days.get(words[i])!.size, days.get(words[j])!.size));
+  best.sort((x, y) => x - y);
+  let m = best.length;
+  for (let k = 1; k <= best.length; k++) {
+    let n = 0;
+    while (n < best.length && best[n] <= q / k) n++;
+    if (n <= k) {
+      m = k;
+      break;
+    }
+  }
+  // 試す組：いちばん重なったときの p が q/m 以下の組だけ（m 組以下）
+  const tested = cooccurrence(captures)
+    .filter((l) => l.count >= MIN_CO && minP(days.get(l.a)!.size, days.get(l.b)!.size) <= q / m)
+    .map((l) => {
+      const da = days.get(l.a)!.size;
+      const db = days.get(l.b)!.size;
+      return { ...l, p: chanceOfAtLeast(lf, active.size, da, db, l.count), strength: l.count / Math.sqrt(da * db) };
+    })
+    .sort((x, y) => x.p - y.p);
+  let pass = 0;
+  tested.forEach((l, i) => {
+    if (l.p <= ((i + 1) / m) * q) pass = i + 1;
+  });
+  return tested.slice(0, pass).map(({ a, b, count, strength }) => ({ a, b, count, strength }));
+}
+
 // つながりの強さを重みにした、ラベル伝播（となりの組の強さを足して、いちばん大きい組に入る。順番を固定して毎回同じ結果にする）。
 // words は、並べる順番（回数の多い順にしておく）。戻り値は、言葉 → まとまりの番号（大きいまとまりが 0）
 export function labelGroups(words: string[], links: { a: string; b: string; strength: number }[], weightOf: (w: string) => number): Map<string, number> {
