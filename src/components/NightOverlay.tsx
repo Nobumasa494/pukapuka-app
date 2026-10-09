@@ -95,6 +95,49 @@ const twinkle = (t: number) => {
 // 星の周りの光。星ごとに、星のまわりだけの小さな絵にして、時間をずらした数グループでまたたかせる。
 // 前は、夜空と同じ大きさの層を数枚またたかせていたが、毎コマ大きな絵を描き直し、スマホ（Android）で
 // 記録4倍の見本（星46）のとき CPU 160〜180%・コマ落ち100%・押しても反応しない、になった（2026-10-09 実機で測った）
+// 点線（ちがう星座どうしの小さなつながり）にそって、ときどき流れ星が走り、着いた星で「きらん」と光る。
+// 2つの星座の間を「何かが通った」と見せて、点線に目が行くようにする（ユーザー「２」→「流れ星できらんと光るぐらいがいい」2026-10-10。
+// 前は光の粒がずっと流れていたが「ダサい」）。点線ごとに時間をずらし、同時には光らない
+const SHOOT_MS = 7000; // 1回りの長さ（この中で1回だけ走る）
+const SHOOT_RUN = 0.13; // 走る長さ（1回りのうち。約0.9秒）
+const SHOOT_TAIL = 28; // 尾の長さ（px）
+function ShootingStar({ ax, ay, bx, by, flow, offset, dim }: { ax: number; ay: number; bx: number; by: number; flow: SharedValue<number>; offset: number; dim: boolean }) {
+  const len = Math.max(1, Math.hypot(bx - ax, by - ay));
+  const ux = (bx - ax) / len;
+  const uy = (by - ay) / len;
+  const angle = `${Math.atan2(by - ay, bx - ax)}rad`;
+  const tail = useAnimatedStyle(() => {
+    const f = (flow.get() + offset) % 1;
+    if (f >= SHOOT_RUN) return { opacity: 0 };
+    const u = f / SHOOT_RUN;
+    const e = u * u * (3 - 2 * u); // はじめと終わりをゆっくり
+    const hx = ax + (bx - ax) * e;
+    const hy = ay + (by - ay) * e;
+    return {
+      opacity: Math.sin(Math.PI * u) * (dim ? DIM : 1),
+      transform: [{ translateX: hx - ux * SHOOT_TAIL / 2 - SHOOT_TAIL / 2 }, { translateY: hy - uy * SHOOT_TAIL / 2 - 1 }, { rotate: angle }],
+    };
+  });
+  const sparkle = useAnimatedStyle(() => {
+    const f = (flow.get() + offset) % 1;
+    const u = (f - SHOOT_RUN * 0.85) / 0.06; // 着く少し前から、短く
+    if (u <= 0 || u >= 1) return { opacity: 0 };
+    const k = Math.sin(Math.PI * u);
+    return { opacity: k * (dim ? DIM : 1), transform: [{ translateX: bx - 9 }, { translateY: by - 9 }, { scale: 0.4 + 0.8 * k }] };
+  });
+  return (
+    <>
+      <Animated.View style={[styles.shootTail, tail]} pointerEvents="none">
+        <LinearGradient colors={['rgba(255,240,200,0)', 'rgba(255,248,225,0.95)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+      </Animated.View>
+      <Animated.View style={[styles.sparkle, sparkle]} pointerEvents="none">
+        <View style={styles.sparkleH} />
+        <View style={styles.sparkleV} />
+      </Animated.View>
+    </>
+  );
+}
+
 function GlowStar({ star, index, group, clock, dim }: { star: Star; index: number; group: number; clock: SharedValue<number>; dim: boolean }) {
   const style = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * twinkle(clock.get() + group / TWINKLE_GROUPS) }));
   const R = star.r * 4.5;
@@ -135,16 +178,19 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   const clock = useSharedValue(0);
   const starsIn = useSharedValue(0);
   const linesIn = useSharedValue(0);
+  const flow = useSharedValue(0);
   useEffect(() => {
     clock.set(withRepeat(withTiming(1, { duration: TWINKLE_MS, easing: Easing.linear }), -1, false));
     starsIn.set(withTiming(1, { duration: 900, easing: Easing.out(Easing.quad) }));
     linesIn.set(withDelay(600, withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.quad) })));
+    flow.set(withRepeat(withTiming(1, { duration: SHOOT_MS, easing: Easing.linear }), -1, false));
     return () => {
       cancelAnimation(clock);
       cancelAnimation(starsIn);
       cancelAnimation(linesIn);
+      cancelAnimation(flow);
     };
-  }, [clock, starsIn, linesIn]);
+  }, [clock, starsIn, linesIn, flow]);
   const starsStyle = useAnimatedStyle(() => ({ opacity: starsIn.get() }));
   const linesStyle = useAnimatedStyle(() => ({ opacity: linesIn.get() }));
 
@@ -362,6 +408,14 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
             );
           })}
         </Svg>
+        {drawn
+          .filter((l) => l.cross)
+          .flatMap((l) => {
+            const a = at.get(l.a)!;
+            const b = at.get(l.b)!;
+            const dim = !!selected && l.a !== selected && l.b !== selected;
+            return [<ShootingStar key={`${l.a}-${l.b}`} ax={a.x} ay={a.y} bx={b.x} by={b.y} flow={flow} offset={hash(`${l.a}~${l.b}`)} dim={dim} />];
+          })}
       </Animated.View>
 
       <Animated.View style={[StyleSheet.absoluteFill, starsStyle]} pointerEvents="box-none">
@@ -552,6 +606,10 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
 const styles = StyleSheet.create({
   // 星の層の窓。上は見出しの下から、下は、説明・ボタン・木や山が見える所（下から130px）を空ける。窓の外は切る（画面を、なぞって動かすため）
+  shootTail: { position: 'absolute', left: 0, top: 0, width: SHOOT_TAIL, height: 2, borderRadius: 1, overflow: 'hidden' },
+  sparkle: { position: 'absolute', left: 0, top: 0, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
+  sparkleH: { position: 'absolute', width: 18, height: 1.6, borderRadius: 1, backgroundColor: 'rgba(255,248,225,0.95)' },
+  sparkleV: { position: 'absolute', width: 1.6, height: 18, borderRadius: 1, backgroundColor: 'rgba(255,248,225,0.95)' },
   skyWindow: { position: 'absolute', left: 0, right: 0, top: SKY_WINDOW_TOP, bottom: SKY_WINDOW_BOTTOM, overflow: 'hidden' },
   edgeMark: { position: 'absolute', fontSize: 26, lineHeight: 30, color: 'rgba(255,232,170,0.9)', textAlign: 'center', width: 30 },
   edgeLeft: { left: 4, top: '45%' },
