@@ -583,17 +583,17 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
       )}
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
-        <Text style={styles.title}>夜空</Text>
+        <Text style={styles.title}>星空</Text>
       </View>
 
-      {/* 左上：ふだんは「← ことばへ」。見本を見ているときは、見本をとじる「×」になる */}
+      {/* 左上：ふだんは「← 夕空へ」。見本を見ているときは、見本をとじる「×」になる */}
       {introOpen ? null : showSample ? (
         <Pressable style={[styles.closeBtn, styles.closeLeft]} hitSlop={14} onPress={() => { setShowSample(false); setSelected(null); }} accessibilityLabel="とじる">
           <Text style={styles.closeBtnText}>×</Text>
         </Pressable>
       ) : (
         <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
-          <Text style={styles.backText}>← ことばへ</Text>
+          <Text style={styles.backText}>← 夕空へ</Text>
         </Pressable>
       )}
 
@@ -627,7 +627,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
       </Text>
 
       <Pressable style={styles.river} hitSlop={16} onPress={onRiver}>
-        <Text style={styles.riverText}>川へ戻る</Text>
+        <Text style={styles.riverText}>水辺へ戻る</Text>
       </Pressable>
     </View>
   );

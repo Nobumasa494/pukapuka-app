@@ -128,7 +128,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
-        <Text style={styles.title}>拾ったことば</Text>
+        <Text style={styles.title}>夕空</Text>
       </View>
 
       {/* 光は文字の後ろ */}
@@ -172,11 +172,11 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       </Text>
 
       <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
-        <Text style={styles.backText}>← 川へ</Text>
+        <Text style={styles.backText}>← 水辺へ</Text>
       </Pressable>
 
       <Pressable style={styles.next} hitSlop={16} onPress={() => onOpenArchive()}>
-        <Text style={styles.nextText}>夜空へ →</Text>
+        <Text style={styles.nextText}>星空へ →</Text>
       </Pressable>
     </View>
   );
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 10, color: 'rgba(255,246,232,0.65)' },
   hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
   empty: { position: 'absolute', top: '30%', left: 0, right: 0, textAlign: 'center', fontSize: 14, color: 'rgba(255,246,232,0.8)', letterSpacing: 1 },
-  // 右上：左上の「← 川へ」と対になる、次の画面（夜空）への入口
+  // 右上：左上の「← 水辺へ」と対になる、次の画面（星空）への入口
   next: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
   nextText: { fontSize: 14, color: 'rgba(255,246,232,0.7)' },
 });
