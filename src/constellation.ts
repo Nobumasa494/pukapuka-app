@@ -19,12 +19,12 @@ export type Area = { x: number; y: number; w: number; h: number };
 export { MIN_CO, cooccurrence, type Line, type Link };
 // cross: 別のまとまりをつなぐ線。画面にはうすい点線で出し、星は引き寄せない
 export type StarLink = Link & { cross: boolean };
-// 星の数と線の数の上限（1画面に、名前が読める量。仮の値：6週間の記録で上限が効き始めるため、26・38に増やした。画面で見て調整する）
-export type Caps = { stars: number; lines: number; perStar: number };
-export const NORMAL_CAPS: Caps = { stars: 26, lines: 38, perStar: 5 }; // 1画面に収める
-// 上限を超える記録のとき（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）。
-// 1つの星からの線の上限はなし（前は3本。描く線を骨組み＝最大全域木にしたので、ごちゃごちゃは骨組みで防ぐ。ユーザー「3本までの役目はなしでいい」2026-10-10）
-export const WIDE_CAPS: Caps = { stars: 60, lines: 150, perStar: Infinity };
+// 上限は、星の数だけ（名前が読める星の数）。描く線は骨組み（星の数−星座の数）なので、線の数・1つの星からの線の数の上限は持たない
+// （2026-10-10 ユーザー「はい」。前は線38・150本、1つの星から5・3本）
+export type Caps = { stars: number };
+export const NORMAL_CAPS: Caps = { stars: 26 }; // 1画面に収める
+// 星が26個を超える人（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）
+export const WIDE_CAPS: Caps = { stars: 60 };
 
 // 星座の骨組み（最大全域木）：星座の中の線（実線）から、輪を作らずに、強い線をできるだけ残す。星座の星は全部つながったまま、
 // 一本道や枝分かれ（星座らしい形）になる。強い順に足し、輪になる線は飛ばす。画面に描く線と、星の位置を決める線に使う。
@@ -51,7 +51,7 @@ export function skeleton(lines: StarLink[]): StarLink[] {
 }
 const MAX_STARS = NORMAL_CAPS.stars;
 
-// 見せる星と線を選ぶ。偶然では起きにくい組（検定）だけを線の候補にして、つながりの強さ（コサイン類似度）の強い順に採り、星の数・1つの星の線の数が上限を超えるものは飛ばす。
+// 見せる星と線を選ぶ。偶然では起きにくい組（検定）だけを線の候補にして、つながりの強さ（コサイン類似度）の強い順に採り、星の数が上限を超える線は飛ばす。
 // focus（拾ったことばでタップした言葉）は線がなくても必ず出し、その言葉の線を先に採る
 export function selectConstellation(
   captures: { word: string; strength: number; capturedAt: number }[],
@@ -73,18 +73,9 @@ export function selectConstellation(
     });
 
   const words = new Set<string>(focus && statOf.has(focus) ? [focus] : []);
-  const degree = new Map<string, number>();
   const lines: StarLink[] = [];
-  let truncated = false; // 上限で切った線があるか
+  let truncated = false; // 星の上限で、入れられなかった星があるか（あれば、動かせる夜空にする）
   for (const l of candidates) {
-    if (lines.length >= caps.lines) {
-      truncated = true;
-      break;
-    }
-    if ((degree.get(l.a) ?? 0) >= caps.perStar || (degree.get(l.b) ?? 0) >= caps.perStar) {
-      truncated = true;
-      continue;
-    }
     const added = (words.has(l.a) ? 0 : 1) + (words.has(l.b) ? 0 : 1);
     if (words.size + added > caps.stars) {
       truncated = true;
@@ -92,11 +83,9 @@ export function selectConstellation(
     }
     words.add(l.a);
     words.add(l.b);
-    degree.set(l.a, (degree.get(l.a) ?? 0) + 1);
-    degree.set(l.b, (degree.get(l.b) ?? 0) + 1);
     lines.push(l);
   }
-  // 点線（星座をまたぐ線）は、星に触れたときだけ出す。星座の線が1本もない星は、ふだんは出さない（点線の相手の星が、1つだけ浮かないように）
+  // 星座の線（実線）が1本もない星は出さない（点線の相手の星が、1つだけ浮かないように）
   const inConstellation = new Set(lines.filter((l) => !l.cross).flatMap((l) => [l.a, l.b]));
   if (focus && statOf.has(focus)) inConstellation.add(focus);
   const kept = lines.filter((l) => inConstellation.has(l.a) && inConstellation.has(l.b));
