@@ -12,9 +12,9 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line as SvgLine, LinearGradient as SvgLinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { WIDE_CAPS, layoutSky, skeleton, lineOpacity, lineWidth, relativeStrength, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
+import { WIDE_CAPS, layoutSky, lineTiers, skeleton, selectConstellation, starBox, type Mag, type StarLink, type Star } from '../constellation';
 import { useCaptures } from '../useCaptures';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
@@ -75,6 +75,14 @@ const AREA_BOTTOM = 150;
 const DIM = 0.3;
 
 const STAR_CORE = 'rgb(255,250,230)';
+// 等級ごとの明るさ（大きさは constellation.ts の MAG_SIZE）。1等星は大きく明るく、十字の光の筋。3等星は小さく暗め（2026-10-10）
+const MAG_LOOK: Record<Mag, { core: number; glowR: number; glow: number; label: number; spike: number }> = {
+  1: { core: 1, glowR: 26, glow: 1, label: 0.95, spike: 17 },
+  2: { core: 0.85, glowR: 13, glow: 0.7, label: 0.8, spike: 0 },
+  3: { core: 0.6, glowR: 7, glow: 0.45, label: 0.6, spike: 0 },
+};
+// 線の段階ごとの太さ・濃さ（1＝強い・2＝ふつう・3＝弱い）
+const LINE_LOOK: Record<Mag, { w: number; o: number }> = { 1: { w: 2.6, o: 0.85 }, 2: { w: 1.3, o: 0.55 }, 3: { w: 0.7, o: 0.32 } };
 const STAR_GLOW = 'rgb(255,232,155)';
 const LINE_COLOR = 'rgb(255,215,140)';
 
@@ -140,19 +148,36 @@ function ShootingStar({ ax, ay, bx, by, flow, offset, dim }: { ax: number; ay: n
 
 function GlowStar({ star, index, group, clock, dim }: { star: Star; index: number; group: number; clock: SharedValue<number>; dim: boolean }) {
   const style = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * twinkle(clock.get() + group / TWINKLE_GROUPS) }));
-  const R = star.r * 4.5;
+  const look = MAG_LOOK[star.mag];
+  const R = Math.max(look.glowR, look.spike);
   return (
-    <View style={{ position: 'absolute', left: star.x - R, top: star.y - R, width: R * 2, height: R * 2, opacity: dim ? DIM : 1 }} pointerEvents="none">
+    <View style={{ position: 'absolute', left: star.x - R, top: star.y - R, width: R * 2, height: R * 2, opacity: (dim ? DIM : 1) * look.glow }} pointerEvents="none">
       <Animated.View style={[StyleSheet.absoluteFill, style]}>
         <Svg width={R * 2} height={R * 2}>
           <Defs>
             <RadialGradient id={`star-glow-${index}`} cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor={STAR_GLOW} stopOpacity={0.32} />
-              <Stop offset="0.4" stopColor={STAR_GLOW} stopOpacity={0.12} />
+              <Stop offset="0" stopColor={STAR_GLOW} stopOpacity={0.38} />
+              <Stop offset="0.4" stopColor={STAR_GLOW} stopOpacity={0.14} />
               <Stop offset="1" stopColor={STAR_GLOW} stopOpacity={0} />
             </RadialGradient>
+            <SvgLinearGradient id={`spike-x-${index}`} x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor="#fff" stopOpacity={0} />
+              <Stop offset="0.5" stopColor="#fff" stopOpacity={0.95} />
+              <Stop offset="1" stopColor="#fff" stopOpacity={0} />
+            </SvgLinearGradient>
+            <SvgLinearGradient id={`spike-y-${index}`} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor="#fff" stopOpacity={0} />
+              <Stop offset="0.5" stopColor="#fff" stopOpacity={0.95} />
+              <Stop offset="1" stopColor="#fff" stopOpacity={0} />
+            </SvgLinearGradient>
           </Defs>
-          <Circle cx={R} cy={R} r={R} fill={`url(#star-glow-${index})`} />
+          <Circle cx={R} cy={R} r={look.glowR} fill={`url(#star-glow-${index})`} />
+          {look.spike > 0 && (
+            <>
+              <Rect x={R - look.spike} y={R - 0.6} width={look.spike * 2} height={1.2} fill={`url(#spike-x-${index})`} />
+              <Rect x={R - 0.6} y={R - look.spike} width={1.2} height={look.spike * 2} fill={`url(#spike-y-${index})`} />
+            </>
+          )}
         </Svg>
       </Animated.View>
     </View>
@@ -344,7 +369,8 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
 
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
   // 太さの基準は、星座の中の線だけで決める（点線は弱い線が多く、入れると星座の中の線がみな太く見えるため）
-  const rel = useMemo(() => relativeStrength(lines.filter((l) => !l.cross)), [lines]);
+  // 線の太さ・濃さは、骨組みの線の強さの順位で3段階（強い・ふつう・弱い）
+  const tier = useMemo(() => lineTiers(skeleton(lines)), [lines]);
   // 描く線：実線は、星座の骨組み（最大全域木）だけ。星に触れたときは、その星の本当のつながりを全部出す（骨組みで隠れた線も）。
   // 点線は、星座の組ごとに、いちばん強い1本だけ（同じ2つの星座の間に何本も引くと、重なってごちゃごちゃした 2026-10-10）
   const bones = useMemo(() => skeleton(lines), [lines]);
@@ -403,8 +429,8 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
                 x2={b.x}
                 y2={b.y}
                 stroke={LINE_COLOR}
-                strokeWidth={l.cross ? CROSS_WIDTH : lineWidth(rel(l.strength))}
-                strokeOpacity={(l.cross ? CROSS_OPACITY : lineOpacity(rel(l.strength))) * (on ? (selected ? 1.5 : 1) : DIM)}
+                strokeWidth={l.cross ? CROSS_WIDTH : LINE_LOOK[tier(l.strength)].w}
+                strokeOpacity={Math.min(1, (l.cross ? CROSS_OPACITY : LINE_LOOK[tier(l.strength)].o) * (on ? (selected ? 1.5 : 1) : DIM))}
                 strokeLinecap="round"
                 strokeDasharray={l.cross ? '3 4' : undefined}
               />
@@ -427,7 +453,7 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
         ))}
         <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
           {stars.map((s) => (
-            <Circle key={s.word} cx={s.x} cy={s.y} r={s.r} fill={STAR_CORE} opacity={lit(s.word) ? 1 : DIM} />
+            <Circle key={s.word} cx={s.x} cy={s.y} r={s.r} fill={STAR_CORE} opacity={MAG_LOOK[s.mag].core * (lit(s.word) ? 1 : DIM)} />
           ))}
         </Svg>
         {stars.map((s) => {
@@ -446,7 +472,7 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
                     marginTop: 4 + s.r * 2 + 3,
                     fontSize: s.labelSize,
                     lineHeight: s.labelH,
-                    color: s.word === selected ? 'rgba(255,232,170,1)' : `rgba(255,246,232,${on ? 0.85 : 0.3})`,
+                    color: s.word === selected ? 'rgba(255,232,170,1)' : `rgba(255,246,232,${on ? MAG_LOOK[s.mag].label : 0.3})`,
                   },
                 ]}
               >

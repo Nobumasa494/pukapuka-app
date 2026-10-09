@@ -6,6 +6,8 @@ import { aggregate, type WordStat } from './wordCloud';
 
 
 export type Star = WordStat & {
+  // 等級（1・2・3）。その夜空の中で、拾った回数の順位で決める（magnitudes）
+  mag: Mag;
   x: number;
   y: number;
   r: number;
@@ -15,6 +17,20 @@ export type Star = WordStat & {
 };
 
 export type Area = { x: number; y: number; w: number; h: number };
+
+// 星の等級：本物の星のように、拾った回数を3段階で見せる（ユーザー「星の大きさは回数で区別しているのに差が分かりづらい」「回数は明るさと大きさで表現したら？」2026-10-10）。
+// その夜空の中での順位で決める（上位15%＝1等星、次の35%＝2等星、残り＝3等星）ので、記録の多い少ないによらず、必ず3段階の差が見える
+export type Mag = 1 | 2 | 3;
+export const MAG_TOP = 0.15;
+export const MAG_MID = 0.5;
+// 等級ごとの大きさ（芯の半径・名前の文字）。明るさ（芯の濃さ・光のにじみ・名前の濃さ）は NightOverlay の MAG_LOOK
+export const MAG_SIZE: Record<Mag, { r: number; label: number }> = { 1: { r: 4.6, label: 14 }, 2: { r: 2.8, label: 12 }, 3: { r: 1.6, label: 10.5 } };
+export function magnitudes(stats: WordStat[]): Map<string, Mag> {
+  const ranked = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
+  const top = Math.ceil(ranked.length * MAG_TOP);
+  const mid = Math.ceil(ranked.length * MAG_MID);
+  return new Map(ranked.map((s, i) => [s.word, (i < top ? 1 : i < mid ? 2 : 3) as Mag]));
+}
 
 export { MIN_CO, cooccurrence, type Line, type Link };
 // cross: 別のまとまりをつなぐ線。画面にはうすい点線で出し、星は引き寄せない
@@ -104,6 +120,7 @@ export function layoutSky(
   area: Area,
   focus?: string,
 ): { stars: Star[]; extentW: number; extentH: number; home?: { x: number; y: number } } {
+  const mags = magnitudes(stats); // 等級は、夜空全体の中の順位で決める
   const solid = lines.filter((l) => !l.cross);
   const parent = new Map<string, string>(stats.map((s) => [s.word, s.word]));
   const find = (x: string): string => (parent.get(x) === x ? x : (parent.set(x, find(parent.get(x)!)), parent.get(x)!));
@@ -112,7 +129,7 @@ export function layoutSky(
   for (const s of stats) comps.set(find(s.word), [...(comps.get(find(s.word)) ?? []), s]);
   const list = [...comps.values()];
   if (stats.length <= MAX_STARS || list.length <= 3) {
-    return { stars: layoutConstellation(stats, lines, area, focus), extentW: area.x + area.w + area.x, extentH: area.y + area.h };
+    return { stars: layoutConstellation(stats, lines, area, focus, mags), extentW: area.x + area.w + area.x, extentH: area.y + area.h };
   }
   // 拾ったことばから来た言葉の星座を最初に、あとは星の多い順（大きいものから置くと、すき間に小さいものが入る）
   const hasFocus = (g: WordStat[]) => (focus && g.some((s) => s.word === focus) ? 1 : 0);
@@ -135,7 +152,7 @@ export function layoutSky(
   const shapes = list.map((g) => {
     const set = new Set(g.map((s) => s.word));
     const side = 150 + 80 * Math.sqrt(g.length);
-    const local = layoutConstellation(g, lines.filter((l) => set.has(l.a) && set.has(l.b)), { x: 0, y: 0, w: side, h: side }, focus && set.has(focus) ? focus : undefined);
+    const local = layoutConstellation(g, lines.filter((l) => set.has(l.a) && set.has(l.b)), { x: 0, y: 0, w: side, h: side }, focus && set.has(focus) ? focus : undefined, mags);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const s of local) {
       const b = starBox(s, 4);
@@ -214,6 +231,15 @@ export function relativeStrength(lines: { strength: number }[]): (strength: numb
   return (strength) => Math.min(1, Math.max(0, 0.5 + (strength - mid) / span));
 }
 
+// 線の段階（1＝強い・2＝ふつう・3＝弱い）：描く骨組みの線の強さの順位で3等分する（星の等級と同じく、はっきりした段階で見せる。2026-10-10）
+export function lineTiers(lines: StarLink[]): (strength: number) => Mag {
+  const st = lines.filter((l) => !l.cross).map((l) => l.strength).sort((a, b) => b - a);
+  if (st.length === 0) return () => 2;
+  const hi = st[Math.min(st.length - 1, Math.floor(st.length / 3))];
+  const lo = st[Math.min(st.length - 1, Math.floor((2 * st.length) / 3))];
+  return (x) => (x > hi ? 1 : x > lo || st.length < 3 ? 2 : 3);
+}
+
 // 線の太さ（0.5〜3.6px）。rel は relativeStrength の値
 export function lineWidth(rel: number): number {
   return 0.5 + 3.1 * rel;
@@ -257,19 +283,21 @@ const CROSS_PULL = 0.25;
 // 力指向の配置: 線でつながる星は引き合い、どの星も押し合う。共起が強い組ほど近くに寄る。
 // 壁の中で動かすと星が画面の端に貼りつくので、まず広さを気にせず動かし、入りきらないときだけ全体を縮めて真ん中に置く。
 // 毎回同じ結果になるよう、最初の位置は言葉の hash で決める。focus は動かさず、ほかの星がそのまわりに並ぶ
-export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: Area, focus?: string): Star[] {
+export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: Area, focus?: string, mags: Map<string, Mag> = magnitudes(stats)): Star[] {
   const cx = area.x + area.w / 2;
   const cy = area.y + area.h / 2;
   const k = Math.min(IDEAL_LEN, 0.8 * Math.sqrt((area.w * area.h) / Math.max(1, stats.length)));
   const stars: Star[] = stats.map((s) => {
-    const labelSize = labelSizeFor(s.count);
+    const mag = mags.get(s.word) ?? 3;
+    const labelSize = MAG_SIZE[mag].label;
     const a = hash(s.word) * Math.PI * 2;
     const rr = k * 2 * Math.sqrt(hash(s.word + '#'));
     return {
       ...s,
+      mag,
       x: Math.cos(a) * rr,
       y: Math.sin(a) * rr,
-      r: starRadius(s.count),
+      r: MAG_SIZE[mag].r,
       labelSize,
       labelW: textWidth(s.word, labelSize) + 2,
       labelH: Math.ceil(labelSize * 1.35),
