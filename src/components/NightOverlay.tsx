@@ -14,7 +14,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, Line as SvgLine, RadialGradient, Stop } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { WIDE_CAPS, layoutSky, lineOpacity, lineWidth, relativeStrength, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
+import { WIDE_CAPS, layoutSky, skeleton, lineOpacity, lineWidth, relativeStrength, selectConstellation, starBox, type StarLink, type Star } from '../constellation';
 import { useCaptures } from '../useCaptures';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
@@ -345,7 +345,9 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
   // 太さの基準は、星座の中の線だけで決める（点線は弱い線が多く、入れると星座の中の線がみな太く見えるため）
   const rel = useMemo(() => relativeStrength(lines.filter((l) => !l.cross)), [lines]);
-  // 描く線：実線は全部。点線は、星座の組ごとに、いちばん強い1本だけ（同じ2つの星座の間に何本も引くと、重なってごちゃごちゃした 2026-10-10）
+  // 描く線：実線は、星座の骨組み（最大全域木）だけ。星に触れたときは、その星の本当のつながりを全部出す（骨組みで隠れた線も）。
+  // 点線は、星座の組ごとに、いちばん強い1本だけ（同じ2つの星座の間に何本も引くと、重なってごちゃごちゃした 2026-10-10）
+  const bones = useMemo(() => skeleton(lines), [lines]);
   const drawn = useMemo(() => {
     const comp = new Map<string, string>();
     const root = (w: string): string => {
@@ -363,8 +365,9 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
       const now = best.get(g);
       if (!now || l.strength > now.strength) best.set(g, l);
     }
-    return [...lines.filter((l) => !l.cross), ...best.values()];
-  }, [lines]);
+    const solid = lines.filter((l) => !l.cross && (bones.includes(l) || (!!selected && (l.a === selected || l.b === selected))));
+    return [...solid, ...best.values()];
+  }, [lines, bones, selected]);
   const neighbors = useMemo(() => {
     const set = new Set<string>();
     if (!selected) return set;

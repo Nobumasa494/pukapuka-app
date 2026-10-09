@@ -6,6 +6,7 @@ import { chromium } from "playwright";
 import { makeDemoCaptures, type DemoDay } from "../../src/demoPersona";
 import {
   selectConstellation,
+  skeleton,
   layoutSky,
   WIDE_CAPS,
 } from "../../src/constellation";
@@ -51,7 +52,7 @@ async function main() {
       h = Math.max(H - WINDOW_BOTTOM, sky.extentH);
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="#071324"/>`;
     svg += `<rect x="0" y="0" width="${W}" height="${H - WINDOW_BOTTOM}" fill="none" stroke="#58a" stroke-dasharray="6 6"/>`;
-    for (const l of picked.lines.filter((l) => !l.cross)) {
+    for (const l of skeleton(picked.lines)) {
       const a = at.get(l.a)!,
         b = at.get(l.b)!;
       svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#ffd78c" stroke-opacity=".6"/>`;

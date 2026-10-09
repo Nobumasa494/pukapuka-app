@@ -22,8 +22,33 @@ export type StarLink = Link & { cross: boolean };
 // 星の数と線の数の上限（1画面に、名前が読める量。仮の値：6週間の記録で上限が効き始めるため、26・38に増やした。画面で見て調整する）
 export type Caps = { stars: number; lines: number; perStar: number };
 export const NORMAL_CAPS: Caps = { stars: 26, lines: 38, perStar: 5 }; // 1画面に収める
-// 上限を超える記録のとき（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）
-export const WIDE_CAPS: Caps = { stars: 60, lines: 150, perStar: 3 };
+// 上限を超える記録のとき（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）。
+// 1つの星からの線の上限はなし（前は3本。描く線を骨組み＝最大全域木にしたので、ごちゃごちゃは骨組みで防ぐ。ユーザー「3本までの役目はなしでいい」2026-10-10）
+export const WIDE_CAPS: Caps = { stars: 60, lines: 150, perStar: Infinity };
+
+// 星座の骨組み（最大全域木）：星座の中の線（実線）から、輪を作らずに、強い線をできるだけ残す。星座の星は全部つながったまま、
+// 一本道や枝分かれ（星座らしい形）になる。強い順に足し、輪になる線は飛ばす。画面に描く線と、星の位置を決める線に使う。
+// 星座分け・検定は、全部の線で計算する（骨組みは見せ方だけ。ユーザー「位置も骨組みの線で決める」2026-10-10）
+export function skeleton(lines: StarLink[]): StarLink[] {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    const p = parent.get(x) ?? x;
+    if (p === x) return x;
+    const q = find(p);
+    parent.set(x, q);
+    return q;
+  };
+  const out: StarLink[] = [];
+  const solid = lines.filter((l) => !l.cross).sort((p, q) => q.strength - p.strength || q.count - p.count || `${p.a}${p.b}`.localeCompare(`${q.a}${q.b}`));
+  for (const l of solid) {
+    const a = find(l.a);
+    const b = find(l.b);
+    if (a === b) continue;
+    parent.set(a, b);
+    out.push(l);
+  }
+  return out;
+}
 const MAX_STARS = NORMAL_CAPS.stars;
 
 // 見せる星と線を選ぶ。偶然では起きにくい組（検定）だけを線の候補にして、つながりの強さ（コサイン類似度）の強い順に採り、星の数・1つの星の線の数が上限を超えるものは飛ばす。
@@ -269,8 +294,8 @@ export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: 
     stars[pinned].y = 0;
   }
 
-  // 引き合うのは、同じまとまりの線だけ（またぐ線は、点線で描くだけ）
-  const edges = lines.filter((l) => !l.cross).map((l) => ({ i: index.get(l.a)!, j: index.get(l.b)!, w: 0.6 + 0.4 * Math.min(1, Math.max(0, l.strength)) }));
+  // 引き合うのは、星座の骨組みの線だけ（またぐ線は点線で描くだけ。骨組みでない線で引き合うと、まるく固まって星座らしくならない）
+  const edges = skeleton(lines).map((l) => ({ i: index.get(l.a)!, j: index.get(l.b)!, w: 0.6 + 0.4 * Math.min(1, Math.max(0, l.strength)) }));
   // 星座（実線でつながる星の集まり）。点線でつながる星座どうしは、星座ごと（形を変えずに）近づける（点線が長く、ほかの星座の上を通らないように。2026-10-10）
   const comp = Array.from({ length: n }, (_, i) => i);
   const root = (i: number): number => (comp[i] === i ? i : (comp[i] = root(comp[i])));
