@@ -9,7 +9,7 @@ import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useAddCapture } from '../useCaptures';
 import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
@@ -542,13 +542,15 @@ const BubbleFace = memo(function BubbleFace({ size }: { size: number }) {
 // 川を流れる泡の一覧。泡が出る・消えるたびに描き直すのはこの層だけにする。
 // 以前は一覧を画面全体（Home）が持っていて、泡が出る・消える・「拾った」の表示が変わるたびに、背景・ボタン・重ねる画面まで
 // 描き直していた。拾うとすぐ泡を補うようにしてから、続けて拾うと描き直しが集中してスマホでカクついた（2026-10-05）
-const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise, paused, holds, flowRate, onCapture }: {
+const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise, paused, hidden, holds, flowRate, onCapture }: {
   P: PathData;
   initialItems: ListItem[];
   sim: SharedValue<SimBubble[]>;
   time: SharedValue<number>;
   rise: SharedValue<number>;
   paused: SharedValue<boolean>;
+  // 川が見えていない（拾ったことば・夜空にいる）
+  hidden: SharedValue<boolean>;
   holds: SharedValue<number>;
   flowRate: SharedValue<number>;
   onCapture: (word: string, strength: number) => void;
@@ -575,6 +577,8 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
 
   // 毎コマ UI スレッドで流す。遷移中は止める
   useFrameCallback((fi) => {
+    // 川が見えていない間は、泡の揺れ（time）も止める。止めないと、夜空などにいる間も、見えない泡の動きを毎コマ計算し続け、スマホが熱くなった（2026-10-09）
+    if (hidden.get()) return;
     const dt = Math.min(0.05, (fi.timeSincePreviousFrame ?? 16) / 1000);
     time.set(time.get() + dt);
     if (paused.get()) return;
@@ -734,6 +738,11 @@ export default function Home() {
     p.timeUpdateEventInterval = TIME_UPDATE_S;
   });
   const [stage, setStage] = useState<Stage>('river');
+  // 川が見えていない段階（拾ったことば・夜空と、その間の動画）。泡の揺れを止める
+  const riverHidden = useSharedValue(false);
+  useEffect(() => {
+    riverHidden.set(stage === 'cloud' || stage === 'toNight' || stage === 'night' || stage === 'nightToCloud');
+  }, [stage, riverHidden]);
   const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
   // 拾ったことばの画面は、離れるときに消え終わったら外す。外さないと、次の動画が流れている間（2〜3秒）も
   // 見えないキラキラと光のアニメーションが動き続け、動画の読み込みと重なってスマホで重かった（2026-10-05）
@@ -843,7 +852,7 @@ export default function Home() {
     }
   };
 
-  // 拾ったことばの画面（つながりを見る）から戻ってきた: 裏に回っている間に動画の描画面が捨てられているので、もう一度流し直す
+  // 拾ったことばの画面（夜空へ）から戻ってきた: 裏に回っている間に動画の描画面が捨てられているので、もう一度流し直す
   const onReturn = () => {
     if (stageRef.current === 'cloud') playClip('cloud');
   };
@@ -997,18 +1006,15 @@ export default function Home() {
         style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 110, pointerEvents: 'none' }}
       />
 
-      <Animated.View style={[styles.uiLayer, uiStyle]} pointerEvents={atRiver ? 'box-none' : 'none'}>
+      {/* 押させない指定は style で（props の pointerEvents は古い書き方で、効かないことがあった。夜空の右上を押すと、見えない「島（試作）」が押されて、島の画面が上に開き、夜空のボタンが全部押せなくなった 2026-10-09） */}
+      <Animated.View style={[styles.uiLayer, uiStyle, { pointerEvents: atRiver ? 'box-none' : 'none' }]}>
         <Text style={styles.wordmark}>pukapuka</Text>
         <Pressable style={styles.archiveBtn} hitSlop={16} onPress={startTransition}>
           <Text style={styles.archiveBtnText}>振り返る</Text>
         </Pressable>
-        {/* 島の3D試作への仮の入口（試作が終わったら消す） */}
-        <Pressable style={styles.islandBtn} hitSlop={12} onPress={() => router.push('/island')}>
-          <Text style={styles.archiveBtnText}>島（試作）</Text>
-        </Pressable>
       </Animated.View>
 
-      <Animated.View style={[styles.bubbleClip, riseStyle]} pointerEvents={atRiver ? 'auto' : 'none'}>
+      <Animated.View style={[styles.bubbleClip, riseStyle, { pointerEvents: atRiver ? 'auto' : 'none' }]}>
         <BubbleLayer
           P={P}
           initialItems={initial.items}
@@ -1016,6 +1022,7 @@ export default function Home() {
           time={time}
           rise={rise}
           paused={paused}
+          hidden={riverHidden}
           holds={holds}
           flowRate={flowRate}
           onCapture={handleCapture}
@@ -1028,14 +1035,14 @@ export default function Home() {
 
       {/* 拾ったことば。空のループの上に重ねる（画面は切り替えない） */}
       {(stage === 'cloud' || ((stage === 'toRiver' || stage === 'toNight') && cloudUiOn)) && (
-        <Animated.View style={[StyleSheet.absoluteFill, cloudUiStyle]} pointerEvents={stage === 'cloud' ? 'box-none' : 'none'}>
+        <Animated.View style={[StyleSheet.absoluteFill, cloudUiStyle, { pointerEvents: stage === 'cloud' ? 'box-none' : 'none' }]}>
           <WordCloudOverlay width={width} height={height} onBack={backToRiver} onOpenArchive={goNight} />
         </Animated.View>
       )}
 
       {/* ふりかえり（夜）。夜の静止画の上に重ねる */}
       {(stage === 'night' || stage === 'nightToRiver' || stage === 'nightToCloud') && (
-        <Animated.View style={[StyleSheet.absoluteFill, nightUiStyle]} pointerEvents={stage === 'night' ? 'box-none' : 'none'}>
+        <Animated.View style={[StyleSheet.absoluteFill, nightUiStyle, { pointerEvents: stage === 'night' ? 'box-none' : 'none' }]}>
           <NightOverlay width={width} height={height} focus={nightFocus} onBack={nightToCloud} onRiver={nightToRiver} />
         </Animated.View>
       )}
@@ -1104,7 +1111,6 @@ const styles = StyleSheet.create({
   },
   wordmark: { position: 'absolute', top: 56, left: 20, fontSize: 20, fontStyle: 'italic', color: 'rgba(255,246,232,0.85)', textShadowColor: 'rgba(120,60,40,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4, zIndex: 10 },
   archiveBtn: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
-  islandBtn: { position: 'absolute', top: 90, right: 20, zIndex: 10 },
   soundBtn: { position: 'absolute', bottom: 34, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
   soundIconOff: { color: 'rgba(255,246,232,0.35)' },
