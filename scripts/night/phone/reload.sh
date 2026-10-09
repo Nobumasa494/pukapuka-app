@@ -10,7 +10,7 @@ for i in $(seq 1 30); do
   set -- $c; [ "${3:-255}" -lt 250 ] && break
 done
 sleep 3
-$A shell input tap 938 276; sleep 9
+$A shell input tap 938 276; sleep 11
 $A shell input tap 936 278; sleep 12
 [ "$1" = "sample" ] && { $A shell input tap 540 1360; sleep 3; }   # 見本を見る（星が出ないときだけある）
 echo "ready（$((i*2))秒で読み込み）"

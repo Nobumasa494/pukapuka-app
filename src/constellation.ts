@@ -25,6 +25,8 @@ export type Caps = { stars: number };
 export const NORMAL_CAPS: Caps = { stars: 26 }; // 1画面に収める
 // 星が26個を超える人（たくさん記録する人）は、夜空を、画面より大きくして、なぞって動かせるようにする（試作 2026-10-09）
 export const WIDE_CAPS: Caps = { stars: 60 };
+// 点線（別々の星座どうしの線）の検定の厳しさ。実線と星座分けは ALPHA（1%）のまま
+export const CROSS_ALPHA = 0.02;
 
 // 星座の骨組み（最大全域木）：星座の中の線（実線）から、輪を作らずに、強い線をできるだけ残す。星座の星は全部つながったまま、
 // 一本道や枝分かれ（星座らしい形）になる。強い順に足し、輪になる線は飛ばす。画面に描く線と、星の位置を決める線に使う。
@@ -64,7 +66,13 @@ export function selectConstellation(
   const found = significantLinks(captures).filter((l) => statOf.has(l.a) && statOf.has(l.b));
   const linked = [...new Set(found.flatMap((l) => [l.a, l.b]))].sort((a, b) => statOf.get(b)!.count - statOf.get(a)!.count || a.localeCompare(b));
   const group = labelGroups(linked, found, (w) => statOf.get(w)!.count);
-  const candidates: StarLink[] = found
+  // 点線（別々の星座どうしの線）だけは、検定を CROSS_ALPHA までゆるめる。点線は弱い線なので、1%ではあまり出ない
+  // （ダミー100人で、1%だと点線0本の人が44%、点線を2%にすると17%。点線の中身の9割は、テーマどうしの線＝その人の生活の形。決定 2026-10-10 ユーザー「Bにする」）
+  const seen = new Set(found.map((l) => `${l.a}\n${l.b}`));
+  const looseCross = significantLinks(captures, CROSS_ALPHA).filter(
+    (l) => !seen.has(`${l.a}\n${l.b}`) && group.has(l.a) && group.has(l.b) && group.get(l.a) !== group.get(l.b) && statOf.has(l.a) && statOf.has(l.b),
+  );
+  const candidates: StarLink[] = [...found, ...looseCross]
     .map((l) => ({ ...l, cross: group.get(l.a) !== group.get(l.b) }))
     .sort((p, q) => {
       const pf = p.a === focus || p.b === focus ? 1 : 0;
