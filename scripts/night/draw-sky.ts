@@ -1,7 +1,7 @@
+/// <reference types="node" />
 // 見本の夜空の配置を、絵（PNG）にして見る。スマホを開かずに、星座の置き方・大きさを確かめるため
 // 使い方: npx tsx scripts/night/draw-sky.ts <出力フォルダ> [記録の倍数…]   例: npx tsx scripts/night/draw-sky.ts /tmp/out 1 4
 // 1＝「見本を見る」、4＝「見本（多め）」。点線の四角＝スマホ1画面（390×714）、赤い丸＝開いたときの画面の真ん中
-import { writeFileSync } from "fs";
 import { chromium } from "playwright";
 import { makeDemoCaptures, type DemoDay } from "../../src/demoPersona";
 import {
@@ -60,8 +60,9 @@ async function main() {
       svg += `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="#fffae6"/>`;
       svg += `<text x="${s.x}" y="${s.y + s.r + s.labelSize + 2}" font-size="${s.labelSize}" fill="#fff6e8" text-anchor="middle" font-family="Noto Sans CJK JP, sans-serif">${s.word}</text>`;
     }
-    if (sky.home)
-      svg += `<circle cx="${sky.home.x}" cy="${sky.home.y}" r="6" fill="none" stroke="#f66"/>`;
+    // 開いたときの真ん中（layoutSky が home を返すときだけ）
+    const home = (sky as { home?: { x: number; y: number } }).home;
+    if (home) svg += `<circle cx="${home.x}" cy="${home.y}" r="6" fill="none" stroke="#f66"/>`;
     svg += "</svg>";
     await page.setContent(`<body style="margin:0">${svg}</body>`);
     await page.screenshot({ path: `${out}/sky${k}.png`, fullPage: true });
