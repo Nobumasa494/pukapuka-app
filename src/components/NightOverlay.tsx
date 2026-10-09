@@ -83,40 +83,27 @@ const twinkle = (t: number) => {
   return s * s;
 };
 
-// 星の周りの光。言葉ごとにアニメーションを持たせず、時間をずらした数枚の層ごとにまたたかせる
-function GlowLayer({ group, clock, stars, lit, width, height }: {
-  group: number;
-  clock: SharedValue<number>;
-  stars: Star[];
-  lit: (word: string) => boolean;
-  width: number;
-  height: number;
-}) {
+// 星の周りの光。星ごとに、星のまわりだけの小さな絵にして、時間をずらした数グループでまたたかせる。
+// 前は、夜空と同じ大きさの層を数枚またたかせていたが、毎コマ大きな絵を描き直し、スマホ（Android）で
+// 見本（多め）のとき CPU 160〜180%・コマ落ち100%・押しても反応しない、になった（2026-10-09 実機で測った）
+function GlowStar({ star, index, group, clock, dim }: { star: Star; index: number; group: number; clock: SharedValue<number>; dim: boolean }) {
   const style = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * twinkle(clock.get() + group / TWINKLE_GROUPS) }));
+  const R = star.r * 4.5;
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, style]} pointerEvents="none" renderToHardwareTextureAndroid>
-      <Svg width={width} height={height}>
-        <Defs>
-          <RadialGradient id={`star-glow-${group}`} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={STAR_GLOW} stopOpacity={0.32} />
-            <Stop offset="0.4" stopColor={STAR_GLOW} stopOpacity={0.12} />
-            <Stop offset="1" stopColor={STAR_GLOW} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        {stars
-          .filter((s) => groupOf(s.word) === group)
-          .map((s) => (
-            <Circle
-              key={s.word}
-              cx={s.x}
-              cy={s.y}
-              r={s.r * 4.5}
-              fill={`url(#star-glow-${group})`}
-              opacity={lit(s.word) ? 1 : DIM}
-            />
-          ))}
-      </Svg>
-    </Animated.View>
+    <View style={{ position: 'absolute', left: star.x - R, top: star.y - R, width: R * 2, height: R * 2, opacity: dim ? DIM : 1 }} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, style]}>
+        <Svg width={R * 2} height={R * 2}>
+          <Defs>
+            <RadialGradient id={`star-glow-${index}`} cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor={STAR_GLOW} stopOpacity={0.32} />
+              <Stop offset="0.4" stopColor={STAR_GLOW} stopOpacity={0.12} />
+              <Stop offset="1" stopColor={STAR_GLOW} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Circle cx={R} cy={R} r={R} fill={`url(#star-glow-${index})`} />
+        </Svg>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -348,8 +335,8 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
       </Animated.View>
 
       <Animated.View style={[StyleSheet.absoluteFill, starsStyle]} pointerEvents="box-none">
-        {Array.from({ length: TWINKLE_GROUPS }, (_, g) => (
-          <GlowLayer key={g} group={g} clock={clock} stars={stars} lit={lit} width={width} height={height} />
+        {stars.map((s, i) => (
+          <GlowStar key={s.word} star={s} index={i} group={groupOf(s.word)} clock={clock} dim={!lit(s.word)} />
         ))}
         <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
           {stars.map((s) => (
