@@ -1,7 +1,7 @@
 /// <reference types="node" />
 // 見本の夜空の配置を、絵（PNG）にして見る。スマホを開かずに、星座の置き方・大きさを確かめるため
 // 使い方: npx tsx scripts/night/draw-sky.ts <出力フォルダ> [記録の倍数…]   例: npx tsx scripts/night/draw-sky.ts /tmp/out 1 4
-// 1＝「見本を見る」、4＝「見本（多め）」。点線の四角＝スマホ1画面（390×714）、赤い丸＝開いたときの画面の真ん中
+// 1＝「見本を見る」、4＝記録4倍（星が多い人。動かせる夜空の見え方）。点線の四角＝スマホ1画面（390×714）、赤い丸＝開いたときの画面の真ん中
 import { chromium } from "playwright";
 import { makeDemoCaptures, type DemoDay } from "../../src/demoPersona";
 import {

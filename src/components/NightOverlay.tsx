@@ -38,8 +38,7 @@ const INTRO_LINES: [string, string][] = [
 const CROSS_WIDTH = 0.7;
 const CROSS_OPACITY = 0.6;
 // 「見本」：星がまだ出ない間に見られる、ダミーの人の夜空（6週間ぶん。自分の記録ではない）
-// full：開発用。記録を4倍にした、上限近くまで星と線が出る見本（動かせる夜空の重さ・見え方を確かめる）
-function sampleCaptures(full = false) {
+function sampleCaptures() {
   const days: DemoDay[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -47,8 +46,7 @@ function sampleCaptures(full = false) {
     const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - d);
     days.push({ start: day.getTime(), dow: day.getDay() });
   }
-  if (!full) return makeDemoCaptures(days, 5, Date.now());
-  return [0, 1, 2, 3].flatMap((i) => makeDemoCaptures(days, 5 + 6 * i, Date.now()));
+  return makeDemoCaptures(days, 5, Date.now());
 }
 
 // 夜空で使う記録の期間（6週間。週ごとの偏りが出ない、7の倍数）
@@ -85,7 +83,7 @@ const twinkle = (t: number) => {
 
 // 星の周りの光。星ごとに、星のまわりだけの小さな絵にして、時間をずらした数グループでまたたかせる。
 // 前は、夜空と同じ大きさの層を数枚またたかせていたが、毎コマ大きな絵を描き直し、スマホ（Android）で
-// 見本（多め）のとき CPU 160〜180%・コマ落ち100%・押しても反応しない、になった（2026-10-09 実機で測った）
+// 記録4倍の見本（星46）のとき CPU 160〜180%・コマ落ち100%・押しても反応しない、になった（2026-10-09 実機で測った）
 function GlowStar({ star, index, group, clock, dim }: { star: Star; index: number; group: number; clock: SharedValue<number>; dim: boolean }) {
   const style = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * twinkle(clock.get() + group / TWINKLE_GROUPS) }));
   const R = star.r * 4.5;
@@ -405,13 +403,12 @@ type Props = {
 export default function NightOverlay({ width, height, focus, onBack, onRiver }: Props) {
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [showSample, setShowSample] = useState(false);
-  const [sampleFull, setSampleFull] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
   const closeIntro = () => setIntroOpen(false);
 
   // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
   const real = useCaptures(NIGHT_DAYS);
-  const sample = useMemo(() => (showSample ? sampleCaptures(sampleFull) : null), [showSample, sampleFull]);
+  const sample = useMemo(() => (showSample ? sampleCaptures() : null), [showSample]);
   const captures = showSample ? sample : real;
   const { stars, lines, canvasW, canvasH, home } = useMemo(() => {
     const f = showSample ? undefined : focus;
@@ -476,7 +473,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
       {/* 左上：ふだんは「← ことばへ」。見本を見ているときは、見本をとじる「×」になる */}
       {introOpen ? null : showSample ? (
-        <Pressable style={[styles.closeBtn, styles.closeLeft]} hitSlop={14} onPress={() => { setShowSample(false); setSampleFull(false); setSelected(null); }} accessibilityLabel="とじる">
+        <Pressable style={[styles.closeBtn, styles.closeLeft]} hitSlop={14} onPress={() => { setShowSample(false); setSelected(null); }} accessibilityLabel="とじる">
           <Text style={styles.closeBtnText}>×</Text>
         </Pressable>
       ) : (
@@ -485,12 +482,6 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         </Pressable>
       )}
 
-      {/* 開発中だけ：上限近くまで星と線が出る見本 */}
-      {__DEV__ && !introOpen && !showSample && (
-        <Pressable style={[styles.help, { top: 88 }]} hitSlop={8} onPress={() => { setSampleFull(true); setShowSample(true); setSelected(null); }}>
-          <Text style={styles.helpText}>見本（多め）</Text>
-        </Pressable>
-      )}
 
       {!introOpen && (
         <Pressable style={styles.help} hitSlop={12} onPress={() => setIntroOpen(true)}>

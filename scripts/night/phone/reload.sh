@@ -1,5 +1,5 @@
 #!/bin/bash
-# 読み込み直し（R を2回）→ 川が出るのを待つ → 夜空 →（$1=sample で見本（多め））
+# 読み込み直し（R を2回）→ 川が出るのを待つ → 夜空 →（$1=sample で「見本を見る」）
 A="$HOME/.local/android/platform-tools/adb -s ${PHONE:?PHONE=IP:ポート を指定}"; D=${OUT:-/tmp/pukapuka-phone}; mkdir -p $D
 $A shell input keyevent 46 46
 # 読み込み中は白い画面。川の空（上のほうの色）が出たら進む。上限60秒
@@ -12,5 +12,5 @@ done
 sleep 3
 $A shell input tap 938 276; sleep 9
 $A shell input tap 936 278; sleep 12
-[ "$1" = "sample" ] && { $A shell input tap 876 382; sleep 3; }
+[ "$1" = "sample" ] && { $A shell input tap 540 1360; sleep 3; }   # 見本を見る（星が出ないときだけある）
 echo "ready（$((i*2))秒で読み込み）"
