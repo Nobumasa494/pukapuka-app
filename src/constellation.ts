@@ -103,6 +103,19 @@ export function layoutSky(
   const hasFocus = (g: WordStat[]) => (focus && g.some((s) => s.word === focus) ? 1 : 0);
   list.sort((a, b) => hasFocus(b) - hasFocus(a) || b.length - a.length || a[0].word.localeCompare(b[0].word));
 
+  // 点線でつながる星座を、続けて置く（すでに置いた相手のそばに置くため）
+  const groupOf = new Map<string, number>();
+  list.forEach((g, i) => g.forEach((s) => groupOf.set(s.word, i)));
+  const partners = list.map(() => new Set<number>());
+  for (const l of lines) {
+    if (!l.cross) continue;
+    const g = groupOf.get(l.a);
+    const h = groupOf.get(l.b);
+    if (g === undefined || h === undefined || g === h) continue;
+    partners[g].add(h);
+    partners[h].add(g);
+  }
+
   // 1. 星座ごとに、星の数に合った広さで形を決め、名前まで含めた外側の箱を測る
   const shapes = list.map((g) => {
     const set = new Set(g.map((s) => s.word));
@@ -124,20 +137,24 @@ export function layoutSky(
   const placed: { x: number; y: number; w: number; h: number }[] = [];
   const hits = (x: number, y: number, w: number, h: number) =>
     placed.some((p) => x < p.x + p.w + SKY_GAP && p.x < x + w + SKY_GAP && y < p.y + p.h + SKY_GAP && p.y < y + h + SKY_GAP);
-  for (const sh of shapes) {
+  shapes.forEach((sh, si) => {
+    // 点線の相手がもう置いてあれば、その真ん中のまわりから探す（なければ、夜空の真ん中から）
+    const near = [...partners[si]].filter((h) => h < si);
+    const ox = near.length ? near.reduce((a, h) => a + placed[h].x + placed[h].w / 2, 0) / near.length : 0;
+    const oy = near.length ? near.reduce((a, h) => a + placed[h].y + placed[h].h / 2, 0) / near.length : 0;
     let t = 0;
     const turn = sh.seed * Math.PI * 2;
     for (;;) {
       const r = 9 * t;
-      const x = Math.cos(t + turn) * r * Math.sqrt(SKY_ASPECT) - sh.w / 2;
-      const y = Math.sin(t + turn) * r / Math.sqrt(SKY_ASPECT) - sh.h / 2;
+      const x = ox + Math.cos(t + turn) * r * Math.sqrt(SKY_ASPECT) - sh.w / 2;
+      const y = oy + Math.sin(t + turn) * r / Math.sqrt(SKY_ASPECT) - sh.h / 2;
       if (!hits(x, y, sh.w, sh.h) || t > 400) {
         placed.push({ x, y, w: sh.w, h: sh.h });
         break;
       }
       t += 0.15;
     }
-  }
+  });
 
   // 3. 全体の左上が、area の左上に来るようにずらす
   const minX = Math.min(...placed.map((p) => p.x));
@@ -219,6 +236,8 @@ const IDEAL_LEN = 64;
 // 押し合う距離の上限（理想の間隔の何倍まで）と、中心へ引く強さ
 const REPEL_RANGE = 2.5;
 const GRAVITY = 0.12;
+// 点線でつながる星座どうしを近づける強さ（星座の中の線の引き合いの何倍か）
+const CROSS_PULL = 0.25;
 
 // 力指向の配置: 線でつながる星は引き合い、どの星も押し合う。共起が強い組ほど近くに寄る。
 // 壁の中で動かすと星が画面の端に貼りつくので、まず広さを気にせず動かし、入りきらないときだけ全体を縮めて真ん中に置く。
@@ -252,6 +271,23 @@ export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: 
 
   // 引き合うのは、同じまとまりの線だけ（またぐ線は、点線で描くだけ）
   const edges = lines.filter((l) => !l.cross).map((l) => ({ i: index.get(l.a)!, j: index.get(l.b)!, w: 0.6 + 0.4 * Math.min(1, Math.max(0, l.strength)) }));
+  // 星座（実線でつながる星の集まり）。点線でつながる星座どうしは、星座ごと（形を変えずに）近づける（点線が長く、ほかの星座の上を通らないように。2026-10-10）
+  const comp = Array.from({ length: n }, (_, i) => i);
+  const root = (i: number): number => (comp[i] === i ? i : (comp[i] = root(comp[i])));
+  for (const { i, j } of edges) comp[root(i)] = root(j);
+  const members = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) members.set(root(i), [...(members.get(root(i)) ?? []), i]);
+  // 星座の組ごとに、いちばん強い点線（画面に描く1本）の両はしの星どうしを近づける
+  const strongest = new Map<string, { i: number; j: number; s: number }>();
+  for (const l of lines) {
+    if (!l.cross || !index.has(l.a) || !index.has(l.b)) continue;
+    const i = index.get(l.a)!;
+    const j = index.get(l.b)!;
+    if (root(i) === root(j)) continue;
+    const key = `${Math.min(root(i), root(j))}-${Math.max(root(i), root(j))}`;
+    if (!strongest.has(key) || l.strength > strongest.get(key)!.s) strongest.set(key, { i, j, s: l.strength });
+  }
+  const bridges = [...strongest.values()];
   // 縦長の画面に合わせ、縦方向は押し合いを強め、中心へ引く力を弱める
   const aspect = Math.min(1.8, Math.max(1, area.h / area.w));
 
@@ -287,6 +323,22 @@ export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: 
       dy[i] -= (ey / d) * f;
       dx[j] += (ex / d) * f;
       dy[j] += (ey / d) * f;
+    }
+    for (const { i: bi, j: bj } of bridges) {
+      const mg = members.get(root(bi))!;
+      const mh = members.get(root(bj))!;
+      const ex = stars[bi].x - stars[bj].x;
+      const ey = stars[bi].y - stars[bj].y;
+      const d = Math.max(0.01, Math.hypot(ex, ey));
+      const f = ((d * d) / k) * CROSS_PULL;
+      for (const m of mg) {
+        dx[m] -= (ex / d) * f;
+        dy[m] -= (ey / d) * f;
+      }
+      for (const m of mh) {
+        dx[m] += (ex / d) * f;
+        dy[m] += (ey / d) * f;
+      }
     }
     for (let i = 0; i < n; i++) {
       if (i === pinned) continue;

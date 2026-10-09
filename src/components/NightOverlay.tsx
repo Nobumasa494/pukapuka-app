@@ -30,17 +30,19 @@ const INTRO_LINES: [string, string][] = [
   ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
   ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。'],
   ['星座', '線でつながった星の集まりです。いっしょに出やすい言葉たちです。'],
-  ['点線', '星に触れると出る、小さなつながりです。'],
+  ['点線', 'ちがう星座どうしの、小さなつながりです。'],
   ['動かす', '星が多いときは、なぞって動かせます。2本指で、拡大・縮小もできます。'],
 ];
 
-// 別のまとまりをつなぐ線は、うすい点線にする（太さ・濃さの倍率）
-const CROSS_WIDTH = 0.7;
-const CROSS_OPACITY = 0.6;
+// 別の星座をつなぐ線は、うすい点線にする。いつも出すので、強さによらず、見える太さ・濃さに決める（px・濃さ）。
+// 前は弱い線に合わせた太さ（約0.35px）で、触れたときだけ濃くしていたが、いつも出すと見えなかった（2026-10-10 実機）
+const CROSS_WIDTH = 1.2;
+const CROSS_OPACITY = 0.45;
 // 「見本」：星がまだ出ない間に見られる、ダミーの人の夜空（6週間ぶん。自分の記録ではない）。
 // 毎日同じ形にする：決まった日（SAMPLE_ANCHOR）までの6週間を決まった種（SAMPLE_SEED）で作り、今日までずらす。
-// 種は、300通りから星座がはっきり分かれるものを選んだ（17番：星22・5つの星座・2つ組なし。ユーザー「見本がさみしい」→ 案A「はい」2026-10-10）
-const SAMPLE_SEED = 17;
+// 種は、600通りから、星座がはっきり分かれて、点線もあるものを選んだ（463番：星22・5つの星座・2つ組なし・点線2本「ひらめいた」→「わくわく」「作る」。
+// ユーザー「見本がさみしい」→ 案A、「点線も表示したい」→ 案C 2026-10-10）
+const SAMPLE_SEED = 463;
 const SAMPLE_ANCHOR = new Date(2026, 9, 9);
 function sampleCaptures() {
   const days: DemoDay[] = [];
@@ -295,8 +297,28 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
   });
 
   const at = useMemo(() => new Map(stars.map((s) => [s.word, s])), [stars]);
-  // 太さの基準は、ふだん出ている線（星座の中の線）だけで決める。点線は、触れたときに出るだけなので、基準に入れない（触れたとき、ほかの線の太さが変わらないように）
+  // 太さの基準は、星座の中の線だけで決める（点線は弱い線が多く、入れると星座の中の線がみな太く見えるため）
   const rel = useMemo(() => relativeStrength(lines.filter((l) => !l.cross)), [lines]);
+  // 描く線：実線は全部。点線は、星座の組ごとに、いちばん強い1本だけ（同じ2つの星座の間に何本も引くと、重なってごちゃごちゃした 2026-10-10）
+  const drawn = useMemo(() => {
+    const comp = new Map<string, string>();
+    const root = (w: string): string => {
+      const p = comp.get(w) ?? w;
+      if (p === w) return w;
+      const q = root(p);
+      comp.set(w, q);
+      return q;
+    };
+    for (const l of lines) if (!l.cross) comp.set(root(l.a), root(l.b));
+    const best = new Map<string, StarLink>();
+    for (const l of lines) {
+      if (!l.cross) continue;
+      const g = [root(l.a), root(l.b)].sort().join('\n');
+      const now = best.get(g);
+      if (!now || l.strength > now.strength) best.set(g, l);
+    }
+    return [...lines.filter((l) => !l.cross), ...best.values()];
+  }, [lines]);
   const neighbors = useMemo(() => {
     const set = new Set<string>();
     if (!selected) return set;
@@ -319,7 +341,8 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
     <Animated.View style={[{ position: 'absolute', left: 0, top: -SKY_WINDOW_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
       <Animated.View style={[StyleSheet.absoluteFill, linesStyle]} pointerEvents="none">
         <Svg width={width} height={height}>
-          {lines.filter((l) => !l.cross || l.a === selected || l.b === selected).map((l) => {
+          {/* 点線（星座をまたぐ線）も、最初から出す（ユーザー「3で最初から表示させる」2026-10-10。前は触れたときだけ） */}
+          {drawn.map((l) => {
             const a = at.get(l.a)!;
             const b = at.get(l.b)!;
             const on = !selected || l.a === selected || l.b === selected;
@@ -331,8 +354,8 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
                 x2={b.x}
                 y2={b.y}
                 stroke={LINE_COLOR}
-                strokeWidth={lineWidth(rel(l.strength)) * (l.cross ? CROSS_WIDTH : 1)}
-                strokeOpacity={lineOpacity(rel(l.strength)) * (l.cross ? CROSS_OPACITY : 1) * (on ? (selected ? 1.5 : 1) : DIM)}
+                strokeWidth={l.cross ? CROSS_WIDTH : lineWidth(rel(l.strength))}
+                strokeOpacity={(l.cross ? CROSS_OPACITY : lineOpacity(rel(l.strength))) * (on ? (selected ? 1.5 : 1) : DIM)}
                 strokeLinecap="round"
                 strokeDasharray={l.cross ? '3 4' : undefined}
               />
