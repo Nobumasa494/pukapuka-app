@@ -59,6 +59,8 @@ const SCENE_OF: Record<Stage, Scene> = {
   riverToMe: 'me',
   meToRiver: 'river',
 };
+// 日記を開く・閉じるときに、曲を消す・戻す長さ（日記の画面のふわっと出る長さに合わせる）
+const DIARY_FADE_MS = 400;
 const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
   river: 1500,
   toCloud: 2000,
@@ -1128,11 +1130,13 @@ export default function Home() {
     setDiaryOpen(true);
     paused.set(true);
     player.pause();
+    ambientRef.current?.setScene(null, DIARY_FADE_MS); // 日記は曲なし（2026-10-11 ユーザー「日記は曲ならないでいいと思う」）
   };
   const closeDiary = () => {
     setDiaryOpen(false);
     paused.set(false);
     player.play();
+    ambientRef.current?.setScene('river', DIARY_FADE_MS);
   };
 
   const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
