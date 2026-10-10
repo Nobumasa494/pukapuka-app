@@ -146,16 +146,16 @@ def main():
                   f'  {compare(name, prints[name], approved)}')
         if only:
             print('--only のため、拾った音は作り直さない')
-            return
-        compose.chimes(tmp)
-        for i in range(5):
-            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', os.path.join(tmp, f'chime_{i}.wav'),
-                            '-c:a', 'aac', '-b:a', CHIME_BITRATE, os.path.join(OUT, f'chime_{i}.m4a')], check=True)
-        for i in range(5):
-            x = wavfile.read(os.path.join(tmp, f'chime_{i}.wav'))[1].T.astype(float) / 32767
-            prints[f'chime_{i}'] = fingerprint(x)
-        results = {compare(f'chime_{i}', prints[f'chime_{i}'], approved) for i in range(5)}
-        print('chime_0..4.m4a  ' + ' / '.join(sorted(results)))
+        if not only:
+            compose.chimes(tmp)
+            for i in range(5):
+                subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', os.path.join(tmp, f'chime_{i}.wav'),
+                                '-c:a', 'aac', '-b:a', CHIME_BITRATE, os.path.join(OUT, f'chime_{i}.m4a')], check=True)
+            for i in range(5):
+                x = wavfile.read(os.path.join(tmp, f'chime_{i}.wav'))[1].T.astype(float) / 32767
+                prints[f'chime_{i}'] = fingerprint(x)
+            results = {compare(f'chime_{i}', prints[f'chime_{i}'], approved) for i in range(5)}
+            print('chime_0..4.m4a  ' + ' / '.join(sorted(results)))
     if approve:
         approved.update(prints)  # --only のときに、ほかの決めた音の指紋を消さない
         json.dump(approved, open(APPROVED, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
