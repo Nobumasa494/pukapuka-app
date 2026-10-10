@@ -31,7 +31,7 @@ const INTRO_LINES: [string, string][] = [
   ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。新しく見つかったものがあれば、それを上に出します。「たとえば」は、実際にそうなった日。'],
   ['01 そのあとに', 'その日から3日以内に、元気・好奇心の言葉を拾ったこと。数字は、この12週でそうなった回数。'],
   ['02 行ったり来たり', '行きも帰りも、よく起きている二つ。数字は、その日のあと3日以内に拾った回数。良い・悪いはありません。'],
-  ['03 よく拾う言葉の変化', '元気・好奇心の言葉を拾った日の数を、12週前ごろ（4週ぶん）と最近（4週ぶん）で比べたもの。'],
+  ['03 よく拾う言葉の変化', '元気・好奇心の言葉を拾った日の数を、前の期間と最近の期間とで並べたもの。期間は、上の日付のとおりです。'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
@@ -42,8 +42,12 @@ function heroText(x: SourceItem, n: number): string {
   // 確かめ中・見えはじめ：確かさは言わず、数えた事実だけ（2026-10-10 ユーザー「多いかもは曖昧で混乱する」）
   return `「${x.word}」の日のあとに、\n「${x.to}」を\n拾った日は、\nいま${n}回です`;
 }
-const shiftLabel = (n: number) => (n === 7 ? '1週' : n === 14 ? '2週' : n === 28 ? '4週' : '6週');
-const monthOf = (day: number, shiftDays = 0) => `${new Date((day + shiftDays + 14) * 86400000).getUTCMonth() + 1}月`; // 4週の真ん中のあたりの月
+// 比べる期間を、実際の日付で書く（「4週どうし」は何のことか伝わらなかった。2026-10-11 ユーザー）。dayNumber は UTC の日の番号
+const dayText = (day: number, shiftDays = 0) => {
+  const d = new Date((day + shiftDays) * 86400000);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+};
+const rangeText = (from: number, span: number, shiftDays = 0) => `${dayText(from, shiftDays)}〜${dayText(from + span - 1, shiftDays)}`;
 const mdDay = (day: number, shiftDays = 0) => {
   const d = new Date((day + shiftDays) * 86400000); // dayNumber は UTC の日で数えている
   return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
@@ -197,15 +201,15 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             </Chapter>
 
             {/* よく拾う言葉の変化：時期と日数で、前と最近を並べる（増えた順） */}
-            <Chapter no="03" title="よく拾う言葉の変化" note={`元気・好奇心の言葉の日数（${shiftLabel(result.shift?.span ?? 7)}どうし）`} last>
+            <Chapter no="03" title="よく拾う言葉の変化" note="元気・好奇心の言葉を拾った日の数" last>
               {result.shift ? (
                 <View>
-                  {result.shift.span < 42 && <Text style={styles.shiftNote}>まだ少ない記録での比べです。記録がたまると、比べる期間が長くなります。</Text>}
+                  {result.shift.span < 42 && <Text style={styles.shiftNote}>まだ記録が少ないので、短い期間で並べています。記録がたまると、期間が長くなります。</Text>}
                   <View style={styles.shiftHeadRow}>
                     <Text style={styles.shiftWordCol} />
-                    <Text style={styles.shiftHead}>{monthOf(result.shift.beforeFrom, shiftDays)}ごろ</Text>
+                    <Text style={styles.shiftHead}>{rangeText(result.shift.beforeFrom, result.shift.span, shiftDays)}</Text>
                     <Text style={styles.shiftHeadArrow} />
-                    <Text style={styles.shiftHead}>最近</Text>
+                    <Text style={styles.shiftHead}>{rangeText(result.shift.afterFrom, result.shift.span, shiftDays)}</Text>
                   </View>
                   {result.shift.rows.map((x) => (
                     <View key={x.word} style={styles.shiftRow}>
@@ -417,9 +421,9 @@ const styles = StyleSheet.create({
   shiftHeadRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 6 },
   shiftRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
   shiftWordCol: { flex: 1 },
-  shiftHead: { width: 64, textAlign: 'right', fontSize: 11, color: SUB, letterSpacing: 1, fontFamily: SERIF },
-  shiftHeadArrow: { width: 34, textAlign: 'center', fontSize: 12, color: 'rgba(43,38,64,0.4)' },
-  shiftNum: { width: 64, textAlign: 'right', fontSize: 17, color: SUB, fontFamily: SERIF },
+  shiftHead: { width: 84, textAlign: 'right', fontSize: 11, color: SUB, fontFamily: SERIF },
+  shiftHeadArrow: { width: 24, textAlign: 'center', fontSize: 12, color: 'rgba(43,38,64,0.4)' },
+  shiftNum: { width: 84, textAlign: 'right', fontSize: 17, color: SUB, fontFamily: SERIF },
   shiftUp: { color: INK },
   loopBlock: { paddingTop: 4 },
   loopTitle: { fontSize: 16, color: INK, fontFamily: SERIF, letterSpacing: 1 },
