@@ -291,21 +291,140 @@ export const TENTATIVE_MIN_WEIGHT = 2;
 export const FEW_DAYS = 14;
 export const FEW_GENKI_DAYS = 5;
 
-export type SourceStage =
-  | { stage: 'few' } // ① 文だけ
-  | { stage: 'none' } // ②③のどちらも出ない（まだ見えない）
-  | { stage: 'tentative' | 'sure'; word: string; to: string; weight: number };
+// 段階（決定 2026-10-10。ユーザー「画面には何かは表示されていて、どんどん確かになっていればいい」）
+//  few        ① 文だけ（データが少ない間）
+//  seen       ②' 見えはじめ：偶然とは比べず、起きたことだけを言う（「〜した日がありました」）。事実なので、はずれない
+//  tentative  ② 確かめ中：ゆるい基準を通った（「〜かも」）。3〜5回に1回は偶然
+//  sure       ③ 確か：厳しい基準を通った（「よく来ます」）
+//  none       矢印が1本もない（まれ）
+export type Stage = 'few' | 'none' | 'seen' | 'tentative' | 'sure';
+export type SourceStage = { stage: 'few' | 'none' } | { stage: 'seen' | 'tentative' | 'sure'; word: string; to: string; weight: number };
+export type LoopStage = { stage: 'few' | 'none' } | { stage: 'seen' | 'tentative' | 'sure'; a: string; b: string };
 
-// いちばん上に出す源を1つ選ぶ（①文だけ → ②確かめ中 → ③確か と、記録がたまるほど確かになる）
-export function topSource(captures: Cap[], now: number): SourceStage {
-  if (!captures.length) return { stage: 'few' };
+// 一度出た源・めぐりは、2週間は残す（決定 2026-10-10）。自信が下がった間は「確かめ中」に戻すだけで、消さない
+export const HOLD_DAYS = 14;
+
+function isFew(captures: Cap[], now: number): boolean {
+  if (!captures.length) return true;
   const first = Math.min(...captures.map((c) => c.capturedAt));
   const genkiDays = new Set(captures.filter((c) => GENKI_WORDS.has(c.word)).map((c) => dayNumber(c.capturedAt))).size;
-  if (dayNumber(now) - dayNumber(first) < FEW_DAYS && genkiDays < FEW_GENKI_DAYS) return { stage: 'few' };
-  const recent = captures.filter((c) => dayNumber(now) - dayNumber(c.capturedAt) < SOURCE_DAYS);
+  return dayNumber(now) - dayNumber(first) < FEW_DAYS && genkiDays < FEW_GENKI_DAYS;
+}
+const recentOf = (captures: Cap[], t: number) =>
+  captures.filter((c) => c.capturedAt <= t && dayNumber(t) - dayNumber(c.capturedAt) < SOURCE_DAYS);
+
+// 今日の結果が③でなければ、1週間前・2週間前の結果も見て、そのころ②③で出ていたものを②で残す
+function withHold<T extends { stage: Stage }>(captures: Cap[], now: number, at: (t: number) => T): T {
+  const cur = at(now);
+  if (cur.stage === 'sure' || cur.stage === 'few') return cur;
+  for (let k = 7; k <= HOLD_DAYS; k += 7) {
+    const past = at(now - k * 86400000);
+    if (past.stage === 'sure' || past.stage === 'tentative') return cur.stage === 'tentative' ? cur : { ...past, stage: 'tentative' };
+  }
+  return cur;
+}
+
+function sourceAt(captures: Cap[], t: number): SourceStage {
+  if (isFew(captures.filter((c) => c.capturedAt <= t), t)) return { stage: 'few' };
+  const recent = recentOf(captures, t);
   const sure = genkiSourcesTested(recent, SOURCE_ALPHA, SOURCE_MIN_WEIGHT)[0];
   if (sure) return { stage: 'sure', word: sure.word, to: sure.to, weight: sure.weight };
   const maybe = genkiSourcesTested(recent, TENTATIVE_ALPHA, TENTATIVE_MIN_WEIGHT)[0];
   if (maybe) return { stage: 'tentative', word: maybe.word, to: maybe.to, weight: maybe.weight };
-  return { stage: 'none' };
+  // 見えはじめ：「していること」→ 元気・好奇心の言葉で、いちばん重い矢印（なければ、どの言葉からでも）
+  const list = arrows(recent).filter((a) => isGenki(a.to));
+  const best = (l: Arrow[]) => l.sort((x, y) => y.weight - x.weight || x.from.localeCompare(y.from) || x.to.localeCompare(y.to))[0];
+  const seen = best(list.filter((a) => WORD_CATEGORY[a.from] === 'doing')) ?? best(list.filter((a) => !isGenki(a.from))) ?? best(list);
+  return seen ? { stage: 'seen', word: seen.from, to: seen.to, weight: seen.weight } : { stage: 'none' };
+}
+
+// いちばん上に出す源を1つ選ぶ（① → ②' → ② → ③ と、記録がたまるほど確かになる）
+export function topSource(captures: Cap[], now: number): SourceStage {
+  return withHold(captures, now, (t) => sourceAt(captures, t));
+}
+
+function loopAt(captures: Cap[], t: number): LoopStage {
+  if (isFew(captures.filter((c) => c.capturedAt <= t), t)) return { stage: 'few' };
+  const recent = recentOf(captures, t);
+  const sure = loopsTested(recent, LOOP_ALPHA, LOOP_MIN_WEIGHT)[0];
+  if (sure) return { stage: 'sure', a: sure.a, b: sure.b };
+  const maybe = loopsTested(recent, LOOP_TENTATIVE_ALPHA, LOOP_MIN_WEIGHT)[0];
+  if (maybe) return { stage: 'tentative', a: maybe.a, b: maybe.b };
+  // 見えはじめ：行きと帰りの、弱いほうの重さがいちばん大きい組
+  const w = new Map(arrows(recent).map((a) => [`${a.from}\n${a.to}`, a.weight]));
+  let best: { a: string; b: string; v: number } | undefined;
+  for (const [key, v] of w) {
+    const [a, b] = key.split('\n');
+    if (a > b) continue;
+    const m = Math.min(v, w.get(`${b}\n${a}`) ?? 0);
+    if (m > 0 && (!best || m > best.v)) best = { a, b, v: m };
+  }
+  return best ? { stage: 'seen', a: best.a, b: best.b } : { stage: 'none' };
+}
+
+// くり返すめぐりを1つ選ぶ（源と同じ段階・同じ残し方）
+export function topLoop(captures: Cap[], now: number): LoopStage {
+  return withHold(captures, now, (t) => loopAt(captures, t));
+}
+
+// くり返すめぐり（A ⇄ B の2語の輪。max-T の並べかえ検定）：行き（A→B）と帰り（B→A）の z の、弱いほうを輪の強さにする。
+// 並べかえのたびに全部の組でいちばん強い輪を記録し、本物がその上位 familyAlpha に入る輪だけ残す（決定 2026-10-10：めぐりも時間とともに確かになる）
+export const LOOP_ALPHA = 0.1; // ③確か（仮。scripts/me/loop-test.ts で決める）
+export const LOOP_TENTATIVE_ALPHA = 0.3; // ②確かめ中（仮）
+export const LOOP_MIN_WEIGHT = 2; // 行きも帰りも、この重さ以上（仮）
+export function loopsTested(
+  captures: Cap[],
+  familyAlpha = LOOP_ALPHA,
+  minWeight = LOOP_MIN_WEIGHT,
+  shuffles = SHUFFLES,
+  seed = 3,
+): { a: string; b: string; z: number }[] {
+  const byDay = wordsByDay(captures);
+  const days = [...byDay.keys()].sort((x, y) => x - y);
+  const words = [...new Set(captures.map((c) => c.word))].sort();
+  const id = new Map(words.map((w, i) => [w, i]));
+  const n = words.length;
+  const sets = days.map((d) => [...byDay.get(d)!].map((w) => id.get(w)!));
+  const shuffled = (pass: (m: Float64Array) => void) => {
+    const r = rng(seed);
+    const perm = sets.slice();
+    for (let t = 0; t < shuffles; t++) {
+      for (let i = perm.length - 1; i > 0; i--) {
+        const j = Math.floor(r() * (i + 1));
+        [perm[i], perm[j]] = [perm[j], perm[i]];
+      }
+      pass(arrowMatrix(days, perm, n));
+    }
+  };
+  const sum = new Float64Array(n * n);
+  const sq = new Float64Array(n * n);
+  shuffled((m) => {
+    for (let x = 0; x < n * n; x++) {
+      sum[x] += m[x];
+      sq[x] += m[x] * m[x];
+    }
+  });
+  const mean = Float64Array.from(sum, (v) => v / shuffles);
+  const sd = Float64Array.from(sq, (v, x) => Math.sqrt(Math.max(v / shuffles - mean[x] ** 2, 0)) || 0.25);
+  const loopZ = (m: Float64Array, a: number, b: number) => {
+    const ab = a * n + b, ba = b * n + a;
+    if (m[ab] < minWeight || m[ba] < minWeight) return -Infinity;
+    return Math.min((m[ab] - mean[ab]) / sd[ab], (m[ba] - mean[ba]) / sd[ba]);
+  };
+  const maxima: number[] = [];
+  shuffled((m) => {
+    let mx = -Infinity;
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) mx = Math.max(mx, loopZ(m, a, b));
+    maxima.push(mx);
+  });
+  maxima.sort((x, y) => y - x);
+  const cut = maxima[Math.floor(familyAlpha * shuffles)] ?? -Infinity;
+  const real = arrowMatrix(days, sets, n);
+  const out: { a: string; b: string; z: number }[] = [];
+  for (let a = 0; a < n; a++)
+    for (let b = a + 1; b < n; b++) {
+      const z = loopZ(real, a, b);
+      if (z > cut) out.push({ a: words[a], b: words[b], z });
+    }
+  return out.sort((x, y) => y.z - x.z || x.a.localeCompare(y.a));
 }
