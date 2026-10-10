@@ -492,3 +492,51 @@ export function loopsTested(
     }
   return out.sort((x, y) => y.z - x.z || x.a.localeCompare(y.a));
 }
+
+// 育っていること（決定 2026-10-10。割合だけだと「はいそれで？」になる、とユーザー。A・B の両方）
+// A：見つかったことの歩み。週ごとに源の一覧を出し直して、言葉が初めて「かも」「よく来る」になった週を並べる（見えはじめは出さない：偶然と区別できないため）
+export type StoryEvent = { at: number; word: string; to: string; stage: 'tentative' | 'sure' };
+export function growthStory(captures: Cap[], now: number): StoryEvent[] {
+  if (!captures.length) return [];
+  const first = Math.min(...captures.map((c) => c.capturedAt));
+  const seen = new Map<string, number>(); // 言葉 → いちばん高かった段階
+  const out: StoryEvent[] = [];
+  for (let t = first + 7 * 86400000; ; t += 7 * 86400000) {
+    const at = Math.min(t, now);
+    const upto = captures.filter((c) => c.capturedAt <= at);
+    if (!isFew(upto, at))
+      for (const x of sourcesAt(upto, at)) {
+        if (x.stage === 'seen') continue;
+        const rank = STAGE_RANK[x.stage];
+        if (rank > (seen.get(x.word) ?? 0)) {
+          seen.set(x.word, rank);
+          out.push({ at, word: x.word, to: x.to, stage: x.stage });
+        }
+      }
+    if (at >= now) break;
+  }
+  return out;
+}
+
+// B：元気の中身の変わり方。最初の4週と最近の4週で、よく拾った元気・好奇心の言葉（拾った日の数）を2つずつ。
+// 偶然とは比べない事実（「よく拾った」）。8週たまるまでは出さない
+export const SHIFT_WEEKS = 4;
+export function genkiShift(captures: Cap[], now: number): { before: string[]; after: string[] } | null {
+  if (!captures.length) return null;
+  const firstDay = dayNumber(Math.min(...captures.map((c) => c.capturedAt)));
+  const today = dayNumber(now);
+  const span = SHIFT_WEEKS * 7;
+  if (today - firstDay + 1 < span * 2) return null;
+  const from = Math.max(firstDay, today - SOURCE_DAYS + 1); // 源と同じ12週の中で比べる
+  const top = (lo: number, hi: number) => {
+    const days = new Map<string, Set<number>>();
+    for (const c of captures) {
+      const d = dayNumber(c.capturedAt);
+      if (d < lo || d > hi || !isGenki(c.word)) continue;
+      if (!days.has(c.word)) days.set(c.word, new Set());
+      days.get(c.word)!.add(d);
+    }
+    return [...days].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0])).slice(0, 2).map(([w]) => w);
+  };
+  return { before: top(from, from + span - 1), after: top(today - span + 1, today) };
+}

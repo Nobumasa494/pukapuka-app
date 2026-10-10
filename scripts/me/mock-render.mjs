@@ -7,6 +7,11 @@ const avg = W.map((_, i) => { const s = W.slice(Math.max(0, i - 2), i + 1); retu
 const smooth = avg.map((r, i) => (i < 2 ? '' : `${gx(i)},${gy(r)}`)).filter(Boolean).join(' ');
 const sureLabel = d.stages.find((s) => s.stage === 'sure')?.label;
 let markI = W.findIndex((w) => w.label === sureLabel); if (markI < 2) markI = 7;
+const stTxt = { sure: 'よく来る', tentative: '来ているかも', seen: '見えはじめ' };
+const listHtml = ['sure', 'tentative', 'seen'].map((st) => { const xs = d.list.filter((x) => x.stage === st); return xs.length ? `<div class="lv">${stTxt[st]}</div>` + xs.map((x) => `<div class="li ${st}">${x.word} → ${x.to}</div>`).join('') : ''; }).join('');
+const loopHtml = d.loops.length ? d.loops.map((x) => `<div class="li ${x.stage}">「${x.a}」と「${x.b}」は、お互いのあとに${x.stage === 'sure' ? 'よく来ます' : '来ているかも'}</div>`).join('') : '<p class="note">まだ、くり返すめぐりは見えていません</p>';
+const storyHtml = d.story.map((e) => `<div class="ev"><span>${e.label}</span>「${e.word}」のあとに「${e.to}」が${e.stage === 'sure' ? 'よく来るように <b>◎</b>' : '来ているかも'}</div>`).join('');
+const shiftHtml = d.shift ? `<div class="shift"><div><small>はじめのころ</small><br>${d.shift.before.join('・')}</div><div class="arr">→</div><div><small>最近</small><br><b>${d.shift.after.join('・')}</b></div></div>` : '';
 const N = d.numbers, pct = Math.round((N.nextGenki / N.srcDays) * 100), base = Math.round(N.baseRate * 100);
 const graph = `<svg viewBox="0 0 320 140" class="g">
  <line x1="14" y1="110" x2="304" y2="110" class="ax"/><line x1="14" y1="65" x2="304" y2="65" class="grid"/><text x="0" y="68" class="t">25%</text><text x="4" y="113" class="t">0</text>
@@ -33,6 +38,9 @@ h4{margin:0 0 4px;font-size:12px;color:#6a6383;font-weight:500}.faint{color:rgba
 .g{width:100%}.ax{stroke:#8a83a3;stroke-width:.8}.grid{stroke:#bdb6cf;stroke-width:.6;stroke-dasharray:3 3}.t{font-size:9px;fill:#6a6383}
 .dot{fill:#c99ab0}.smooth{fill:none;stroke:#8f5f8a;stroke-width:2.2}.mark{fill:#f3c46b;stroke:#8f5f8a}.mt{font-size:10px;fill:#8f5f8a}
 .cmp{display:grid;grid-template-columns:5.5em 1fr 2.6em;gap:6px;align-items:center;font-size:12px;margin-top:4px}.bar{height:9px;border-radius:5px;background:#c99ab0}.bar.b{background:#cfc8dc}
+.lv{font-size:10.5px;color:#6a6383;margin:6px 0 2px}.li{font-size:14px;margin:2px 0 2px 8px}.li.sure{color:#2f2a48}.li.tentative{color:rgba(47,42,72,.6)}.li.seen{color:rgba(47,42,72,.38);font-size:13px}
+.sub2{font-size:11px;color:#8f5f8a;margin:10px 0 4px;border-bottom:1px dashed #d9c8d8}.ev{font-size:12px;margin:3px 0}.ev span{display:inline-block;width:5.2em;color:#6a6383;font-size:11px}.ev b{color:#c9a03a}
+.shift{display:flex;align-items:center;gap:10px;font-size:14px;text-align:center}.shift small{font-size:10px;color:#6a6383}.arr{font-size:18px;color:#8f5f8a}
 .n{position:absolute;width:22px;height:22px;border-radius:50%;background:#e2574c;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 0 0 2px #fff}
 .legend{width:430px;font-size:15px;line-height:1.7;color:#222}.legend h2{font-size:18px;margin:0 0 8px}.legend li{margin-bottom:12px}.legend b{color:#e2574c}
 </style>
@@ -48,16 +56,20 @@ h4{margin:0 0 4px;font-size:12px;color:#6a6383;font-weight:500}.faint{color:rgba
   <div class="cmp"><span>散歩の次の日</span><div class="bar" style="width:${pct}%"></div><span>${pct}%</span>
    <span>ふだんの次の日</span><div class="bar b" style="width:${base}%"></div><span>${base}%</span></div>
   <p class="note">元気・好奇心の言葉を拾った日の割合（この3か月。散歩は${N.srcDays}日のうち${N.nextGenki}日）</p></div>
- <div class="sec" style="position:relative"><div class="n" style="left:-8px;top:-8px">3</div><h4>くり返すめぐり<span class="chip">見えはじめ</span></h4>
-  <p class="faint">「${d.loop.a}」のあとに「${d.loop.b}」が来て、<br>また「${d.loop.a}」が来た日がありました</p></div>
- <div class="sec" style="position:relative"><div class="n" style="left:-8px;top:-8px">4</div><h4>育っていること</h4><p class="big3">元気・好奇心の言葉は、この3か月 だいたい2割</p>${graph}
-  <p class="note">点＝その週。線＝ならした割合</p></div>
+ <div class="sec" style="position:relative"><div class="n" style="left:-8px;top:-8px">3</div><h4>元気・好奇心が来やすいこと</h4>${listHtml}</div>
+ <div class="sec" style="position:relative"><div class="n" style="left:-8px;top:-8px">4</div><h4>くり返すめぐり</h4>${loopHtml}</div>
+ <div class="sec" style="position:relative"><div class="n" style="left:-8px;top:-8px">5</div><h4>育っていること</h4>
+  <div class="sub2">見つかってきたこと</div>${storyHtml}
+  <div class="sub2">元気の中身</div>${shiftHtml}
+  <div class="sub2">元気・好奇心の言葉の割合（週ごと）</div>${graph}</div>
 </div></div>
-<div class="legend"><h2>わたしのこと（見本の人・使い始めて12週目）</h2><ol style="padding-left:0;list-style:none">
-<li><b>1</b>　<b>開いたとき、最初に見える文</b>。「散歩した次の日に、元気な言葉（わくわく など）を拾うことが多い」とアプリが見つけた。3か月分たまって確かになったので、ふつうの字で「よく来ます」</li>
-<li><b>2</b>　<b>1の、もとになった数字</b>。散歩した次の日は${pct}%の日で元気な言葉を拾っている。ふだんの日は${base}%。この差で「散歩のあとによく来る」と言っている</li>
-<li><b>3</b>　<b>くり返すめぐり</b>。「仕事 → 疲れ → 仕事 …」と、お互いのあとに来る言葉。まだ偶然かどうかわからないので、起きた事実だけを、うすい字で（見えはじめ）</li>
-<li><b>4</b>　<b>育っていること</b>。拾った言葉のうち、元気・好奇心の言葉が何割か、週ごとの変化。★は「散歩」が源として確かになった週。この見本の人は、育つようには作っていないので平ら</li>
+<div class="legend"><h2>わたしのこと（見本の人・12週目）</h2>
+<p style="margin-top:0">だんだん好奇心が育っていくように作った見本の人です。</p><ol style="padding-left:0;list-style:none">
+<li><b>1</b>　<b>開いたときの文</b>。いちばん確かな（または新しく確かになった）1つ</li>
+<li><b>2</b>　<b>1のもとの数字</b>。散歩の次の日と、ふだんの次の日の比べ</li>
+<li><b>3</b>　<b>いろいろな源</b>。濃い字＝よく来る、うすい字＝かも、もっとうすい字＝見えはじめ。日がたつと下から上へ上がっていく</li>
+<li><b>4</b>　<b>くり返すめぐり</b>。「かも」以上だけ</li>
+<li><b>5</b>　<b>育っていること</b>。見つかってきたことの歩み（A）と、元気の中身の変わり方（B）。いちばん下に、前からの割合のグラフ（小さく）</li>
 </ol></div>`;
 const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 860, height: 800 }, deviceScaleFactor: 1.5 });
