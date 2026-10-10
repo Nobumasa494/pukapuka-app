@@ -54,7 +54,7 @@ const out = {
   list: me.few ? [] : me.list,
   topItem: me.few ? null : me.top,
   loops: me.few ? [] : me.loops,
-  story: (me.few ? [] : me.story).map((e) => ({ ...e, label: `${new Date(e.at).getMonth() + 1}月${new Date(e.at).getDate()}日` })),
+  story: (me.few ? [] : (me.story ?? [])).map((e) => ({ ...e, label: `${new Date(e.at).getMonth() + 1}月${new Date(e.at).getDate()}日` })),
   shift: me.few ? null : me.shift,
   numbers: { srcDays: srcDays.length, nextGenki, baseRate },
   stages,

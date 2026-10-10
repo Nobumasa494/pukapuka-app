@@ -470,9 +470,40 @@ export function genkiShift(captures: Cap[], now: number): { before: string[]; af
 // ---- わたしのこと全体の計算（速くした形。2026-10-10） ----
 // ある時点の「源の一覧」と「めぐり」を、1回の並べかえ（500回×2周）でまとめて出す。これを「スナップショット」と呼ぶ。
 // 過去の時点のスナップショットは、記録が増えても変わらない（その時点までの記録だけで決まる）ので、端末にとっておける（meCache）
+// 並べかえのたびに矢印の表を数え直す道具（速くした形。2026-10-10、スマホで12週を全部計算すると10秒かかったため）
+// ・どの日とどの日が「n日後」の関係かは、並べかえても変わらないので、最初に1回だけ調べておく
+// ・表は1枚を使い回す（毎回新しく作らない）
+function arrowCounter(days: number[], n: number) {
+  const at = new Map(days.map((d, i) => [d, i]));
+  const pi: number[] = [], pj: number[] = [], pw: number[] = [];
+  days.forEach((d, i) =>
+    ARROW_WEIGHTS.forEach((w, k) => {
+      const j = at.get(d + k + 1);
+      if (j === undefined) return;
+      pi.push(i);
+      pj.push(j);
+      pw.push(w);
+    }),
+  );
+  const m = new Float64Array(n * n);
+  return (sets: number[][]): Float64Array => {
+    m.fill(0);
+    for (let q = 0; q < pi.length; q++) {
+      const A = sets[pi[q]], B = sets[pj[q]], w = pw[q];
+      for (let x = 0; x < A.length; x++) {
+        const row = A[x] * n;
+        for (let y = 0; y < B.length; y++) if (A[x] !== B[y]) m[row + B[y]] += w;
+      }
+    }
+    return m;
+  };
+}
+
+// わたしのこと本番の並べかえの回数（2026-10-10。スマホで速くするため 500 から減らした。まちがいの割合は scripts/me で確かめた）
+export const SNAP_SHUFFLES = 300;
 export type Snapshot = { t: number; sources: SourceItem[]; loops: LoopItem[] } | { t: number; few: true };
 
-export function snapshot(captures: Cap[], t: number, shuffles = SHUFFLES, seed = 2): Snapshot {
+export function snapshot(captures: Cap[], t: number, shuffles = SNAP_SHUFFLES, seed = 2): Snapshot {
   const upto = captures.filter((c) => c.capturedAt <= t);
   if (isFew(upto, t)) return { t, few: true };
   const recent = recentOf(captures, t);
@@ -488,58 +519,78 @@ export function snapshot(captures: Cap[], t: number, shuffles = SHUFFLES, seed =
   for (let a = 0; a < n; a++) if (doing[a]) for (let b = 0; b < n; b++) if (a !== b && genki[b]) cand.push(a * n + b);
   const pairs: number[] = []; // めぐりの組（a < b、似た言葉どうしは除く）
   for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (!isSimilar(words[a], words[b])) pairs.push(a * n + b);
-  const shuffled = (pass: (m: Float64Array) => void) => {
+  const count = arrowCounter(days, n);
+  // 使う矢印（源の候補・めぐりの行きと帰り）だけを、並べかえ1回ごとに覚えておく。2周しなくてよくなる（スマホで速く）
+  const N2 = n * n;
+  const slot = new Int32Array(N2).fill(-1);
+  const idx: number[] = [];
+  const keep = (x: number) => {
+    if (slot[x] < 0) {
+      slot[x] = idx.length;
+      idx.push(x);
+    }
+  };
+  for (const x of cand) keep(x);
+  for (const x of pairs) {
+    keep(x);
+    keep((x % n) * n + Math.floor(x / n));
+  }
+  const K = idx.length;
+  const buf = new Float32Array(shuffles * K);
+  const sum = new Float64Array(K);
+  const sq = new Float64Array(K);
+  {
     const r = rng(seed);
     const perm = sets.slice();
-    for (let k = 0; k < shuffles; k++) {
+    for (let t = 0; t < shuffles; t++) {
       shuffleDays(perm, days, r);
-      pass(arrowMatrix(days, perm, n));
-    }
-  };
-  const N2 = n * n;
-  const sum = new Float64Array(N2);
-  const sq = new Float64Array(N2);
-  shuffled((m) => {
-    for (let x = 0; x < N2; x++) {
-      const v = m[x];
-      if (v) {
-        sum[x] += v;
-        sq[x] += v * v;
+      const m = count(perm);
+      const o = t * K;
+      for (let k = 0; k < K; k++) {
+        const v = m[idx[k]];
+        buf[o + k] = v;
+        sum[k] += v;
+        sq[k] += v * v;
       }
     }
-  });
+  }
   const mean = Float64Array.from(sum, (v) => v / shuffles);
-  const sd = Float64Array.from(sq, (v, x) => Math.sqrt(Math.max(v / shuffles - mean[x] ** 2, 0)) || 0.25);
-  const zOf = (m: Float64Array, x: number) => (m[x] - mean[x]) / sd[x];
-  const loopZ = (m: Float64Array, x: number) => {
-    const a = Math.floor(x / n), b = x % n, ba = b * n + a;
-    if (m[x] < LOOP_MIN_WEIGHT || m[ba] < LOOP_MIN_WEIGHT) return -Infinity;
-    return Math.min(zOf(m, x), zOf(m, ba));
-  };
-  // 2周目：並べかえのたびに「いちばんの当たり」を記録（源は重さの下限 2・3 ごと、めぐりは1つ）
+  const sd = Float64Array.from(sq, (v, k) => Math.sqrt(Math.max(v / shuffles - mean[k] ** 2, 0)) || 0.25);
+  const candK = cand.map((x) => slot[x]);
+  const pairK = pairs.map((x) => slot[x]);
+  const pairBK = pairs.map((x) => slot[(x % n) * n + Math.floor(x / n)]);
+  // 並べかえのたびに「いちばんの当たり」を記録（源は重さの下限 2・3 ごと、めぐりは1つ）
   const srcMax2: number[] = [], srcMax3: number[] = [], loopMax: number[] = [];
-  shuffled((m) => {
+  for (let t = 0; t < shuffles; t++) {
+    const o = t * K;
     let m2 = -Infinity, m3 = -Infinity, ml = -Infinity;
-    for (const x of cand) {
-      const v = m[x];
+    for (let q = 0; q < candK.length; q++) {
+      const k = candK[q], v = buf[o + k];
       if (v < TENTATIVE_MIN_WEIGHT) continue;
-      const z = zOf(m, x);
+      const z = (v - mean[k]) / sd[k];
       if (z > m2) m2 = z;
       if (v >= SOURCE_MIN_WEIGHT && z > m3) m3 = z;
     }
-    for (const x of pairs) {
-      if (m[x] < LOOP_MIN_WEIGHT) continue;
-      const z = loopZ(m, x);
+    for (let q = 0; q < pairK.length; q++) {
+      const k1 = pairK[q], k2 = pairBK[q], v1 = buf[o + k1], v2 = buf[o + k2];
+      if (v1 < LOOP_MIN_WEIGHT || v2 < LOOP_MIN_WEIGHT) continue;
+      const z = Math.min((v1 - mean[k1]) / sd[k1], (v2 - mean[k2]) / sd[k2]);
       if (z > ml) ml = z;
     }
     srcMax2.push(m2);
     srcMax3.push(m3);
     loopMax.push(ml);
-  });
+  }
+  const zOf = (m: Float64Array, x: number) => (m[x] - mean[slot[x]]) / sd[slot[x]];
+  const loopZ = (m: Float64Array, x: number) => {
+    const ba = (x % n) * n + Math.floor(x / n);
+    if (m[x] < LOOP_MIN_WEIGHT || m[ba] < LOOP_MIN_WEIGHT) return -Infinity;
+    return Math.min(zOf(m, x), zOf(m, ba));
+  };
   const cut = (arr: number[], alpha: number) => arr.sort((a, b) => b - a)[Math.floor(alpha * shuffles)] ?? -Infinity;
   const cutSure = cut(srcMax3, SOURCE_ALPHA), cutMaybe = cut(srcMax2, TENTATIVE_ALPHA);
   const loopSure = cut(loopMax, LOOP_ALPHA), loopMaybe = cut(loopMax, LOOP_TENTATIVE_ALPHA);
-  const real = arrowMatrix(days, sets, n);
+  const real = Float64Array.from(count(sets));
   // 源：言葉ごとに、いちばん目立つ矢印と、重さ2以上・3以上の中での z
   const best = new Map<number, { item: SourceItem; z2: number; z3: number }>();
   for (const x of cand) {
@@ -582,7 +633,7 @@ export const LIST_MAX = 8;
 export type StoryEvent = { at: number; word: string; to: string; stage: 'tentative' | 'sure' };
 export type MeResult =
   | { few: true }
-  | { few: false; top: SourceItem | null; list: SourceItem[]; loops: LoopItem[]; story: StoryEvent[]; shift: { before: string[]; after: string[] } | null };
+  | { few: false; top: SourceItem | null; list: SourceItem[]; loops: LoopItem[]; story: StoryEvent[] | null; shift: { before: string[]; after: string[] } | null }; // story が null＝まだ計算中
 
 // スナップショットの並び（古い順、最後が今）から、画面に出すものをまとめる
 //  ・一覧：今の源。1つ前・2つ前の週の終わりに②③だった言葉は、②で残す（2週間残す。決定 2026-10-10）
@@ -620,11 +671,20 @@ export function computeMeSync(captures: Cap[], now: number): MeResult {
 
 // とっておく場所（端末の AsyncStorage など）。鍵は「時点の日・その時点までの記録の数」。記録が後から足された（電波がなかったなど）ときは数が変わるので、計算し直す
 export type SnapCache = { get: (key: string) => Promise<Snapshot | null>; set: (key: string, v: Snapshot) => Promise<void> };
-export const SNAP_VERSION = 1; // 計算の中身を変えたら上げる（古いとっておきを使わない）
-export async function computeMe(captures: Cap[], now: number, cache?: SnapCache, onProgress?: (done: number, total: number) => void): Promise<MeResult> {
+export const SNAP_VERSION = 2; // 計算の中身を変えたら上げる（古いとっておきを使わない）
+// 計算の順番：まず「今」と直近2つの週の終わり（いちばん上・一覧・めぐりに要る）→ onPartial で先に画面を出す → 残り（歩みに要る）
+export async function computeMe(
+  captures: Cap[],
+  now: number,
+  cache?: SnapCache,
+  onProgress?: (done: number, total: number) => void,
+  onPartial?: (r: MeResult) => void,
+): Promise<MeResult> {
   const ts = checkpoints(captures, now);
-  const snaps: Snapshot[] = [];
-  for (let i = 0; i < ts.length; i++) {
+  const snaps: (Snapshot | null)[] = ts.map(() => null);
+  const order = [...ts.keys()].reverse(); // 新しい順
+  let done = 0;
+  for (const i of order) {
     const t = ts[i];
     const isNow = i === ts.length - 1;
     const key = `v${SNAP_VERSION}:${dayNumber(t)}:${captures.filter((c) => c.capturedAt <= t).length}`;
@@ -634,10 +694,14 @@ export async function computeMe(captures: Cap[], now: number, cache?: SnapCache,
       sn = snapshot(captures, t);
       if (!isNow && cache) await cache.set(key, sn);
     }
-    snaps.push(sn);
-    onProgress?.(i + 1, ts.length);
+    snaps[i] = sn;
+    onProgress?.(++done, ts.length);
+    if (done === Math.min(3, ts.length) && done < ts.length && onPartial) {
+      const r = assemble(snaps.filter((x): x is Snapshot => !!x), captures, now);
+      onPartial(r.few ? r : { ...r, story: null });
+    }
   }
-  return assemble(snaps, captures, now);
+  return assemble(snaps as Snapshot[], captures, now);
 }
 
 // 前の形（テストで使う）

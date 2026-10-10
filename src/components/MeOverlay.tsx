@@ -52,9 +52,19 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
     const run = ++running.current;
     const caps = captures.map((c) => ({ word: c.word, capturedAt: c.capturedAt }));
     const now = Date.now();
-    computeMe(caps, now, meCache(deviceId), (done, total) => {
-      if (run === running.current && total > 2) setProgress([done, total]);
-    })
+    computeMe(
+      caps,
+      now,
+      meCache(deviceId),
+      (done, total) => {
+        if (run === running.current && total > 2) setProgress([done, total]);
+      },
+      (partial) => {
+        if (run !== running.current) return;
+        setResult(partial);
+        setNumbers(!partial.few && partial.top && partial.top.stage !== 'seen' ? nextDayRate(caps, now, partial.top.word) : null);
+      },
+    )
       .then((r) => {
         if (run !== running.current) return;
         setResult(r);
@@ -76,7 +86,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
         {/* 開いたときの1画面：いちばん上の源を1つだけ大きく。疲れている日はここだけ読めばよい */}
         <View style={{ height, justifyContent: 'center', paddingHorizontal: 28 }}>
           {!result ? (
-            <Text style={styles.wait}>{progress ? `夜が明けるのを待っています…（${progress[0]}/${progress[1]}）` : ''}</Text>
+            <Text style={styles.wait}>{progress ? '夜が明けるのを待っています…' : ''}</Text>
           ) : result.few ? (
             <Text style={styles.heroFew}>元気な日が、あと少し集まると{'\n'}見えてきます</Text>
           ) : top ? (
@@ -138,7 +148,9 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             <View style={styles.card}>
               <Text style={styles.h}>育っていること</Text>
               <Text style={styles.sub}>見つかってきたこと</Text>
-              {result.story.length ? (
+              {!result.story ? (
+                <Text style={styles.note}>見つかってきたことを、さかのぼって調べています…</Text>
+              ) : result.story.length ? (
                 result.story.slice(-8).map((e) => (
                   <View key={`${e.at}${e.word}${e.stage}`} style={styles.ev}>
                     <Text style={styles.evDate}>{md(e.at)}</Text>
