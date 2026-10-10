@@ -6,8 +6,6 @@ import { useCaptures, useDeviceId } from '../useCaptures';
 import { meCache } from '../meCache';
 import SAMPLE from '../meSampleResult.json';
 import HelpStar from './HelpStar';
-import { CATEGORY_COLOR } from '../wordCloud';
-import { WORD_CATEGORY } from '../words';
 import { SOURCE_DAYS, computeMe, examples, type Example, type MeResult, type SourceItem } from '../flow';
 
 // わたしのこと（夜明け）。川の画面の上に重ねて出す（SPEC 第2部 C3.）。
@@ -348,17 +346,12 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
   );
 }
 
-// 言葉：明朝の字の前に、種類の色（夕空と同じ CATEGORY_COLOR）の小さな丸
+// 言葉：明朝の字だけ（種類の色の丸はやめた。意味がどこにも書いていなかった。矢印の左はいつも「していること」、右は元気・好奇心の言葉で、置き場所で分かる。2026-10-10 ユーザー「A」）
 function Word({ word }: { word: string }) {
-  const [r, g, b] = CATEGORY_COLOR[WORD_CATEGORY[word] ?? 'emotion'];
-  const k = 0.78; // 丸は少し濃くして、明るい紙の上でも見えるように
   return (
-    <View style={styles.word}>
-      <View style={[styles.wordDot, { backgroundColor: `rgb(${Math.round(r * k)},${Math.round(g * k)},${Math.round(b * k)})` }]} />
-      <Text style={styles.wordText} numberOfLines={1}>
-        {word}
-      </Text>
-    </View>
+    <Text style={styles.wordText} numberOfLines={1}>
+      {word}
+    </Text>
   );
 }
 
@@ -444,8 +437,6 @@ const styles = StyleSheet.create({
   empty: { fontSize: 13, color: SUB, fontFamily: SERIF },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   pair: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, flexWrap: 'wrap', gap: 10 },
-  word: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  wordDot: { width: 6, height: 6, borderRadius: 3 },
   wordText: { fontSize: 16, color: INK, fontFamily: SERIF },
   arrow: { fontSize: 13, color: 'rgba(43,38,64,0.45)' },
   meter: { flexDirection: 'row', gap: 4 },
@@ -455,7 +446,7 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendText: { fontSize: 11, color: SUB, fontFamily: SERIF },
   tl: { paddingVertical: 10, gap: 8 },
-  steps: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 12 },
+  steps: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepDate: { fontSize: 12, color: SUB, fontFamily: SERIF },
   stepArrow: { fontSize: 14, color: 'rgba(43,38,64,0.4)' },
