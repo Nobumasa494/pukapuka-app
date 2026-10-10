@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue, useAnimatedStyle, useAnimatedProps, useAnimatedReaction, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI,
@@ -92,7 +92,7 @@ const GLINT = 26;
 // 押せると分かるように、4秒に1回、星が「きらん」と光り、月のうしろの淡い光（月の暈）も一瞬明るくなる。
 // 押した瞬間は少し縮んで明るくなり、軽く振動する
 // （ユーザー「月ボタンが押せる感を出したい」→ 暈が息づく案 →「きらんと光るがいいかも、４秒に一回くらい」2026-10-10）
-function LookBackMoon({ onPress }: { onPress: () => void }) {
+function LookBackMoon({ onPress, disabled }: { onPress: () => void; disabled?: boolean }) {
   const kiran = useSharedValue(0);
   const pressed = useSharedValue(0);
   useEffect(() => {
@@ -116,7 +116,8 @@ function LookBackMoon({ onPress }: { onPress: () => void }) {
   const moonStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 - 0.12 * pressed.value }] }));
   return (
     <Pressable
-      style={styles.archiveBtn}
+      // 水辺以外では押させない。ここ（ふつうの部品）の style なら、web でも戻したときに正しく効く
+      style={[styles.archiveBtn, { pointerEvents: disabled ? 'none' : 'auto' }]}
       hitSlop={16}
       onPressIn={() => {
         pressed.set(withTiming(1, { duration: 80 }));
@@ -124,6 +125,7 @@ function LookBackMoon({ onPress }: { onPress: () => void }) {
       }}
       onPressOut={() => pressed.set(withTiming(0, { duration: 220 }))}
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel="振り返る"
     >
@@ -1148,26 +1150,29 @@ export default function Home() {
       />
 
       {/* 押させない指定は style で（props の pointerEvents は古い書き方で、効かないことがあった。夜空の右上を押すと、見えない「島（試作）」が押されて、島の画面が上に開き、夜空のボタンが全部押せなくなった 2026-10-09） */}
-      <Animated.View style={[styles.uiLayer, uiStyle, { pointerEvents: atRiver ? 'box-none' : 'none' }]}>
-        {/* 開いている間は、ほかの所を押すと閉じる */}
-        {lookBackOpen && atRiver && <Pressable style={StyleSheet.absoluteFill} onPress={() => setLookBackOpen(false)} />}
-        {/* 振り返る：右上の小さな月と星（文字のボタンは景色から浮いた。ユーザー「ダサい」→ 印だけ「月と星」2026-10-10） */}
-        <LookBackMoon onPress={() => setLookBackOpen((o) => !o)} />
-        {/* 行き先を選ぶ（決定 2026-10-10。ユーザー「振り返るのボタン、夕空か夜空かを選べるようにしたい」） */}
-        {lookBackOpen && atRiver && (
-          <View style={styles.lookBackMenu}>
-            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={startTransition}>
-              <Text style={styles.lookBackItem}>夕空</Text>
-            </Pressable>
-            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToNight}>
-              <Text style={styles.lookBackItem}>星空</Text>
-            </Pressable>
-            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToMe}>
-              <Text style={styles.lookBackItem}>わたしのこと</Text>
-            </Pressable>
-          </View>
-        )}
+      {/* 月と星・行き先のメニュー・閉じるための面は、画面全体をおおう層に入れず、それぞれ直接置く（2026-10-10、ユーザー「1回目は反応するが2回目は反応しない」）。
+          web では、押させない指定の 'box-none' が書けず（'auto' と同じになる）、一度 'none' にすると 'none' が残った。
+          月と星は自分で押させない指定を持ち（水辺以外では押せない）、メニューと閉じる面は水辺で開いているときだけ置く */}
+      {lookBackOpen && atRiver && <Pressable style={[StyleSheet.absoluteFill, { zIndex: 9 }]} onPress={() => setLookBackOpen(false)} />}
+      {/* 振り返る：右上の小さな月と星（文字のボタンは景色から浮いた。ユーザー「ダサい」→ 印だけ「月と星」2026-10-10） */}
+      {/* 包みは押させない（切りかえない）。押せるかどうかは中の月と星が決める。web は子の 'auto' で押せ、スマホは 'box-none' で子だけ押せる */}
+      <Animated.View style={[styles.moonSpot, uiStyle, { pointerEvents: Platform.OS === 'web' ? 'none' : 'box-none' }]}>
+        <LookBackMoon onPress={() => setLookBackOpen((o) => !o)} disabled={!atRiver} />
       </Animated.View>
+      {/* 行き先を選ぶ（決定 2026-10-10。ユーザー「振り返るのボタン、夕空か夜空かを選べるようにしたい」） */}
+      {lookBackOpen && atRiver && (
+        <View style={styles.lookBackMenu}>
+          <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={startTransition}>
+            <Text style={styles.lookBackItem}>夕空</Text>
+          </Pressable>
+          <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToNight}>
+            <Text style={styles.lookBackItem}>星空</Text>
+          </Pressable>
+          <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToMe}>
+            <Text style={styles.lookBackItem}>わたしのこと</Text>
+          </Pressable>
+        </View>
+      )}
 
       <Animated.View style={[styles.bubbleClip, riseStyle, { pointerEvents: atRiver ? 'auto' : 'none' }]}>
         <BubbleLayer
@@ -1271,7 +1276,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.3,
   },
-  archiveBtn: { position: 'absolute', top: 52, right: 16, zIndex: 10, alignItems: 'center', justifyContent: 'center' },
+  moonSpot: { position: 'absolute', top: 52, right: 16, zIndex: 10 },
+  archiveBtn: { alignItems: 'center', justifyContent: 'center' },
   // 星の真ん中（viewBox 30×26 の (24, 7.1) を 34×30 に広げた位置）
   moonGlint: { position: 'absolute', left: 27.2 - GLINT / 2, top: 8.2 - GLINT / 2, width: GLINT, height: GLINT },
   moonHalo: { position: 'absolute', left: 17 - MOON_HALO / 2, top: 15 - MOON_HALO / 2, width: MOON_HALO, height: MOON_HALO },
