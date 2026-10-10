@@ -3,37 +3,34 @@
 **疲れている社会人が、30秒で言葉を拾うだけで、自分の好奇心の源に気づき、それが育っていくのが見えるアプリ。**
 
 - 川を流れてくる言葉の泡を、ピンときたら拾うだけ。文字は打たなくていい
-- 画面ごとに1つの問い・1つの分析。数字とグラフを出すのは「わたしのこと」だけ
+- 画面ごとに1つの問い・1つの分析。数字とグラフを出すのは「夜明け」だけ
 - 育てる行動はアプリの外で、本人が選ぶ。アプリは気づきと育ちを映す鏡
 
-## 画面（方針。2026-10-07）
+## 画面
 
-見本の絵と例の言葉は仮のものです。詳しくは [docs/SPEC.md](docs/SPEC.md) の「MVP」と「気づきの日記」。
+水辺で言葉を拾い、夕空・星空・夜明けで振り返り、日記に書く。夕方から夜、朝、昼へと、1日がひと回りするようにつながっています。
+水辺の右上の「月と星」から、どの画面へも行けます。
 
-| 画面 | 問い | 分析 | いつ作るか |
-|---|---|---|---|
-| ことばの川 | 今、どんな言葉がピンとくる？ | （言葉を集める入口） | MVP |
-| 拾ったことば | このごろ、何を拾ってる？ | 集計（回数・強さ） | MVP |
-| 夜空 | 何と何が、いつも一緒？ | 無向ネットワーク・コミュニティ検出 | MVP |
-| わたしのこと | 何のあとに元気・好奇心が来る？ それは育ってる？ | 有向ネットワーク（入次数・PageRank・強連結成分分解）＋時間の変化 | MVP |
-| 気づきの日記 | 気づいたあと、自分で試したことを残す | （分析なし。川とは独立） | MVP のあと |
+<table>
+  <tr>
+    <td align="center" width="20%"><img src="docs/screens/1_river.png" alt="水辺"><br><b>水辺</b>（夕方）</td>
+    <td align="center" width="20%"><img src="docs/screens/2_words.png" alt="夕空"><br><b>夕空</b></td>
+    <td align="center" width="20%"><img src="docs/screens/3_sky.png" alt="星空"><br><b>星空</b>（夜）</td>
+    <td align="center" width="20%"><img src="docs/screens/4_me.png" alt="夜明け"><br><b>夜明け</b></td>
+    <td align="center" width="20%"><img src="docs/screens/5_diary.png" alt="日記"><br><b>日記</b>（昼）</td>
+  </tr>
+</table>
 
-![ことばの川](docs/screens/1_river.png)
-![拾ったことば](docs/screens/2_words.png)
-![夜空](docs/screens/3_sky.png)
-![わたしのこと](docs/screens/4_me.png)
-![気づきの日記](docs/screens/5_diary.png)
+| 画面 | 何をする | 見えること |
+|---|---|---|
+| 水辺 | 川を流れてくる言葉の泡を、ピンときたら拾う。長く押すほど強い気持ち | （言葉を集める入口） |
+| 夕空 | このごろ、何を拾っている？ | 拾った回数は文字の大きさ、気持ちの強さはキラキラと光 |
+| 星空 | 何と何が、いつも一緒？ | よく一緒に拾う言葉が、線でつながって星座になる |
+| 夜明け | 何のあとに、元気・好奇心が来る？ それは育っている？ | 「◯◯の日のあとに、△△を拾う」と、その回数。数字を出すのはこの画面だけ |
+| 日記 | 自分で書くだけの場所。カレンダーで振り返る | 書いた日に小さな印。アプリは何もコメントしない（川とはつながらない） |
 
-画像を直すときは `docs/screens/screens.html` を直して `node docs/screens/render.mjs` で作り直す。
-
-## 試作の画面（開発中のスクリーンショット）
-<img width="251" height="389" alt="image" src="https://github.com/user-attachments/assets/860c86b0-f667-4d84-ba82-22be21b67293" />
-
-<img width="213" height="383" alt="image" src="https://github.com/user-attachments/assets/20201881-6012-4627-8d58-59a6bf0a5592" />
-
-<img width="220" height="382" alt="image" src="https://github.com/user-attachments/assets/f5de6c16-4928-4f0e-8207-a0c7ede90c3f" />
-<img width="703" height="374" alt="image" src="https://github.com/user-attachments/assets/0b4fd77a-20ec-4bb7-99d5-017be191479d" />
-
+絵は、開発中のアプリ（web・見本のダミーの記録）の画面です。言葉や日記は仮のものです。
+詳しくは [docs/SPEC.md](docs/SPEC.md)。絵を撮り直すときは、web を 8091 で立ててから `node docs/screens/render.mjs`。
 
 ## 開発に必要なもの
 

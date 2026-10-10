@@ -7,7 +7,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
 await p.goto(url, { waitUntil: 'networkidle', timeout: 90000 });
 await p.waitForTimeout(5000);
 const X = 1280 - 33, Y = 67;
-const menu = async () => (await p.getByText('わたしのこと', { exact: true }).count()) > 0;
+const menu = async () => (await p.getByText('夜明け', { exact: true }).count()) > 0;
 const open = async () => { await p.mouse.click(X, Y); await p.waitForTimeout(700); return menu(); };
 let ok = true;
 const check = (name, v) => { console.log(v ? '✅' : '❌', name); if (!v) ok = false; };
@@ -27,7 +27,7 @@ await p.mouse.click(X, Y); await p.waitForTimeout(800);
 const t = p.getByText('水辺へ戻る'); if (await t.count()) await t.first().click({ force: true });
 await p.waitForTimeout(4000);
 check('星空から戻ったあと開く', await open());
-for (const [dest, back, wait] of [['わたしのこと', '← 水辺へ', 2500], ['星空', null, 2500], ['夕空', '← 水辺へ', 4500], ['わたしのこと', '← 水辺へ', 2500]]) {
+for (const [dest, back, wait] of [['夜明け', '← 水辺へ', 2500], ['星空', null, 2500], ['夕空', '← 水辺へ', 4500], ['夜明け', '← 水辺へ', 2500]]) {
   if (!(await menu())) await open();
   await p.getByText(dest, { exact: true }).first().click();
   await p.waitForTimeout(wait);

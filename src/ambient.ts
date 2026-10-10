@@ -33,7 +33,7 @@ const CHIME_VOICES = 2;
 type Voice = { player: AudioPlayer; ready: boolean; startedAt: number };
 
 export type Ambient = {
-  setScene: (scene: Scene, fadeMs: number) => void;
+  setScene: (scene: Scene | null, fadeMs: number) => void; // null は曲なし（日記）
   setMuted: (muted: boolean) => void;
   chime: (strength: number) => void;
   dispose: () => void;
@@ -126,7 +126,7 @@ export function createAmbient(): Ambient {
     setScene(next, fadeMs) {
       if (next === scene) return;
       scene = next;
-      ensure(next);
+      if (next) ensure(next);
       for (const s of Object.keys(players) as Scene[]) {
         target[s] = s === next ? BGM_VOLUME * SCENE_VOLUME[s] : 0;
         rate[s] = BGM_VOLUME / Math.max(1, fadeMs);

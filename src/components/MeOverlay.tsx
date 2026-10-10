@@ -243,7 +243,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
         locations={[0, 0.7, 1]}
         style={[styles.headerFade, { pointerEvents: 'none' }]}
       />
-      <Text style={[styles.title, { pointerEvents: 'none' }]}>{showSample ? 'わたしのこと（見本）' : 'わたしのこと'}</Text>
+      <Text style={[styles.title, { pointerEvents: 'none' }]}>{showSample ? '夜明け（見本）' : '夜明け'}</Text>
       {/* 左上：ふだんは「← 水辺へ」。見本を見ているときは、見本をとじる「×」（星空と同じ） */}
       {introOpen ? null : showSample ? (
         <Pressable style={[styles.closeBtn, styles.closeLeft]} hitSlop={14} onPress={() => setShowSample(false)} accessibilityLabel="見本をとじる">
@@ -262,7 +262,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
           onPressIn={() => Haptics.selectionAsync()}
           onPress={() => setIntroOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel="わたしのことの見方"
+          accessibilityLabel="夜明けの見方"
         >
           <HelpStar color={HELP_COLOR} glint="#fffaf2" />
         </Pressable>
@@ -271,7 +271,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
         <View style={styles.intro}>
           <LinearGradient colors={['#f6eef2', '#fbf3ec']} style={StyleSheet.absoluteFill} />
           <ScrollView contentContainerStyle={styles.introScroll} showsVerticalScrollIndicator={false}>
-            <Text style={styles.introTitle}>わたしのことの見方</Text>
+            <Text style={styles.introTitle}>夜明けの見方</Text>
             <View style={styles.introBlock}>
               {INTRO_LINES.map(([label, body], i) => (
                 <View key={label} style={[styles.introRow, i === INTRO_LINES.length - 1 && { borderBottomWidth: 0 }]}>
