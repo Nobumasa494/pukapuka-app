@@ -126,6 +126,8 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             <Text style={styles.heroQuiet}>元気な日が、あと少し集まると{'\n'}見えてきます</Text>
           ) : top ? (
             <View style={{ alignItems: 'center' }}>
+              {/* 新しく確かになったものが上にあるとき、なぜ上にあるかを添える（一覧の先頭と違うことがあるため。2026-10-10 ユーザー「はい」） */}
+              {result.topIsNew && <Text style={styles.heroNew}>新しく見つかりました</Text>}
               <Text style={styles.hero}>{heroText(top, counts[`${top.word}→${top.to}`] ?? 0)}</Text>
               {top.stage === 'sure' && <Text style={styles.heroCount}>この12週で {counts[`${top.word}→${top.to}`] ?? 0}回</Text>}
               {/* たとえば：実際にそうなった日（割合の数字より分かりやすい） */}
@@ -409,6 +411,7 @@ const styles = StyleSheet.create({
   tagTextSeen: { color: SUB },
   count: { fontSize: 18, color: INK, fontFamily: SERIF },
   countUnit: { fontSize: 11, color: SUB },
+  heroNew: { marginBottom: 18, fontSize: 12, color: PLUM, letterSpacing: 3, fontFamily: SERIF },
   heroCount: { marginTop: 14, fontSize: 13, color: SUB, fontFamily: SERIF, letterSpacing: 1 },
   found: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
   foundDate: { width: 64, fontSize: 13, color: SUB, fontFamily: SERIF },

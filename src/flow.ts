@@ -638,7 +638,7 @@ export const LIST_MAX = 8;
 export type StoryEvent = { at: number; word: string; to: string; stage: 'tentative' | 'sure' };
 export type MeResult =
   | { few: true }
-  | { few: false; top: SourceItem | null; list: SourceItem[]; loops: LoopItem[]; story: StoryEvent[] | null; shift: { before: string[]; after: string[] } | null }; // story が null＝まだ計算中
+  | { few: false; top: SourceItem | null; topIsNew?: boolean; list: SourceItem[]; loops: LoopItem[]; story: StoryEvent[] | null; shift: { before: string[]; after: string[] } | null }; // story が null＝まだ計算中。topIsNew＝いちばん上が、新しく確かになったもの
 
 // スナップショットの並び（古い順、最後が今）から、画面に出すものをまとめる
 //  ・一覧：今の源。1つ前・2つ前の週の終わりに②③だった言葉は、②で残す（2週間残す。決定 2026-10-10）
@@ -651,7 +651,8 @@ export function assemble(snaps: Snapshot[], captures: Cap[], now: number): MeRes
   const list = sortItems(holdItems(cur.sources, past.map((x) => x.sources), (x) => x.word)).slice(0, LIST_MAX);
   const old = past[0];
   const wasSure = new Set(old ? old.sources.filter((x) => x.stage === 'sure').map((x) => x.word) : []);
-  const top = (old ? list.find((x) => x.stage === 'sure' && !wasSure.has(x.word)) : undefined) ?? list[0] ?? null;
+  const fresh = old ? list.find((x) => x.stage === 'sure' && !wasSure.has(x.word)) : undefined;
+  const top = fresh ?? list[0] ?? null;
   const loops = sortItems(holdItems(cur.loops, past.map((x) => x.loops), (x) => x.a + '\n' + x.b)).slice(0, 3);
   const rank = new Map<string, number>();
   const story: StoryEvent[] = [];
@@ -666,7 +667,7 @@ export function assemble(snaps: Snapshot[], captures: Cap[], now: number): MeRes
       }
     }
   }
-  return { few: false, top, list, loops, story, shift: genkiShift(captures, now) };
+  return { few: false, top, topIsNew: !!fresh, list, loops, story, shift: genkiShift(captures, now) };
 }
 
 // すべてをその場で計算する（テスト・試し用）。アプリでは computeMe（とっておいた結果を使う）
