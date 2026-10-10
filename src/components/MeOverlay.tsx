@@ -30,7 +30,7 @@ const SERIF = Platform.select({ ios: 'Hiragino Mincho ProN', android: 'serif', d
 const INTRO_LINES: [string, string][] = [
   ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。新しく見つかったものがあれば、それを上に出します。「たとえば」は、実際にそうなった日。'],
   ['01 そのあとに', 'その日から3日以内に、元気・好奇心の言葉を拾ったこと。数字は、この12週でそうなった回数。'],
-  ['02 行ったり来たり', '何日かのあいだに、交互に拾っている二つ。良い・悪いはありません。'],
+  ['02 行ったり来たり', '行きも帰りも、よく起きている二つ。数字は、その日のあと3日以内に拾った回数。良い・悪いはありません。'],
   ['03 よく拾う言葉の変化', '元気・好奇心の言葉を拾った日の数を、12週前ごろ（4週ぶん）と最近（4週ぶん）で比べたもの。'],
 ];
 const HELP_COLOR = '#8f5f8a';
@@ -174,9 +174,21 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               })()}
             </Chapter>
 
-            <Chapter no="02" title="行ったり来たり" note="何日かのあいだに、交互に拾っている二つ">
+            <Chapter no="02" title="行ったり来たり" note="行きも帰りも、よく起きている二つ">
               {result.loops.some((x) => x.stage === 'sure') ? (
-                result.loops.filter((x) => x.stage === 'sure').map((x) => <Row key={x.a + x.b} a={x.a} b={x.b} mark="⇄" n={counts[`${x.a}⇄${x.b}`] ?? 0} />)
+                result.loops
+                  .filter((x) => x.stage === 'sure')
+                  .map((x) => (
+                    <View key={x.a + x.b} style={styles.loopBlock}>
+                      <Text style={styles.loopTitle}>
+                        {x.a}
+                        <Text style={styles.mark}>{'  ⇄  '}</Text>
+                        {x.b}
+                      </Text>
+                      <Row a={x.a} b={x.b} mark="⟶" n={counts[`${x.a}→${x.b}`] ?? 0} small />
+                      <Row a={x.b} b={x.a} mark="⟶" n={counts[`${x.b}→${x.a}`] ?? 0} small />
+                    </View>
+                  ))
               ) : (
                 <Text style={styles.empty}>拾う日が増えると、ここに並んでいきます</Text>
               )}
@@ -306,9 +318,9 @@ function Rule({ label }: { label: string }) {
 
 // 章：小さな番号と短い名前。説明は1行だけ（冗長にしない）
 // 1行：散歩 ⟶ わくわく ……… 9回
-function Row({ a, b, mark, n }: { a: string; b: string; mark: string; n: number }) {
+function Row({ a, b, mark, n, small }: { a: string; b: string; mark: string; n: number; small?: boolean }) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, small && styles.rowSmall]}>
       {/* 言葉は途中で切らない：入りきらないときは、言葉ごと次の行へ */}
       <View style={styles.rowWordsBox}>
         <Text style={styles.rowWords}>{a}</Text>
@@ -405,6 +417,9 @@ const styles = StyleSheet.create({
   shiftHeadArrow: { width: 34, textAlign: 'center', fontSize: 12, color: 'rgba(43,38,64,0.4)' },
   shiftNum: { width: 64, textAlign: 'right', fontSize: 17, color: SUB, fontFamily: SERIF },
   shiftUp: { color: INK },
+  loopBlock: { paddingTop: 4 },
+  loopTitle: { fontSize: 16, color: INK, fontFamily: SERIF, letterSpacing: 1 },
+  rowSmall: { paddingVertical: 8, paddingLeft: 12, borderBottomWidth: 0 },
   // 章
   chapter: { paddingVertical: 34, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: LINE },
   chHead: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },

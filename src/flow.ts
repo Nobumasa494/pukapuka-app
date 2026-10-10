@@ -773,6 +773,10 @@ export function countsFor(captures: Cap[], now: number, r: MeResult): Counts {
   const out: Counts = {};
   if (r.few) return out;
   for (const x of [...r.list, ...(r.top ? [r.top] : [])]) out[`${x.word}→${x.to}`] = pairCount(captures, now, x.word, x.to);
-  for (const x of r.loops) out[`${x.a}⇄${x.b}`] = loopCount(captures, now, x.a, x.b);
+  // 行ったり来たりは、行き（a→b）と帰り（b→a）を別々に数える（合計は、何を足したのか分かりにくい。2026-10-10）
+  for (const x of r.loops) {
+    out[`${x.a}→${x.b}`] = pairCount(captures, now, x.a, x.b);
+    out[`${x.b}→${x.a}`] = pairCount(captures, now, x.b, x.a);
+  }
   return out;
 }
