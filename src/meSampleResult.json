@@ -133,13 +133,29 @@
    }
   ],
   "shift": {
-   "before": [
-    "わくわく",
-    "ひらめいた"
-   ],
-   "after": [
-    "やってみたい",
-    "もっと知りたい"
+   "beforeFrom": 20653,
+   "afterFrom": 20709,
+   "rows": [
+    {
+     "word": "やってみたい",
+     "before": 3,
+     "after": 13
+    },
+    {
+     "word": "もっと知りたい",
+     "before": 2,
+     "after": 10
+    },
+    {
+     "word": "ほっとした",
+     "before": 4,
+     "after": 6
+    },
+    {
+     "word": "わくわく",
+     "before": 7,
+     "after": 8
+    }
    ]
   }
  },

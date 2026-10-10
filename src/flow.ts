@@ -450,14 +450,18 @@ export function loopsTested(
 // B：元気の中身の変わり方。最初の4週と最近の4週で、よく拾った元気・好奇心の言葉（拾った日の数）を2つずつ。
 // 偶然とは比べない事実（「よく拾った」）。8週たまるまでは出さない
 export const SHIFT_WEEKS = 4;
-export function genkiShift(captures: Cap[], now: number): { before: string[]; after: string[] } | null {
+// よく拾う言葉の変化：直近12週の、はじめの4週と最近の4週で、元気・好奇心の言葉を拾った日の数を比べる。
+// どちらかでよく拾った言葉を4つまで、増えた順に（2026-10-10、ユーザー「うつりかわりの意味」→ 時期と日数を出す形に）
+export type ShiftRow = { word: string; before: number; after: number };
+export type Shift = { beforeFrom: number; afterFrom: number; rows: ShiftRow[] }; // beforeFrom・afterFrom は暦の日の番号（dayNumber）
+export function genkiShift(captures: Cap[], now: number): Shift | null {
   if (!captures.length) return null;
   const firstDay = dayNumber(Math.min(...captures.map((c) => c.capturedAt)));
   const today = dayNumber(now);
   const span = SHIFT_WEEKS * 7;
   if (today - firstDay + 1 < span * 2) return null;
   const from = Math.max(firstDay, today - SOURCE_DAYS + 1); // 源と同じ12週の中で比べる
-  const top = (lo: number, hi: number) => {
+  const count = (lo: number, hi: number) => {
     const days = new Map<string, Set<number>>();
     for (const c of captures) {
       const d = dayNumber(c.capturedAt);
@@ -465,9 +469,15 @@ export function genkiShift(captures: Cap[], now: number): { before: string[]; af
       if (!days.has(c.word)) days.set(c.word, new Set());
       days.get(c.word)!.add(d);
     }
-    return [...days].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0])).slice(0, 2).map(([w]) => w);
+    return new Map([...days].map(([w, s]) => [w, s.size]));
   };
-  return { before: top(from, from + span - 1), after: top(today - span + 1, today) };
+  const b = count(from, from + span - 1), a = count(today - span + 1, today);
+  const rows = [...new Set([...b.keys(), ...a.keys()])]
+    .map((word) => ({ word, before: b.get(word) ?? 0, after: a.get(word) ?? 0 }))
+    .sort((x, y) => Math.max(y.before, y.after) - Math.max(x.before, x.after) || x.word.localeCompare(y.word))
+    .slice(0, 4)
+    .sort((x, y) => y.after - y.before - (x.after - x.before) || x.word.localeCompare(y.word));
+  return { beforeFrom: from, afterFrom: today - span + 1, rows };
 }
 
 // ---- わたしのこと全体の計算（速くした形。2026-10-10） ----
@@ -638,7 +648,7 @@ export const LIST_MAX = 8;
 export type StoryEvent = { at: number; word: string; to: string; stage: 'tentative' | 'sure' };
 export type MeResult =
   | { few: true }
-  | { few: false; top: SourceItem | null; topIsNew?: boolean; list: SourceItem[]; loops: LoopItem[]; story: StoryEvent[] | null; shift: { before: string[]; after: string[] } | null }; // story が null＝まだ計算中。topIsNew＝いちばん上が、新しく確かになったもの
+  | { few: false; top: SourceItem | null; topIsNew?: boolean; list: SourceItem[]; loops: LoopItem[]; story: StoryEvent[] | null; shift: Shift | null }; // story が null＝まだ計算中。topIsNew＝いちばん上が、新しく確かになったもの
 
 // スナップショットの並び（古い順、最後が今）から、画面に出すものをまとめる
 //  ・一覧：今の源。1つ前・2つ前の週の終わりに②③だった言葉は、②で残す（2週間残す。決定 2026-10-10）

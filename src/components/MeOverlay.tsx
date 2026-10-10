@@ -31,7 +31,7 @@ const INTRO_LINES: [string, string][] = [
   ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。新しく見つかったものがあれば、それを上に出します。「たとえば」は、実際にそうなった日。'],
   ['01 そのあとに', 'その日から3日以内に、元気・好奇心の言葉を拾ったこと。数字は、この12週でそうなった回数。'],
   ['02 行ったり来たり', '何日かのあいだに、交互に拾っている二つ。良い・悪いはありません。'],
-  ['03 うつりかわり', 'よく拾う元気・好奇心の言葉の、はじめのころと最近。'],
+  ['03 よく拾う言葉の変化', '元気・好奇心の言葉を拾った日の数を、12週前ごろ（4週ぶん）と最近（4週ぶん）で比べたもの。'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
@@ -42,6 +42,7 @@ function heroText(x: SourceItem, n: number): string {
   // 確かめ中・見えはじめ：確かさは言わず、数えた事実だけ（2026-10-10 ユーザー「多いかもは曖昧で混乱する」）
   return `「${x.word}」の日のあとに、\n「${x.to}」を拾った日が\n${n}回ありました`;
 }
+const monthOf = (day: number, shiftDays = 0) => `${new Date((day + shiftDays + 14) * 86400000).getUTCMonth() + 1}月`; // 4週の真ん中のあたりの月
 const mdDay = (day: number, shiftDays = 0) => {
   const d = new Date((day + shiftDays) * 86400000); // dayNumber は UTC の日で数えている
   return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
@@ -181,18 +182,30 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               )}
             </Chapter>
 
-            <Chapter no="03" title="うつりかわり" note="よく拾う、元気・好奇心の言葉" last>
+            {/* よく拾う言葉の変化：時期と日数で、前と最近を並べる（増えた順） */}
+            <Chapter no="03" title="よく拾う言葉の変化" note="元気・好奇心の言葉を拾った日の数" last>
               {result.shift ? (
-                <View style={styles.shift}>
-                  <View style={styles.shiftCol}>
-                    <Text style={styles.shiftHead}>はじめのころ</Text>
-                    {result.shift.before.map((w) => <Text key={w} style={styles.shiftWordOld}>{w}</Text>)}
-                  </View>
-                  <Text style={styles.shiftArrow}>⟶</Text>
-                  <View style={styles.shiftCol}>
+                <View>
+                  <View style={styles.shiftHeadRow}>
+                    <Text style={styles.shiftWordCol} />
+                    <Text style={styles.shiftHead}>{monthOf(result.shift.beforeFrom, shiftDays)}ごろ</Text>
+                    <Text style={styles.shiftHeadArrow} />
                     <Text style={styles.shiftHead}>最近</Text>
-                    {result.shift.after.map((w) => <Text key={w} style={styles.shiftWord}>{w}</Text>)}
                   </View>
+                  {result.shift.rows.map((x) => (
+                    <View key={x.word} style={styles.shiftRow}>
+                      <Text style={[styles.rowWords, styles.shiftWordCol]}>{x.word}</Text>
+                      <Text style={styles.shiftNum}>
+                        {x.before}
+                        <Text style={styles.countUnit}>日</Text>
+                      </Text>
+                      <Text style={styles.shiftHeadArrow}>⟶</Text>
+                      <Text style={[styles.shiftNum, x.after > x.before && styles.shiftUp]}>
+                        {x.after}
+                        <Text style={styles.countUnit}>日</Text>
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               ) : (
                 <Text style={styles.empty}>8週間たまると見えてきます</Text>
@@ -363,10 +376,6 @@ const styles = StyleSheet.create({
   step: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepDate: { fontSize: 12, color: SUB, fontFamily: SERIF },
   stepArrow: { fontSize: 14, color: 'rgba(43,38,64,0.4)' },
-  shift: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  shiftCol: { flex: 1, gap: 8 },
-  shiftHead: { fontSize: 11, color: SUB, letterSpacing: 2, fontFamily: SERIF, marginBottom: 2 },
-  shiftArrow: { fontSize: 14, color: 'rgba(43,38,64,0.45)', marginTop: 22 },
   // 1行と、確かさの札
   rowWordsBox: { flexShrink: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 2 },
   rowWords: { fontSize: 15.5, color: INK, fontFamily: SERIF },
@@ -389,6 +398,13 @@ const styles = StyleSheet.create({
   histStep: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   histDate: { fontSize: 12, color: SUB, fontFamily: SERIF },
   histArrow: { fontSize: 12, color: 'rgba(43,38,64,0.4)' },
+  shiftHeadRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 6 },
+  shiftRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
+  shiftWordCol: { flex: 1 },
+  shiftHead: { width: 64, textAlign: 'right', fontSize: 11, color: SUB, letterSpacing: 1, fontFamily: SERIF },
+  shiftHeadArrow: { width: 34, textAlign: 'center', fontSize: 12, color: 'rgba(43,38,64,0.4)' },
+  shiftNum: { width: 64, textAlign: 'right', fontSize: 17, color: SUB, fontFamily: SERIF },
+  shiftUp: { color: INK },
   // 章
   chapter: { paddingVertical: 34, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: LINE },
   chHead: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
@@ -421,8 +437,6 @@ const styles = StyleSheet.create({
   tlKey: { flexDirection: 'row', gap: 18, marginTop: 10 },
   tlKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   // うつりかわり
-  shiftWordOld: { fontSize: 17, color: SUB, fontFamily: SERIF },
-  shiftWord: { fontSize: 19, color: INK, fontFamily: SERIF },
   meterDotBig: { width: 8, height: 8, borderRadius: 4 },
   // 上の見出し・ボタン
   headerFade: { position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_H },
