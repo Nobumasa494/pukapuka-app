@@ -40,7 +40,7 @@ const HELP_COLOR = '#8f5f8a';
 function heroText(x: SourceItem, n: number): string {
   if (x.stage === 'sure') return `「${x.word}」の日のあとは、\n「${x.to}」を\n拾うことが多いみたい`;
   // 確かめ中・見えはじめ：確かさは言わず、数えた事実だけ（2026-10-10 ユーザー「多いかもは曖昧で混乱する」）
-  return `「${x.word}」の日のあとに、\n「${x.to}」を拾った日は、\nいま${n}回です`;
+  return `「${x.word}」の日のあとに、\n「${x.to}」を\n拾った日は、\nいま${n}回です`;
 }
 const shiftLabel = (n: number) => (n === 7 ? '1週' : n === 14 ? '2週' : n === 28 ? '4週' : '6週');
 const monthOf = (day: number, shiftDays = 0) => `${new Date((day + shiftDays + 14) * 86400000).getUTCMonth() + 1}月`; // 4週の真ん中のあたりの月
@@ -131,7 +131,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               {result.topIsNew && <Text style={styles.heroNew}>新しく見つかりました</Text>}
               <Text style={styles.hero}>{heroText(top, counts[`${top.word}→${top.to}`] ?? 0)}</Text>
               {top.stage === 'sure' && <Text style={styles.heroCount}>この12週で {counts[`${top.word}→${top.to}`] ?? 0}回</Text>}
-              {top.stage !== 'sure' && <Text style={styles.heroCount}>あと数回増えると、はっきりしてくるかもしれません</Text>}
+              {top.stage !== 'sure' && <Text style={styles.heroCount}>あと数回増えると、{'\n'}はっきりしてくるかもしれません</Text>}
               {/* たとえば：実際にそうなった日（割合の数字より分かりやすい） */}
               {numbers && numbers.length > 0 && (
                 <View style={styles.ex}>
@@ -197,7 +197,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             </Chapter>
 
             {/* よく拾う言葉の変化：時期と日数で、前と最近を並べる（増えた順） */}
-            <Chapter no="03" title="よく拾う言葉の変化" note={`元気・好奇心の言葉を拾った日の数（${shiftLabel(result.shift?.span ?? 7)}どうしの比べ）`} last>
+            <Chapter no="03" title="よく拾う言葉の変化" note={`元気・好奇心の言葉の日数（${shiftLabel(result.shift?.span ?? 7)}どうし）`} last>
               {result.shift ? (
                 <View>
                   {result.shift.span < 42 && <Text style={styles.shiftNote}>まだ少ない記録での比べです。記録がたまると、比べる期間が長くなります。</Text>}
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   count: { fontSize: 18, color: INK, fontFamily: SERIF },
   countUnit: { fontSize: 11, color: SUB },
   heroNew: { marginBottom: 18, fontSize: 12, color: PLUM, letterSpacing: 3, fontFamily: SERIF },
-  heroCount: { marginTop: 14, fontSize: 13, color: SUB, fontFamily: SERIF, letterSpacing: 1 },
+  heroCount: { marginTop: 14, fontSize: 13, color: SUB, fontFamily: SERIF, letterSpacing: 1, textAlign: 'center', lineHeight: 21 },
   // わかってきた順
   hist: { paddingVertical: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
   histWords: { fontSize: 16, color: INK, fontFamily: SERIF },
