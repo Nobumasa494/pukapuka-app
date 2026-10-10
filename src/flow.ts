@@ -64,7 +64,8 @@ export function genkiSources(list: Arrow[]): { word: string; weight: number }[] 
     .sort((x, y) => y.weight - x.weight || x.word.localeCompare(y.word));
 }
 
-// 行き着きやすい気持ち（PageRank）：矢印に沿って重みを少しずつ流すのをくり返す。
+// PageRank：矢印に沿って重みを少しずつ流すのをくり返す。
+// 「行き着きやすい気持ち」に使う予定だったが、やめた（2026-10-10。毎日の記録は次の日へ必ず続くので行き止まりがなく、偶然と区別できなかった）。答え合わせの道具のために残す。
 // 矢印の出ない言葉からは、全体に均等に流す。合計は1
 export function pageRank(list: Arrow[], damping = 0.85, iterations = 100): Map<string, number> {
   const nodes = [...new Set(list.flatMap((a) => [a.from, a.to]))].sort();
