@@ -5,7 +5,7 @@
 //   散歩→わくわく 1、疲れ→わくわく 1、散歩→疲れ 0.5、散歩→不安 0.25、疲れ→不安 0.25+1、わくわく→疲れ 1+0.25、わくわく→不安 0.5、不安→疲れ 1
 // 源：散歩 1・疲れ 1。めぐり：{わくわく・不安・疲れ}（散歩には戻る矢印がない）。
 // 育ち（週）：月〜金は同じ週。言葉は 2+1+1+1+1 = 6、元気はわくわくの1 → 1/6
-import { arrows, genkiSources, cycles, growth, pageRank } from '../../src/flow';
+import { arrows, genkiSources, cycles, growth, pageRank, topSource } from '../../src/flow';
 const at = (day: number) => new Date(2026, 9, day, 20).getTime();
 const caps = [
   ['散歩', 5], ['疲れ', 5], ['疲れ', 5], ['わくわく', 6], ['疲れ', 7], ['不安', 8], ['疲れ', 9],
@@ -35,4 +35,11 @@ check('空', [arrows([]), cycles([]), growth([], 'month'), [...pageRank([])]], [
 check('4日あくと矢印なし', arrows([{ word: '散歩', capturedAt: at(1) }, { word: 'わくわく', capturedAt: at(5) }]), []);
 // 月をまたぐ（9/30 → 10/1 は次の日）
 check('月をまたいでも次の日', arrows([{ word: '散歩', capturedAt: new Date(2026, 8, 30, 23).getTime() }, { word: 'わくわく', capturedAt: new Date(2026, 9, 1, 1).getTime() }]), [{ from: '散歩', to: 'わくわく', weight: 1 }]);
+// 段階：使い始めて2週間未満・元気な日5日未満は ①文だけ。元気な日が5日たてば、2週間前でも先へ進む
+check('段階：空は①', topSource([], at(9)).stage, 'few');
+check('段階：5日目は①', topSource(caps, at(9)).stage, 'few');
+const genki5 = [1, 2, 3, 4, 5].map((d) => ({ word: 'うれしい', capturedAt: at(d) }));
+check('段階：元気な日5日なら①を出る', topSource(genki5, at(5)).stage !== 'few', true);
+check('段階：好奇心の言葉は元気な日に数えない', topSource([1, 2, 3, 4, 5].map((d) => ({ word: '面白い', capturedAt: at(d) })), at(5)).stage, 'few');
+check('段階：2週間たてば①を出る', topSource([{ word: '散歩', capturedAt: new Date(2026, 8, 20, 20).getTime() }, ...caps], at(9)).stage !== 'few', true);
 process.exit(ok ? 0 : 1);

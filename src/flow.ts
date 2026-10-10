@@ -143,3 +143,169 @@ export function growth(captures: Cap[], unit: 'week' | 'month'): { start: number
     .sort((a, b) => a[0] - b[0])
     .map(([start, b]) => ({ start, ratio: b.genki / b.total, total: b.total }));
 }
+
+// 偶然との比べ（並べかえ検定）：日ごとの言葉はそのまま、日の並びだけをでたらめに入れ替えて、矢印の重さを何度も数え直す。
+// 本物の重さ以上になった割合（p）が alpha 未満のものだけ「偶然より、はっきり多い」とする。
+// 毎日拾う言葉（疲れ・仕事）は、並びを入れ替えてもどこへでも矢印が出るので、残らない。
+// 乱数は種を決めてあるので、同じ記録からは毎回同じ結果になる
+export const FLOW_ALPHA = 0.01; // 仮の値（scripts/me/tune-test.ts で決める）
+export const SHUFFLES = 500;
+
+function rng(seed: number) {
+  let s = seed >>> 0;
+  return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
+}
+
+// 矢印の重さを、言葉の番号の表（n×n）に数える（文字列の Map より速い。並べかえで何百回も数えるため）
+function arrowMatrix(days: number[], sets: number[][], n: number): Float64Array {
+  const at = new Map(days.map((d, i) => [d, i]));
+  const m = new Float64Array(n * n);
+  days.forEach((d, i) =>
+    ARROW_WEIGHTS.forEach((weight, k) => {
+      const j = at.get(d + k + 1);
+      if (j === undefined) return;
+      for (const a of sets[i]) for (const b of sets[j]) if (a !== b) m[a * n + b] += weight;
+    }),
+  );
+  return m;
+}
+
+export type FlowResult = {
+  arrows: (Arrow & { p: number })[]; // 偶然より多い矢印
+  sources: { word: string; weight: number; p: number }[]; // 偶然より多い源（重い順）
+};
+
+export function significantFlow(captures: Cap[], alpha = FLOW_ALPHA, shuffles = SHUFFLES, seed = 1): FlowResult {
+  const byDay = wordsByDay(captures);
+  const days = [...byDay.keys()].sort((a, b) => a - b);
+  const words = [...new Set(captures.map((c) => c.word))].sort();
+  const id = new Map(words.map((w, i) => [w, i]));
+  const n = words.length;
+  const genki = words.map(isGenki);
+  const sets = days.map((d) => [...byDay.get(d)!].map((w) => id.get(w)!));
+  const srcOf = (m: Float64Array) => {
+    const s = new Float64Array(n);
+    for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) if (genki[b]) s[a] += m[a * n + b];
+    return s;
+  };
+  const real = arrowMatrix(days, sets, n);
+  const realSrc = srcOf(real);
+  const hitA = new Uint32Array(n * n);
+  const hitS = new Uint32Array(n);
+  const r = rng(seed);
+  const perm = sets.slice();
+  for (let t = 0; t < shuffles; t++) {
+    for (let i = perm.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    const m = arrowMatrix(days, perm, n);
+    for (let x = 0; x < n * n; x++) if (real[x] > 0 && m[x] >= real[x]) hitA[x]++;
+    const s = srcOf(m);
+    for (let a = 0; a < n; a++) if (realSrc[a] > 0 && s[a] >= realSrc[a]) hitS[a]++;
+  }
+  const p = (hits: number) => (1 + hits) / (1 + shuffles);
+  const outArrows: (Arrow & { p: number })[] = [];
+  for (let a = 0; a < n; a++)
+    for (let b = 0; b < n; b++) {
+      const x = a * n + b;
+      if (real[x] > 0 && p(hitA[x]) < alpha) outArrows.push({ from: words[a], to: words[b], weight: real[x], p: p(hitA[x]) });
+    }
+  const sources = words
+    .map((word, a) => ({ word, weight: realSrc[a], p: p(hitS[a]) }))
+    .filter((s) => s.weight > 0 && s.p < alpha)
+    .sort((x, y) => x.p - y.p || y.weight - x.weight || x.word.localeCompare(y.word));
+  return { arrows: outArrows, sources };
+}
+
+// 元気・好奇心の源（max-T の並べかえ検定）：「〇〇 → 元気・好奇心の言葉」の矢印をすべて試すので、1本ずつ比べると偶然でもどれかが通ってしまう。
+// そこで、矢印ごとに「偶然ならどれくらいか」からのずれ（z＝(本物−偶然の平均)÷偶然のばらつき）を出し、
+// 並べかえのたびに、全部の矢印の中でいちばん大きい z を記録する。本物の z が、その「いちばん大きい z」の上位 familyAlpha に入る矢印だけを源にする。
+// 日をまたいだ流れのない人では、何か1つでも源が出るのは、およそ familyAlpha の割合になる
+export const SOURCE_ALPHA = 0.1; // ③確か（決定 2026-10-10。scripts/me/tune-test.ts：12週で、流れのない人に出るのは約3%）
+export const SOURCE_MIN_WEIGHT = 3; // 1回きりの偶然を出さない（次の日なら3回ぶん）
+export function genkiSourcesTested(
+  captures: Cap[],
+  familyAlpha = SOURCE_ALPHA,
+  minWeight = SOURCE_MIN_WEIGHT,
+  shuffles = SHUFFLES,
+  seed = 2,
+  onlyDoing = true,
+): { word: string; to: string; weight: number; z: number }[] {
+  const byDay = wordsByDay(captures);
+  const days = [...byDay.keys()].sort((a, b) => a - b);
+  const words = [...new Set(captures.map((c) => c.word))].sort();
+  const id = new Map(words.map((w, i) => [w, i]));
+  const n = words.length;
+  const sets = days.map((d) => [...byDay.get(d)!].map((w) => id.get(w)!));
+  const cand: number[] = []; // 試す矢印（行き先が元気・好奇心の言葉）
+  // 源の候補は「していること」の言葉だけ（設計書 C3.「していることを中心に見る」）。試す組を減らすと、本物が偶然に埋もれにくい
+  for (let a = 0; a < n; a++)
+    if (!onlyDoing || WORD_CATEGORY[words[a]] === 'doing')
+      for (let b = 0; b < n; b++) if (a !== b && isGenki(words[b])) cand.push(a * n + b);
+  const real = arrowMatrix(days, sets, n);
+  const shuffled = (pass: (m: Float64Array) => void) => {
+    const r = rng(seed);
+    const perm = sets.slice();
+    for (let t = 0; t < shuffles; t++) {
+      for (let i = perm.length - 1; i > 0; i--) {
+        const j = Math.floor(r() * (i + 1));
+        [perm[i], perm[j]] = [perm[j], perm[i]];
+      }
+      pass(arrowMatrix(days, perm, n));
+    }
+  };
+  const sum = new Float64Array(cand.length);
+  const sq = new Float64Array(cand.length);
+  shuffled((m) => cand.forEach((x, k) => ((sum[k] += m[x]), (sq[k] += m[x] * m[x]))));
+  const mean = cand.map((_, k) => sum[k] / shuffles);
+  const sd = cand.map((_, k) => Math.sqrt(Math.max(sq[k] / shuffles - mean[k] ** 2, 0)) || 0.25); // ばらつき0は、いちばん小さい重さで代える
+  const maxima: number[] = [];
+  shuffled((m) => {
+    let mx = -Infinity;
+    cand.forEach((x, k) => {
+      if (m[x] >= minWeight) mx = Math.max(mx, (m[x] - mean[k]) / sd[k]);
+    });
+    maxima.push(mx);
+  });
+  maxima.sort((a, b) => b - a);
+  const cut = maxima[Math.floor(familyAlpha * shuffles)] ?? -Infinity;
+  const best = new Map<number, { word: string; to: string; weight: number; z: number }>();
+  cand.forEach((x, k) => {
+    if (real[x] < minWeight) return;
+    const z = (real[x] - mean[k]) / sd[k];
+    if (z <= cut) return;
+    const a = Math.floor(x / n);
+    const prev = best.get(a);
+    if (!prev || z > prev.z) best.set(a, { word: words[a], to: words[x % n], weight: real[x], z });
+  });
+  return [...best.values()].sort((p, q) => q.z - p.z || p.word.localeCompare(q.word));
+}
+
+// 源を見る期間：直近12週（決定 2026-10-10。6週より本物が見つかりやすく、偽物も少ない）
+export const SOURCE_DAYS = 84;
+// ②確かめ中の基準（決定 2026-10-10）：ゆるいので、3〜5回に1回は偶然。画面では必ず「〜かも」「確かめ中」と書く
+export const TENTATIVE_ALPHA = 0.3;
+export const TENTATIVE_MIN_WEIGHT = 2;
+// ①データが少ない間：使い始めて2週間、または元気な日が5日たまるまで（決定 2026-10-07）
+export const FEW_DAYS = 14;
+export const FEW_GENKI_DAYS = 5;
+
+export type SourceStage =
+  | { stage: 'few' } // ① 文だけ
+  | { stage: 'none' } // ②③のどちらも出ない（まだ見えない）
+  | { stage: 'tentative' | 'sure'; word: string; to: string; weight: number };
+
+// いちばん上に出す源を1つ選ぶ（①文だけ → ②確かめ中 → ③確か と、記録がたまるほど確かになる）
+export function topSource(captures: Cap[], now: number): SourceStage {
+  if (!captures.length) return { stage: 'few' };
+  const first = Math.min(...captures.map((c) => c.capturedAt));
+  const genkiDays = new Set(captures.filter((c) => GENKI_WORDS.has(c.word)).map((c) => dayNumber(c.capturedAt))).size;
+  if (dayNumber(now) - dayNumber(first) < FEW_DAYS && genkiDays < FEW_GENKI_DAYS) return { stage: 'few' };
+  const recent = captures.filter((c) => dayNumber(now) - dayNumber(c.capturedAt) < SOURCE_DAYS);
+  const sure = genkiSourcesTested(recent, SOURCE_ALPHA, SOURCE_MIN_WEIGHT)[0];
+  if (sure) return { stage: 'sure', word: sure.word, to: sure.to, weight: sure.weight };
+  const maybe = genkiSourcesTested(recent, TENTATIVE_ALPHA, TENTATIVE_MIN_WEIGHT)[0];
+  if (maybe) return { stage: 'tentative', word: maybe.word, to: maybe.to, weight: maybe.weight };
+  return { stage: 'none' };
+}
