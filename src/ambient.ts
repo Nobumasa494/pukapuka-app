@@ -24,6 +24,8 @@ const CHIMES = [
 
 // 曲の音量（3曲とも -20 LUFS にそろえてある）
 const BGM_VOLUME = 0.8;
+// わたしのこと（夜明け）は、読むのをじゃましないよう、ほかの画面より小さく鳴らす（SPEC E.。曲の音量そのものは -20 LUFS でそろえたまま）
+const SCENE_VOLUME: Record<Scene, number> = { river: 1, cloud: 1, night: 1, me: 0.6 };
 const STEP_MS = 40;
 // 拾った音は1つの高さにつき2つずつ持つ。続けて同じ高さを拾っても、前の音の余韻を切らずに次の音を鳴らせる
 const CHIME_VOICES = 2;
@@ -116,7 +118,7 @@ export function createAmbient(): Ambient {
       if (next === scene) return;
       scene = next;
       for (const s of Object.keys(players) as Scene[]) {
-        target[s] = s === next ? BGM_VOLUME : 0;
+        target[s] = s === next ? BGM_VOLUME * SCENE_VOLUME[s] : 0;
         rate[s] = BGM_VOLUME / Math.max(1, fadeMs);
       }
       run();
