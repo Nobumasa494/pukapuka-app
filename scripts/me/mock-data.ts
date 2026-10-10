@@ -3,7 +3,7 @@
 // 使い方: npx tsx scripts/me/mock-data.ts <出力.json> [週=12]
 import { writeFileSync } from 'fs';
 import { makeDemoCaptures, type DemoDay } from '../../src/demoPersona';
-import { dayNumber, growth, topSource, loopList, sourceList, growthStory, genkiShift, isGenki, SOURCE_DAYS } from '../../src/flow';
+import { dayNumber, growth, topSource, computeMeSync, isGenki, SOURCE_DAYS } from '../../src/flow';
 
 export function demoWithFlow(weeks: number, seed = 418) {
   const days: DemoDay[] = []; const t = new Date(2026, 9, 10);
@@ -49,13 +49,13 @@ const srcDays = 'word' in top0 ? [...byDay].filter(([, w]) => w.has(top0.word)).
 const nextGenki = srcDays.filter((d) => [...(byDay.get(d + 1) ?? [])].some(isGenki)).length;
 const allDays = [...byDay.keys()];
 const baseRate = allDays.filter((d) => [...(byDay.get(d + 1) ?? [])].some(isGenki)).length / allDays.length;
-const sl = sourceList(caps, now);
+const me = computeMeSync(caps, now);
 const out = {
-  list: 'list' in sl ? sl.list : [],
-  topItem: 'top' in sl ? sl.top : null,
-  loops: loopList(caps, now),
-  story: growthStory(caps, now).map((e) => ({ ...e, label: `${new Date(e.at).getMonth() + 1}月${new Date(e.at).getDate()}日` })),
-  shift: genkiShift(caps, now),
+  list: me.few ? [] : me.list,
+  topItem: me.few ? null : me.top,
+  loops: me.few ? [] : me.loops,
+  story: (me.few ? [] : me.story).map((e) => ({ ...e, label: `${new Date(e.at).getMonth() + 1}月${new Date(e.at).getDate()}日` })),
+  shift: me.few ? null : me.shift,
   numbers: { srcDays: srcDays.length, nextGenki, baseRate },
   stages,
   weeks,

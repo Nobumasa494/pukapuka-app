@@ -14,6 +14,7 @@ import { useAddCapture } from '../useCaptures';
 import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
+import MeOverlay from '../components/MeOverlay';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
@@ -40,7 +41,7 @@ const VIDEO_SURFACE = 'textureView' as const;
 // 新しい動画を動かし始めた瞬間に表示中の動画が黒くなった（ボタンを押した瞬間に画面が黒く光る）
 // 夜はループの動画を持たない。遷移の最後のコマと同じ静止画で止める
 type Clip = 'river' | 'toCloud' | 'cloud' | 'toRiver' | 'toNight' | 'nightToCloud';
-type Stage = Clip | 'night' | 'nightToRiver' | 'riverToNight';
+type Stage = Clip | 'night' | 'nightToRiver' | 'riverToNight' | 'me' | 'riverToMe' | 'meToRiver';
 
 // 段階ごとに流す曲と、切り替えにかける時間（遷移の動画と同じ長さ）
 const SCENE_OF: Record<Stage, Scene> = {
@@ -53,6 +54,9 @@ const SCENE_OF: Record<Stage, Scene> = {
   nightToCloud: 'cloud',
   nightToRiver: 'river',
   riverToNight: 'night',
+  me: 'me',
+  riverToMe: 'me',
+  meToRiver: 'river',
 };
 const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
   river: 1500,
@@ -62,6 +66,8 @@ const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
   nightToCloud: 3000,
   nightToRiver: 900,
   riverToNight: 900,
+  riverToMe: 900,
+  meToRiver: 900,
 };
 type Still = 'river' | 'cloud' | 'night';
 // first: 最初のコマと同じ静止画（差し替えの瞬間に被せる）。last: 遷移の最後のコマと同じ静止画（終わり際に被せる）
@@ -820,7 +826,7 @@ export default function Home() {
   // 川が見えていない段階（拾ったことば・夜空と、その間の動画）。泡の揺れを止める
   const riverHidden = useSharedValue(false);
   useEffect(() => {
-    riverHidden.set(stage === 'cloud' || stage === 'toNight' || stage === 'night' || stage === 'nightToCloud' || stage === 'riverToNight');
+    riverHidden.set(stage === 'cloud' || stage === 'toNight' || stage === 'night' || stage === 'nightToCloud' || stage === 'riverToNight' || stage === 'me' || stage === 'riverToMe');
   }, [stage, riverHidden]);
   const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
   // 「振り返る」を押すと出る、行き先（夕空・星空）の選び
@@ -849,6 +855,7 @@ export default function Home() {
   const coverNight = useSharedValue(0);
   const covers: Record<Still, SharedValue<number>> = { river: coverRiver, cloud: coverCloud, night: coverNight };
   const nightUi = useSharedValue(0);
+  const meUi = useSharedValue(0);
   const riverUi = useSharedValue(1);
   const cloudUi = useSharedValue(0);
   const rise = useSharedValue(0);
@@ -1078,10 +1085,43 @@ export default function Home() {
     }, NIGHT_FADE_MS);
   };
 
+  // 川 → わたしのこと（夜明け）。動画は使わず、夜明けの画面をふわっと重ねる（SPEC F.「川 → わたしのこと」案：0.9秒）
+  const riverToMe = () => {
+    if (stageRef.current !== 'river') return;
+    setLookBackOpen(false);
+    goStage('riverToMe');
+    paused.set(true);
+    rise.set(0);
+    riverUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    appear.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    meUi.set(withTiming(1, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    later(() => {
+      if (stageRef.current !== 'riverToMe') return;
+      goStage('me');
+      player.pause();
+    }, NIGHT_FADE_MS);
+  };
+
+  // わたしのこと → 川。夜明けが淡く消えて、夕方の川に戻る
+  const meToRiver = () => {
+    if (stageRef.current !== 'me') return;
+    goStage('meToRiver');
+    player.play();
+    meUi.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    appear.set(withTiming(1, { duration: BACK_SURFACE_MS, easing: Easing.out(Easing.quad) }));
+    later(() => {
+      if (stageRef.current !== 'meToRiver') return;
+      goStage('river');
+      paused.set(false);
+      riverUi.set(withTiming(1, { duration: UI_FADE_MS }));
+    }, NIGHT_FADE_MS);
+  };
+
   const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
   const coverCloudStyle = useAnimatedStyle(() => ({ opacity: coverCloud.value }));
   const coverNightStyle = useAnimatedStyle(() => ({ opacity: coverNight.value }));
   const nightUiStyle = useAnimatedStyle(() => ({ opacity: nightUi.value }));
+  const meUiStyle = useAnimatedStyle(() => ({ opacity: meUi.value }));
   // 行き: カメラが空を見上げるのに合わせて泡は空へ昇って消える。帰り: 水面から少し浮かび上がって現れる
   const riseStyle = useAnimatedStyle(() => ({
     opacity: (1 - rise.value) * appear.value,
@@ -1122,6 +1162,9 @@ export default function Home() {
             <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToNight}>
               <Text style={styles.lookBackItem}>星空</Text>
             </Pressable>
+            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToMe}>
+              <Text style={styles.lookBackItem}>わたしのこと</Text>
+            </Pressable>
           </View>
         )}
       </Animated.View>
@@ -1156,6 +1199,13 @@ export default function Home() {
       {(stage === 'night' || stage === 'nightToRiver' || stage === 'nightToCloud' || stage === 'riverToNight') && (
         <Animated.View style={[StyleSheet.absoluteFill, nightUiStyle, { pointerEvents: stage === 'night' ? 'box-none' : 'none' }]}>
           <NightOverlay width={width} height={height} focus={nightFocus} onBack={nightToCloud} onRiver={nightToRiver} />
+        </Animated.View>
+      )}
+
+      {/* わたしのこと（夜明け）。背景の夜明けは画面が自分で持つ */}
+      {(stage === 'me' || stage === 'riverToMe' || stage === 'meToRiver') && (
+        <Animated.View style={[StyleSheet.absoluteFill, meUiStyle, { pointerEvents: stage === 'me' ? 'auto' : 'none' }]}>
+          <MeOverlay width={width} height={height} onBack={meToRiver} />
         </Animated.View>
       )}
 

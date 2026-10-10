@@ -4,12 +4,13 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 // 背景の曲と、泡を拾ったときの音。曲は画面ごとに別で、調だけ（Aメジャー／F#マイナー）そろえる。
 // 画面が変わるときは遷移の動画と同じ長さで重ねて切り替える。作り方はスキル pukapuka-music
 
-export type Scene = 'river' | 'cloud' | 'night';
+export type Scene = 'river' | 'cloud' | 'night' | 'me';
 
 const BGM: Record<Scene, number> = {
   river: require('../assets/sounds/bgm_river.m4a'),
   cloud: require('../assets/sounds/bgm_cloud.m4a'),
   night: require('../assets/sounds/bgm_night.m4a'),
+  me: require('../assets/sounds/bgm_me.m4a'),
 };
 
 // 泡を拾ったときの音「ぷかっ」。ミ ファ# ラ シ ド#（Aメジャーの五音音階）。どの和音の上でもぶつかりにくい
@@ -73,8 +74,8 @@ export function createAmbient(): Ambient {
   let muted = false;
   let active = AppState.currentState === 'active';
   // 曲ごとの目標の音量と、1ミリ秒あたりに近づける量
-  const target: Record<Scene, number> = { river: 0, cloud: 0, night: 0 };
-  const rate: Record<Scene, number> = { river: 1, cloud: 1, night: 1 };
+  const target: Record<Scene, number> = { river: 0, cloud: 0, night: 0, me: 0 };
+  const rate: Record<Scene, number> = { river: 1, cloud: 1, night: 1, me: 1 };
   let timer: ReturnType<typeof setInterval> | null = null;
 
   const tick = () => {

@@ -346,16 +346,6 @@ const STAGE_RANK: Record<Stage, number> = { sure: 3, tentative: 2, seen: 1, none
 export type SourceItem = { word: string; to: string; weight: number; stage: 'seen' | 'tentative' | 'sure'; z: number };
 export type LoopItem = { a: string; b: string; stage: 'tentative' | 'sure'; z: number };
 
-// ある日の時点の源を、全部の「していること」について段階つきで出す（1回の並べかえで決める）
-function sourcesAt(captures: Cap[], t: number): SourceItem[] {
-  const { scored, cutAt } = sourcesScored(recentOf(captures, t));
-  const sure = cutAt(SOURCE_ALPHA, SOURCE_MIN_WEIGHT), maybe = cutAt(TENTATIVE_ALPHA, TENTATIVE_MIN_WEIGHT);
-  return scored.map((x) => ({
-    word: x.word, to: x.to, weight: x.weight, z: x.z,
-    stage: x.zAt[3] > sure ? 'sure' : x.zAt[2] > maybe ? 'tentative' : 'seen',
-  }));
-}
-
 // 一度②③に出た言葉は、2週間は②で残す（今日の段階が低いときだけ。なくなっていても②で足す）
 function holdItems<T extends { stage: string; z: number }>(cur: T[], past: T[][], key: (x: T) => string): T[] {
   const out = new Map(cur.map((x) => [key(x), x]));
@@ -370,46 +360,6 @@ function holdItems<T extends { stage: string; z: number }>(cur: T[], past: T[][]
 
 const sortItems = <T extends { stage: string; z: number }>(l: T[]) =>
   l.sort((a, b) => STAGE_RANK[b.stage as Stage] - STAGE_RANK[a.stage as Stage] || b.z - a.z);
-
-// 源の一覧（決定 2026-10-10、ユーザー「いろんなやつをみたいよね」）：確かさの順に、多くて LIST_MAX まで。
-// いちばん上の1つ（top）は、新しく③になったもの（2週間前は③でなかった）を優先。当たり前のことは、たいてい前から③のまま
-export const LIST_MAX = 8;
-export function sourceList(captures: Cap[], now: number): { few: true } | { few: false; top: SourceItem | null; list: SourceItem[] } {
-  if (isFew(captures.filter((c) => c.capturedAt <= now), now)) return { few: true };
-  const at = (k: number) => (isFew(captures.filter((c) => c.capturedAt <= now - k * 86400000), now - k * 86400000) ? [] : sourcesAt(captures, now - k * 86400000));
-  const cur = sourcesAt(captures, now);
-  const past = [at(7), at(HOLD_DAYS)];
-  const list = sortItems(holdItems(cur, past, (x) => x.word)).slice(0, LIST_MAX);
-  const wasSure = new Set(past[1].filter((x) => x.stage === 'sure').map((x) => x.word));
-  const top = list.find((x) => x.stage === 'sure' && !wasSure.has(x.word)) ?? list[0] ?? null;
-  return { few: false, top, list };
-}
-
-// めぐりの一覧：②③だけ（見えはじめは出さない。決定 2026-10-10。偶然と区別できない間は、ころころ変わって意味のない組になるため）
-function loopsAt(captures: Cap[], t: number): LoopItem[] {
-  const recent = recentOf(captures, t);
-  const sure = loopsTested(recent, LOOP_ALPHA, LOOP_MIN_WEIGHT);
-  const keys = new Set(sure.map((x) => x.a + '\n' + x.b));
-  const maybe = loopsTested(recent, LOOP_TENTATIVE_ALPHA, LOOP_MIN_WEIGHT).filter((x) => !keys.has(x.a + '\n' + x.b));
-  return [...sure.map((x) => ({ ...x, stage: 'sure' as const })), ...maybe.map((x) => ({ ...x, stage: 'tentative' as const }))];
-}
-export function loopList(captures: Cap[], now: number): LoopItem[] {
-  if (isFew(captures.filter((c) => c.capturedAt <= now), now)) return [];
-  const at = (k: number) => (isFew(captures.filter((c) => c.capturedAt <= now - k * 86400000), now - k * 86400000) ? [] : loopsAt(captures, now - k * 86400000));
-  return sortItems(holdItems(loopsAt(captures, now), [at(7), at(HOLD_DAYS)], (x) => x.a + '\n' + x.b)).slice(0, 3);
-}
-
-// いちばん上の源（一覧の top）。前の形（topSource）も残す
-export function topSource(captures: Cap[], now: number): SourceStage {
-  const r = sourceList(captures, now);
-  if (r.few) return { stage: 'few' };
-  return r.top ? { stage: r.top.stage, word: r.top.word, to: r.top.to, weight: r.top.weight } : { stage: 'none' };
-}
-export function topLoop(captures: Cap[], now: number): LoopStage {
-  if (isFew(captures.filter((c) => c.capturedAt <= now), now)) return { stage: 'few' };
-  const l = loopList(captures, now)[0];
-  return l ? { stage: l.stage, a: l.a, b: l.b } : { stage: 'none' };
-}
 
 // くり返すめぐり（A ⇄ B の2語の輪。max-T の並べかえ検定）：行き（A→B）と帰り（B→A）の z の、弱いほうを輪の強さにする。
 // 並べかえのたびに全部の組でいちばん強い輪を記録し、本物がその上位 familyAlpha に入る輪だけ残す（決定 2026-10-10：めぐりも時間とともに確かになる）
@@ -494,30 +444,6 @@ export function loopsTested(
 }
 
 // 育っていること（決定 2026-10-10。割合だけだと「はいそれで？」になる、とユーザー。A・B の両方）
-// A：見つかったことの歩み。週ごとに源の一覧を出し直して、言葉が初めて「かも」「よく来る」になった週を並べる（見えはじめは出さない：偶然と区別できないため）
-export type StoryEvent = { at: number; word: string; to: string; stage: 'tentative' | 'sure' };
-export function growthStory(captures: Cap[], now: number): StoryEvent[] {
-  if (!captures.length) return [];
-  const first = Math.min(...captures.map((c) => c.capturedAt));
-  const seen = new Map<string, number>(); // 言葉 → いちばん高かった段階
-  const out: StoryEvent[] = [];
-  for (let t = first + 7 * 86400000; ; t += 7 * 86400000) {
-    const at = Math.min(t, now);
-    const upto = captures.filter((c) => c.capturedAt <= at);
-    if (!isFew(upto, at))
-      for (const x of sourcesAt(upto, at)) {
-        if (x.stage === 'seen') continue;
-        const rank = STAGE_RANK[x.stage];
-        if (rank > (seen.get(x.word) ?? 0)) {
-          seen.set(x.word, rank);
-          out.push({ at, word: x.word, to: x.to, stage: x.stage });
-        }
-      }
-    if (at >= now) break;
-  }
-  return out;
-}
-
 // B：元気の中身の変わり方。最初の4週と最近の4週で、よく拾った元気・好奇心の言葉（拾った日の数）を2つずつ。
 // 偶然とは比べない事実（「よく拾った」）。8週たまるまでは出さない
 export const SHIFT_WEEKS = 4;
@@ -539,4 +465,198 @@ export function genkiShift(captures: Cap[], now: number): { before: string[]; af
     return [...days].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0])).slice(0, 2).map(([w]) => w);
   };
   return { before: top(from, from + span - 1), after: top(today - span + 1, today) };
+}
+
+// ---- わたしのこと全体の計算（速くした形。2026-10-10） ----
+// ある時点の「源の一覧」と「めぐり」を、1回の並べかえ（500回×2周）でまとめて出す。これを「スナップショット」と呼ぶ。
+// 過去の時点のスナップショットは、記録が増えても変わらない（その時点までの記録だけで決まる）ので、端末にとっておける（meCache）
+export type Snapshot = { t: number; sources: SourceItem[]; loops: LoopItem[] } | { t: number; few: true };
+
+export function snapshot(captures: Cap[], t: number, shuffles = SHUFFLES, seed = 2): Snapshot {
+  const upto = captures.filter((c) => c.capturedAt <= t);
+  if (isFew(upto, t)) return { t, few: true };
+  const recent = recentOf(captures, t);
+  const byDay = wordsByDay(recent);
+  const days = [...byDay.keys()].sort((a, b) => a - b);
+  const words = [...new Set(recent.map((c) => c.word))].sort();
+  const id = new Map(words.map((w, i) => [w, i]));
+  const n = words.length;
+  const sets = days.map((d) => [...byDay.get(d)!].map((w) => id.get(w)!));
+  const doing = words.map((w) => WORD_CATEGORY[w] === 'doing');
+  const genki = words.map(isGenki);
+  const cand: number[] = [];
+  for (let a = 0; a < n; a++) if (doing[a]) for (let b = 0; b < n; b++) if (a !== b && genki[b]) cand.push(a * n + b);
+  const pairs: number[] = []; // めぐりの組（a < b、似た言葉どうしは除く）
+  for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (!isSimilar(words[a], words[b])) pairs.push(a * n + b);
+  const shuffled = (pass: (m: Float64Array) => void) => {
+    const r = rng(seed);
+    const perm = sets.slice();
+    for (let k = 0; k < shuffles; k++) {
+      shuffleDays(perm, days, r);
+      pass(arrowMatrix(days, perm, n));
+    }
+  };
+  const N2 = n * n;
+  const sum = new Float64Array(N2);
+  const sq = new Float64Array(N2);
+  shuffled((m) => {
+    for (let x = 0; x < N2; x++) {
+      const v = m[x];
+      if (v) {
+        sum[x] += v;
+        sq[x] += v * v;
+      }
+    }
+  });
+  const mean = Float64Array.from(sum, (v) => v / shuffles);
+  const sd = Float64Array.from(sq, (v, x) => Math.sqrt(Math.max(v / shuffles - mean[x] ** 2, 0)) || 0.25);
+  const zOf = (m: Float64Array, x: number) => (m[x] - mean[x]) / sd[x];
+  const loopZ = (m: Float64Array, x: number) => {
+    const a = Math.floor(x / n), b = x % n, ba = b * n + a;
+    if (m[x] < LOOP_MIN_WEIGHT || m[ba] < LOOP_MIN_WEIGHT) return -Infinity;
+    return Math.min(zOf(m, x), zOf(m, ba));
+  };
+  // 2周目：並べかえのたびに「いちばんの当たり」を記録（源は重さの下限 2・3 ごと、めぐりは1つ）
+  const srcMax2: number[] = [], srcMax3: number[] = [], loopMax: number[] = [];
+  shuffled((m) => {
+    let m2 = -Infinity, m3 = -Infinity, ml = -Infinity;
+    for (const x of cand) {
+      const v = m[x];
+      if (v < TENTATIVE_MIN_WEIGHT) continue;
+      const z = zOf(m, x);
+      if (z > m2) m2 = z;
+      if (v >= SOURCE_MIN_WEIGHT && z > m3) m3 = z;
+    }
+    for (const x of pairs) {
+      if (m[x] < LOOP_MIN_WEIGHT) continue;
+      const z = loopZ(m, x);
+      if (z > ml) ml = z;
+    }
+    srcMax2.push(m2);
+    srcMax3.push(m3);
+    loopMax.push(ml);
+  });
+  const cut = (arr: number[], alpha: number) => arr.sort((a, b) => b - a)[Math.floor(alpha * shuffles)] ?? -Infinity;
+  const cutSure = cut(srcMax3, SOURCE_ALPHA), cutMaybe = cut(srcMax2, TENTATIVE_ALPHA);
+  const loopSure = cut(loopMax, LOOP_ALPHA), loopMaybe = cut(loopMax, LOOP_TENTATIVE_ALPHA);
+  const real = arrowMatrix(days, sets, n);
+  // 源：言葉ごとに、いちばん目立つ矢印と、重さ2以上・3以上の中での z
+  const best = new Map<number, { item: SourceItem; z2: number; z3: number }>();
+  for (const x of cand) {
+    const v = real[x];
+    if (v <= 0) continue;
+    const z = zOf(real, x), a = Math.floor(x / n);
+    let e = best.get(a);
+    if (!e) best.set(a, (e = { item: { word: words[a], to: words[x % n], weight: v, z, stage: 'seen' }, z2: -Infinity, z3: -Infinity }));
+    if (z > e.item.z) Object.assign(e.item, { to: words[x % n], weight: v, z });
+    if (v >= TENTATIVE_MIN_WEIGHT && z > e.z2) e.z2 = z;
+    if (v >= SOURCE_MIN_WEIGHT && z > e.z3) e.z3 = z;
+  }
+  const sources = [...best.values()].map(({ item, z2, z3 }) => ({ ...item, stage: (z3 > cutSure ? 'sure' : z2 > cutMaybe ? 'tentative' : 'seen') as SourceItem['stage'] }));
+  const loops: LoopItem[] = [];
+  for (const x of pairs) {
+    const z = loopZ(real, x);
+    if (z > loopMaybe) loops.push({ a: words[Math.floor(x / n)], b: words[x % n], z, stage: z > loopSure ? 'sure' : 'tentative' });
+  }
+  return { t, sources: sortItems(sources), loops: sortItems(loops) };
+}
+
+// 計算する時点：週の終わり（日曜の夜）ごとと、今。週の終わりは毎日同じなので、とっておいたスナップショットを使い回せる
+export function checkpoints(captures: Cap[], now: number): number[] {
+  if (!captures.length) return [now];
+  const first = Math.min(...captures.map((c) => c.capturedAt));
+  const out: number[] = [];
+  const d = new Date(first);
+  // first を含む週の日曜 23:59:59.999
+  let t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + ((7 - d.getDay()) % 7), 23, 59, 59, 999).getTime();
+  while (t < now) {
+    out.push(t);
+    const x = new Date(t);
+    t = new Date(x.getFullYear(), x.getMonth(), x.getDate() + 7, 23, 59, 59, 999).getTime();
+  }
+  out.push(now);
+  return out;
+}
+
+export const LIST_MAX = 8;
+export type StoryEvent = { at: number; word: string; to: string; stage: 'tentative' | 'sure' };
+export type MeResult =
+  | { few: true }
+  | { few: false; top: SourceItem | null; list: SourceItem[]; loops: LoopItem[]; story: StoryEvent[]; shift: { before: string[]; after: string[] } | null };
+
+// スナップショットの並び（古い順、最後が今）から、画面に出すものをまとめる
+//  ・一覧：今の源。1つ前・2つ前の週の終わりに②③だった言葉は、②で残す（2週間残す。決定 2026-10-10）
+//  ・いちばん上：2つ前の週の終わりには③でなかったのに、今③になった源（新しく見えてきた源）。なければ一覧の先頭
+//  ・歩み：言葉が初めて②・③になった時点を並べる
+export function assemble(snaps: Snapshot[], captures: Cap[], now: number): MeResult {
+  const cur = snaps[snaps.length - 1];
+  if (!cur || 'few' in cur) return { few: true };
+  const past = snaps.slice(-3, -1).filter((x): x is Extract<Snapshot, { sources: SourceItem[] }> => !('few' in x));
+  const list = sortItems(holdItems(cur.sources, past.map((x) => x.sources), (x) => x.word)).slice(0, LIST_MAX);
+  const old = past[0];
+  const wasSure = new Set(old ? old.sources.filter((x) => x.stage === 'sure').map((x) => x.word) : []);
+  const top = (old ? list.find((x) => x.stage === 'sure' && !wasSure.has(x.word)) : undefined) ?? list[0] ?? null;
+  const loops = sortItems(holdItems(cur.loops, past.map((x) => x.loops), (x) => x.a + '\n' + x.b)).slice(0, 3);
+  const rank = new Map<string, number>();
+  const story: StoryEvent[] = [];
+  for (const sn of snaps) {
+    if ('few' in sn) continue;
+    for (const x of sn.sources) {
+      if (x.stage === 'seen') continue;
+      const r = STAGE_RANK[x.stage];
+      if (r > (rank.get(x.word) ?? 0)) {
+        rank.set(x.word, r);
+        story.push({ at: sn.t, word: x.word, to: x.to, stage: x.stage });
+      }
+    }
+  }
+  return { few: false, top, list, loops, story, shift: genkiShift(captures, now) };
+}
+
+// すべてをその場で計算する（テスト・試し用）。アプリでは computeMe（とっておいた結果を使う）
+export function computeMeSync(captures: Cap[], now: number): MeResult {
+  return assemble(checkpoints(captures, now).map((t) => snapshot(captures, t)), captures, now);
+}
+
+// とっておく場所（端末の AsyncStorage など）。鍵は「時点の日・その時点までの記録の数」。記録が後から足された（電波がなかったなど）ときは数が変わるので、計算し直す
+export type SnapCache = { get: (key: string) => Promise<Snapshot | null>; set: (key: string, v: Snapshot) => Promise<void> };
+export const SNAP_VERSION = 1; // 計算の中身を変えたら上げる（古いとっておきを使わない）
+export async function computeMe(captures: Cap[], now: number, cache?: SnapCache, onProgress?: (done: number, total: number) => void): Promise<MeResult> {
+  const ts = checkpoints(captures, now);
+  const snaps: Snapshot[] = [];
+  for (let i = 0; i < ts.length; i++) {
+    const t = ts[i];
+    const isNow = i === ts.length - 1;
+    const key = `v${SNAP_VERSION}:${dayNumber(t)}:${captures.filter((c) => c.capturedAt <= t).length}`;
+    let sn = !isNow && cache ? await cache.get(key) : null;
+    if (!sn) {
+      await new Promise((r) => setTimeout(r, 0)); // 画面を止めないよう、1つ計算するたびにひと息つく
+      sn = snapshot(captures, t);
+      if (!isNow && cache) await cache.set(key, sn);
+    }
+    snaps.push(sn);
+    onProgress?.(i + 1, ts.length);
+  }
+  return assemble(snaps, captures, now);
+}
+
+// 前の形（テストで使う）
+export function topSource(captures: Cap[], now: number): SourceStage {
+  const r = computeMeSync(captures, now);
+  if (r.few) return { stage: 'few' };
+  return r.top ? { stage: r.top.stage, word: r.top.word, to: r.top.to, weight: r.top.weight } : { stage: 'none' };
+}
+export function sourceList(captures: Cap[], now: number) {
+  return computeMeSync(captures, now);
+}
+
+// いちばん上の源の数字：その言葉を拾った日のうち、次の日に元気・好奇心の言葉を拾った日の割合と、ふだんの日の割合（直近12週）。
+// 次の日に記録のある日だけで数える（開かなかった日は「来なかった」に数えない）
+export function nextDayRate(captures: Cap[], now: number, word: string): { days: number; hits: number; rate: number; base: number } {
+  const byDay = wordsByDay(recentOf(captures, now));
+  const has = (d: number) => [...(byDay.get(d) ?? [])].some(isGenki);
+  const all = [...byDay.keys()].filter((d) => byDay.has(d + 1));
+  const mine = all.filter((d) => byDay.get(d)!.has(word));
+  const hits = mine.filter((d) => has(d + 1)).length;
+  return { days: mine.length, hits, rate: mine.length ? hits / mine.length : 0, base: all.length ? all.filter((d) => has(d + 1)).length / all.length : 0 };
 }
