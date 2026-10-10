@@ -28,11 +28,10 @@ const SERIF = Platform.select({ ios: 'Hiragino Mincho ProN', android: 'serif', d
 
 // 見方（右上の印を押したときだけ出す。星空の「星の見方」と同じ形）
 const INTRO_LINES: [string, string][] = [
-  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。「たとえば」は、実際にそうなった日。'],
+  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。新しく見つかったものがあれば、それを上に出します。「たとえば」は、実際にそうなった日。'],
   ['01 そのあとに', 'その日から3日以内に、元気・好奇心の言葉を拾ったこと。数字は、この12週でそうなった回数。'],
   ['02 行ったり来たり', '何日かのあいだに、交互に拾っている二つ。良い・悪いはありません。'],
-  ['03 見つかった日', '上に並んでいるものが、確かになった日。'],
-  ['04 うつりかわり', 'よく拾う元気・好奇心の言葉の、はじめのころと最近。'],
+  ['03 うつりかわり', 'よく拾う元気・好奇心の言葉の、はじめのころと最近。'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
@@ -182,31 +181,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               )}
             </Chapter>
 
-            {/* 見つかった日：いま並んでいるものが、いつ確かになったか（新しい順） */}
-            <Chapter no="03" title="見つかった日" note="上に並んでいるものが、確かになった日">
-              {!result.story ? (
-                <Text style={styles.empty}>さかのぼって調べています…</Text>
-              ) : (() => {
-                  const now = new Set([...result.list.filter((x) => x.stage === 'sure').map((x) => x.word), ...(top && top.stage === 'sure' ? [top.word] : [])]);
-                  const found = result.story.filter((e) => e.stage === 'sure' && now.has(e.word)).reverse();
-                  return found.length ? (
-                    found.map((e) => (
-                      <View key={e.word} style={styles.found}>
-                        <Text style={styles.foundDate}>{mdDayT(e.at, shiftDays)}</Text>
-                        <View style={styles.rowWordsBox}>
-                          <Text style={styles.rowWords}>{e.word}</Text>
-                          <Text style={styles.mark}>⟶</Text>
-                          <Text style={styles.rowWords}>{e.to}</Text>
-                        </View>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.empty}>まだありません</Text>
-                  );
-                })()}
-            </Chapter>
-
-            <Chapter no="04" title="うつりかわり" note="よく拾う、元気・好奇心の言葉" last>
+            <Chapter no="03" title="うつりかわり" note="よく拾う、元気・好奇心の言葉" last>
               {result.shift ? (
                 <View style={styles.shift}>
                   <View style={styles.shiftCol}>
@@ -335,12 +310,6 @@ function Row({ a, b, mark, n }: { a: string; b: string; mark: string; n: number 
   );
 }
 
-const mdDayT = (t: number, shiftDays = 0) => {
-  const d = new Date(t);
-  d.setDate(d.getDate() + shiftDays);
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
-};
-
 function Chapter({ no, title, note, last, children }: { no: string; title: string; note?: string; last?: boolean; children: React.ReactNode }) {
   return (
     <View style={[styles.chapter, last && { borderBottomWidth: 0 }]}>
@@ -413,8 +382,6 @@ const styles = StyleSheet.create({
   countUnit: { fontSize: 11, color: SUB },
   heroNew: { marginBottom: 18, fontSize: 12, color: PLUM, letterSpacing: 3, fontFamily: SERIF },
   heroCount: { marginTop: 14, fontSize: 13, color: SUB, fontFamily: SERIF, letterSpacing: 1 },
-  found: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
-  foundDate: { width: 64, fontSize: 13, color: SUB, fontFamily: SERIF },
   // わかってきた順
   hist: { paddingVertical: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
   histWords: { fontSize: 16, color: INK, fontFamily: SERIF },
