@@ -413,6 +413,26 @@ export function topLoop(captures: Cap[], now: number): LoopStage {
 
 // くり返すめぐり（A ⇄ B の2語の輪。max-T の並べかえ検定）：行き（A→B）と帰り（B→A）の z の、弱いほうを輪の強さにする。
 // 並べかえのたびに全部の組でいちばん強い輪を記録し、本物がその上位 familyAlpha に入る輪だけ残す（決定 2026-10-10：めぐりも時間とともに確かになる）
+// ほとんど同じ意味の言葉の組（決定 2026-10-10）。めぐりで「疲れ ⇄ 目が疲れた」のような組が出ても気づきにならないので、同じ組どうしの輪は試さない
+export const SIMILAR_GROUPS: string[][] = [
+  ['疲れ', '目が疲れた', '体が重い', '重い', '力が抜ける'],
+  ['眠い', 'ぼーっとする'],
+  ['不安', '恐れ', '怖い', '焦り', '緊張', 'どきどき', 'ざわざわ'],
+  ['悲しみ', '寂しい', '孤独', '切ない', '虚しい'],
+  ['怒り', 'むかつく', '悔しい'],
+  ['わくわく', 'ワクワクする', 'ときめき', '高揚感'],
+  ['喜び', 'うれしい'],
+  ['安心', 'ほっとした', '穏やか', '安心したい'],
+  ['解放感', 'スッキリ', '軽い'],
+  ['面白い', '気になる', 'もっと知りたい', '調べたい', '深掘りしたい', '不思議', 'なんで？'],
+  ['やってみたい', '試してみたい'],
+  ['頭が痛い', '胸が痛い', '息苦しい'],
+  ['仕事', '会議', '締め切り', 'プレッシャー', '責任'],
+  ['休みたい', '逃げたい', '一人になりたい'],
+];
+const SIMILAR = new Map(SIMILAR_GROUPS.flatMap((g, i) => g.map((w) => [w, i] as const)));
+export const isSimilar = (a: string, b: string) => SIMILAR.has(a) && SIMILAR.get(a) === SIMILAR.get(b);
+
 export const LOOP_ALPHA = 0.1; // ③確か（仮。scripts/me/loop-test.ts で決める）
 export const LOOP_TENTATIVE_ALPHA = 0.3; // ②確かめ中（仮）
 export const LOOP_MIN_WEIGHT = 2; // 行きも帰りも、この重さ以上（仮）
@@ -447,7 +467,10 @@ export function loopsTested(
   });
   const mean = Float64Array.from(sum, (v) => v / shuffles);
   const sd = Float64Array.from(sq, (v, x) => Math.sqrt(Math.max(v / shuffles - mean[x] ** 2, 0)) || 0.25);
+  const similar = new Set<number>();
+  for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) if (isSimilar(words[a], words[b])) similar.add(a * n + b);
   const loopZ = (m: Float64Array, a: number, b: number) => {
+    if (similar.has(a * n + b)) return -Infinity;
     const ab = a * n + b, ba = b * n + a;
     if (m[ab] < minWeight || m[ba] < minWeight) return -Infinity;
     return Math.min((m[ab] - mean[ab]) / sd[ab], (m[ba] - mean[ba]) / sd[ba]);
