@@ -729,3 +729,21 @@ export function nextDayRate(captures: Cap[], now: number, word: string): { days:
   const hits = mine.filter((d) => has(d + 1)).length;
   return { days: mine.length, hits, rate: mine.length ? hits / mine.length : 0, base: all.length ? all.filter((d) => has(d + 1)).length / all.length : 0 };
 }
+
+// 「たとえば」の欄：その言葉の日のあと3日以内に、行き先の言葉を拾った例を、新しい順に max 個（直近12週）。
+// 割合の数字より、自分の記録の実際の日のほうが分かりやすい（2026-10-10、ユーザー「分析がわかりにくいのでは」）
+export type Example = { from: number; to: number }; // 暦の日の番号（dayNumber）
+export function examples(captures: Cap[], now: number, word: string, to: string, max = 3): Example[] {
+  const byDay = wordsByDay(recentOf(captures, now));
+  const out: Example[] = [];
+  for (const d of [...byDay.keys()].sort((a, b) => b - a)) {
+    if (!byDay.get(d)!.has(word)) continue;
+    for (let k = 1; k <= ARROW_WEIGHTS.length; k++)
+      if (byDay.get(d + k)?.has(to)) {
+        out.push({ from: d, to: d + k });
+        break;
+      }
+    if (out.length >= max) break;
+  }
+  return out;
+}

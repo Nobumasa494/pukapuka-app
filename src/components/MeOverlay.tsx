@@ -6,7 +6,7 @@ import { useCaptures, useDeviceId } from '../useCaptures';
 import { meCache } from '../meCache';
 import SAMPLE from '../meSampleResult.json';
 import HelpStar from './HelpStar';
-import { GENKI_WORDS, SOURCE_DAYS, computeMe, nextDayRate, type LoopItem, type MeResult, type SourceItem } from '../flow';
+import { SOURCE_DAYS, computeMe, examples, type Example, type LoopItem, type MeResult, type SourceItem } from '../flow';
 
 // わたしのこと（夜明け）。川の画面の上に重ねて出す（SPEC 第2部 C3.）。
 // 開くと、いちばん上に元気・好奇心の源が1つだけ大きく出る。下へスクロールすると、数字・いろいろな源・めぐり・育っていること。
@@ -23,29 +23,29 @@ const MUTE = '#6a6383';
 
 // 見方（右上の印を押したときだけ出す。星空の「星の見方」と同じ形）
 const INTRO_LINES: [string, string][] = [
-  ['いちばん上', '何をしたあとに、元気・好奇心の言葉がよく来るか。いちばん確かなもの（または、新しく確かになったもの）を1つ'],
-  ['数字', 'その言葉を拾った次の日と、ふだんの次の日で、元気・好奇心の言葉を拾った日の割合'],
-  ['来やすいこと', 'いちばん上のほかにも、元気・好奇心が来やすいことを、確かな順に並べています'],
-  ['めぐり', 'お互いのあとに来やすい2つの言葉。良い・悪いはありません'],
-  ['育っていること', 'これまでに見つかってきたことと、元気の中身（はじめのころと最近）'],
+  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。いちばん確かなもの（または、新しく確かになったもの）を1つ'],
+  ['たとえば', 'あなたの記録の中で、実際にそうなった日'],
+  ['来やすいこと', 'ほかにも、あとで元気・好奇心の言葉が来やすいこと。「あと」は、その日から3日以内のことです'],
+  ['交互に', '交互に拾うことが多い2つの言葉。良い・悪いはありません'],
+  ['見えてきたこと', 'これまでに見えてきたことと、よく拾う元気・好奇心の言葉の変わり方（はじめのころと最近）'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
-const kindOf = (w: string) => (GENKI_WORDS.has(w) ? '元気な言葉' : '好奇心の言葉');
 
 // 言い方の決まり（スキル /pukapuka-me の 3.）：「〜のあとに」と書く。「〜のせいで」「〜すると」とは書かない
 function heroText(x: SourceItem): string {
-  const k = kindOf(x.to);
-  if (x.stage === 'sure') return `「${x.word}」のあとに、\n${k}が\nよく来ます`;
-  if (x.stage === 'tentative') return `「${x.word}」のあとに、\n${k}が\n来ているかも`;
-  return `「${x.word}」のあとに、\n${k}が来た日が\nありました`;
-}
-const STAGE_LABEL = { sure: 'よく来る', tentative: '来ているかも', seen: '見えはじめ' } as const;
+  if (x.stage === 'sure') return `「${x.word}」の日のあとは、\n「${x.to}」を\n拾うことが多いみたい`;
+  if (x.stage === 'tentative') return `「${x.word}」の日のあとは、\n「${x.to}」を\n拾うことが多いかも`;
+  return `「${x.word}」の日のあとに、\n「${x.to}」を\n拾った日がありました`;
+}const STAGE_LABEL = { sure: '多い', tentative: '多いかも', seen: 'あった日がある' } as const;
 const CHIP = { tentative: '確かめ中', seen: '見えはじめ' } as const;
 
 function loopText(x: LoopItem) {
-  return `「${x.a}」と「${x.b}」は、お互いのあとに${x.stage === 'sure' ? 'よく来ます' : '来ているかも'}`;
-}
+  return `「${x.a}」と「${x.b}」を、${x.stage === 'sure' ? '交互に拾うことが多いみたい' : '交互に拾っているかも'}`;
+}const mdDay = (day: number, shiftDays = 0) => {
+  const d = new Date((day + shiftDays) * 86400000); // dayNumber は UTC の日で数えている
+  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+};
 const md = (t: number, shiftDays = 0) => {
   const d = new Date(t);
   d.setDate(d.getDate() + shiftDays);
@@ -53,7 +53,7 @@ const md = (t: number, shiftDays = 0) => {
 };
 
 type Caps = { word: string; capturedAt: number }[];
-type Numbers = ReturnType<typeof nextDayRate>;
+type Numbers = Example[];
 
 // 記録から、わたしのことの結果を計算する（とっておいた結果を使い、いちばん上を先に出す）。key が変わったときだけ計算し直す。
 // make は計算を始めるときに呼ぶ（今の時刻を読むため、描くたびには呼ばない）
@@ -67,7 +67,7 @@ function useMe(key: string | null, make: () => Input) {
     const { caps, now, cacheId } = make();
     const show = (r: MeResult) => {
       if (run !== running.current) return;
-      setState({ key, result: r, shiftDays: 0, numbers: !r.few && r.top && r.top.stage !== 'seen' ? nextDayRate(caps, now, r.top.word) : null });
+      setState({ key, result: r, shiftDays: 0, numbers: !r.few && r.top ? examples(caps, now, r.top.word, r.top.to) : null });
     };
     computeMe(caps, now, meCache(cacheId), undefined, show).then(show, () => {});
     // make は key が変わったときだけ呼ぶ
@@ -93,7 +93,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
   // 見本はいつも同じ人・同じ日なので、前もって計算した結果を使う（scripts/me/make-sample.ts。スマホで計算すると3〜6秒かかった）。
   // 日付だけ、見本の日から今日までずらして見せる
   const [sampleShift, setSampleShift] = useState(0);
-  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.numbers as Numbers | null, shiftDays: sampleShift, busy: false };
+  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.examples as Numbers, shiftDays: sampleShift, busy: false };
   const openSample = () => {
     const a = new Date(SAMPLE.at), t = new Date();
     setSampleShift(Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() - new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()) / 86400000));
@@ -121,7 +121,21 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             <View style={{ alignItems: 'center' }}>
               {top.stage !== 'sure' && <Text style={styles.chip}>{CHIP[top.stage]}</Text>}
               <Text style={[styles.hero, faint && styles.heroFaint]}>{heroText(top)}</Text>
-              {top.stage === 'sure' && <Text style={styles.heroSub}>次の日に「{top.to}」が来ることが多い</Text>}
+              {/* たとえば：実際にそうなった日（割合の数字より分かりやすい） */}
+              {numbers && numbers.length > 0 && (
+                <View style={styles.exBox}>
+                  <Text style={styles.exHead}>たとえば</Text>
+                  {numbers.map((e) => (
+                    <Text key={e.from} style={styles.ex}>
+                      <Text style={styles.exDate}>{mdDay(e.from, shiftDays)} </Text>
+                      {top.word}
+                      {'　→　'}
+                      <Text style={styles.exDate}>{mdDay(e.to, shiftDays)} </Text>
+                      {top.to}
+                    </Text>
+                  ))}
+                </View>
+              )}
             </View>
           ) : (
             <Text style={styles.heroFew}>まだ、はっきりした流れは{'\n'}見えていません</Text>
@@ -136,37 +150,28 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
 
         {result && !result.few && (
           <View style={{ paddingHorizontal: 14 }}>
-            {top && numbers && numbers.days > 0 && (
-              <View style={styles.card}>
-                <Text style={styles.h}>「{top.word}」の日と、ふだんの日</Text>
-                <Bar label={`${top.word}の次の日`} value={numbers.rate} strong />
-                <Bar label="ふだんの次の日" value={numbers.base} />
-                <Text style={styles.note}>
-                  元気・好奇心の言葉を拾った日の割合（この3か月。{top.word}は{numbers.days}日のうち{numbers.hits}日）
-                </Text>
-              </View>
-            )}
 
             <View style={styles.card}>
-              <Text style={styles.h}>元気・好奇心が来やすいこと</Text>
+              <Text style={styles.h}>{top ? 'ほかにも、あとで元気・好奇心が来やすいこと' : 'あとで元気・好奇心が来やすいこと'}</Text>
               {(['sure', 'tentative', 'seen'] as const).map((st) => {
-                const xs = result.list.filter((x) => x.stage === st);
+                const xs = result.list.filter((x) => x.stage === st && x.word !== top?.word);
                 if (!xs.length) return null;
                 return (
                   <View key={st}>
                     <Text style={styles.level}>{STAGE_LABEL[st]}</Text>
                     {xs.map((x) => (
                       <Text key={x.word} style={[styles.item, st === 'tentative' && styles.itemMaybe, st === 'seen' && styles.itemSeen]}>
-                        {x.word} → {x.to}
+                        {x.word} のあと{'　→　'}{x.to}
                       </Text>
                     ))}
                   </View>
                 );
               })}
+              <Text style={styles.note}>「あと」は、その日から3日以内のことです</Text>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.h}>くり返すめぐり</Text>
+              <Text style={styles.h}>交互に来やすい言葉</Text>
               {result.loops.length ? (
                 result.loops.map((x) => (
                   <Text key={x.a + x.b} style={[styles.item, x.stage === 'tentative' && styles.itemMaybe]}>
@@ -174,13 +179,12 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
                   </Text>
                 ))
               ) : (
-                <Text style={styles.note}>まだ、くり返すめぐりは見えていません</Text>
+                <Text style={styles.note}>まだ、はっきりしたものは見えていません</Text>
               )}
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.h}>育っていること</Text>
-              <Text style={styles.sub}>見つかってきたこと</Text>
+              <Text style={styles.h}>これまでに見えてきたこと</Text>
               {!result.story ? (
                 <Text style={styles.note}>見つかってきたことを、さかのぼって調べています…</Text>
               ) : result.story.length ? (
@@ -188,14 +192,17 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
                   <View key={`${e.at}${e.word}${e.stage}`} style={styles.ev}>
                     <Text style={styles.evDate}>{md(e.at, shiftDays)}</Text>
                     <Text style={styles.evText}>
-                      「{e.word}」のあとに「{e.to}」が{e.stage === 'sure' ? 'よく来るように ◎' : '来ているかも'}
+                      {e.word} のあとの「{e.to}」が、{e.stage === 'sure' ? 'はっきりしてきた ◎' : '見えてきた'}
                     </Text>
                   </View>
                 ))
               ) : (
-                <Text style={styles.note}>まだ、はっきり見つかったことはありません</Text>
+                <Text style={styles.note}>まだ、はっきり見えてきたことはありません</Text>
               )}
-              <Text style={styles.sub}>元気の中身</Text>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.h}>よく拾う元気・好奇心の言葉</Text>
               {result.shift ? (
                 <View style={styles.shift}>
                   <View style={styles.shiftCol}>
@@ -247,7 +254,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
           <ScrollView contentContainerStyle={styles.introScroll} showsVerticalScrollIndicator={false}>
             <Pressable style={styles.introCard} onPress={() => setIntroOpen(false)}>
               <Text style={styles.introTitle}>わたしのことの見方</Text>
-              <Text style={styles.introLead}>水辺で拾った言葉の、日をまたいだ順番を見ています。何をしたあとに、元気な言葉や好奇心の言葉がよく来るかが分かります。</Text>
+              <Text style={styles.introLead}>水辺で拾った言葉の、日をまたいだ順番を見ています。何をした日のあとに、どんな元気・好奇心の言葉を拾うことが多いかが分かります。</Text>
               {INTRO_LINES.map(([label, body]) => (
                 <View key={label} style={styles.introRow}>
                   <Text style={styles.introLabel}>{label}</Text>
@@ -257,13 +264,13 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               <View style={styles.introRow}>
                 <Text style={styles.introLabel}>確かさ</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.introBody, { color: INK }]}>よく来ます：何週も見て、たまたまではなさそうなもの</Text>
-                  <Text style={[styles.introBody, { color: 'rgba(47,42,72,0.6)' }]}>来ているかも：確かめている途中。たまたまのこともあります</Text>
-                  <Text style={[styles.introBody, { color: 'rgba(47,42,72,0.42)' }]}>来た日がありました：起きたことを、そのまま書いています</Text>
+                  <Text style={[styles.introBody, { color: INK }]}>多いみたい：何週も見て、たまたまではなさそうなもの</Text>
+                  <Text style={[styles.introBody, { color: 'rgba(47,42,72,0.6)' }]}>多いかも：確かめている途中。たまたまのこともあります</Text>
+                  <Text style={[styles.introBody, { color: 'rgba(47,42,72,0.42)' }]}>拾った日がありました：起きたことを、そのまま書いています</Text>
                   <Text style={styles.introNote}>拾う日が増えるほど、うすい字から濃い字へ、だんだん確かになっていきます。</Text>
                 </View>
               </View>
-              <Text style={styles.introEnd}>「〜のあとに」は順番のことで、「〜したから」という意味ではありません。</Text>
+              <Text style={styles.introEnd}>「〜のあと」は順番のことで、「〜したから」という意味ではありません。</Text>
               {/* 見本は、見方の中からいつでも見られる（星空と同じ） */}
               {!showSample && (
                 <Pressable
@@ -285,20 +292,6 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
           </View>
         </Pressable>
       )}
-    </View>
-  );
-}
-
-function Bar({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
-  return (
-    <View style={styles.barRow}>
-      <Text style={styles.barLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      <View style={styles.barTrack}>
-        <View style={[styles.bar, { width: `${Math.round(value * 100)}%`, backgroundColor: strong ? '#c99ab0' : '#cfc8dc' }]} />
-      </View>
-      <Text style={styles.barValue}>{Math.round(value * 100)}%</Text>
     </View>
   );
 }
@@ -329,7 +322,10 @@ const styles = StyleSheet.create({
   hero: { textAlign: 'center', fontSize: 25, lineHeight: 40, color: INK },
   heroFaint: { color: 'rgba(47,42,72,0.55)' },
   heroFew: { textAlign: 'center', fontSize: 19, lineHeight: 32, color: SUB },
-  heroSub: { marginTop: 16, textAlign: 'center', fontSize: 13, color: SUB },
+  exBox: { marginTop: 24, alignSelf: 'stretch', marginHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14 },
+  exHead: { fontSize: 11, color: MUTE, marginBottom: 4 },
+  ex: { fontSize: 14, color: INK, marginVertical: 3 },
+  exDate: { fontSize: 12, color: MUTE },
   chip: {
     marginBottom: 14, fontSize: 11, color: 'rgba(47,42,72,0.6)', paddingHorizontal: 10, paddingVertical: 2,
     borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(47,42,72,0.4)', borderRadius: 999, overflow: 'hidden',
@@ -351,9 +347,4 @@ const styles = StyleSheet.create({
   shiftHead: { fontSize: 10, color: MUTE },
   shiftWords: { fontSize: 15, color: INK, textAlign: 'center', marginTop: 2 },
   arrow: { fontSize: 18, color: '#8f5f8a', marginHorizontal: 6 },
-  barRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 4 },
-  barLabel: { width: 96, fontSize: 12, color: INK },
-  barTrack: { flex: 1, height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.5)', overflow: 'hidden' },
-  bar: { height: 9, borderRadius: 5 },
-  barValue: { width: 40, textAlign: 'right', fontSize: 12, color: INK },
 });

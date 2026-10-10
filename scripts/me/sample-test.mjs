@@ -16,7 +16,7 @@ await p.screenshot({ path: `${out}/s1-empty.png` });
 check('何も出ないとき「見本を見る」がある', (await p.getByText('見本を見る').count()) > 0);
 await p.getByText('見本を見る').first().click();
 const t0 = Date.now();
-await p.waitForFunction(() => /よく来ます|来ているかも|ありました/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {});
+await p.waitForFunction(() => /多いみたい|多いかも|ありました/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {});
 console.log('見本が出るまで', Date.now() - t0, 'ms');
 await p.waitForTimeout(1500);
 await p.screenshot({ path: `${out}/s2-sample.png` });
@@ -38,7 +38,7 @@ check('見本をとじると「← 水辺へ」に戻る', (await p.getByText('�
 await p.getByLabel('わたしのことの見方').click(); await p.waitForTimeout(600);
 check('見方の中に「見本を見る」', (await p.getByText('見本を見る').count()) > 0);
 await p.getByText('見本を見る').last().click(); await p.waitForTimeout(1500);
-check('見方から見本が開く（2回目はすぐ）', (await p.getByText('わたしのこと（見本）').count()) > 0 && /よく来ます/.test(await p.evaluate(() => document.body.innerText)));
+check('見方から見本が開く（2回目はすぐ）', (await p.getByText('わたしのこと（見本）').count()) > 0 && /多いみたい/.test(await p.evaluate(() => document.body.innerText)));
 await p.getByLabel('見本をとじる').click(); await p.waitForTimeout(600);
 await p.getByText('← 水辺へ').first().click(); await p.waitForTimeout(3000);
 await p.mouse.click(390 - 33, 67); await p.waitForTimeout(700);
