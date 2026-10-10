@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCaptures, useDeviceId } from '../useCaptures';
@@ -19,17 +19,22 @@ const READ_DAYS = SOURCE_DAYS * 2;
 
 // 夜明けの空（上→下）。星空より明るく、文字が読みやすい。動かさない（毎コマの描き直しをしない）
 const DAWN = ['#8fa3cf', '#b6b4d8', '#dcc3d6', '#efc9cf', '#f8d6c4', '#fde8cc'] as const;
-const INK = '#2f2a48';
-const SUB = '#5d5674';
-const MUTE = '#6a6383';
+const INK = '#2b2640';
+const SUB = '#5f5876';
+const PLUM = '#7d5878';
+const LINE = 'rgba(43,38,64,0.14)';
+const SHEET = 'rgb(253,249,246)';
+const HEADER_H = 96;
+// 明朝体（デザインの決まり：日本語は明朝の細い字）。アプリに字の部品を入れると数MB〜十数MB重くなるので、端末にある明朝体を使う
+const SERIF = Platform.select({ ios: 'Hiragino Mincho ProN', android: 'serif', default: '"Noto Serif JP","Hiragino Mincho ProN","Yu Mincho","YuMincho",serif' });
 
 // 見方（右上の印を押したときだけ出す。星空の「星の見方」と同じ形）
 const INTRO_LINES: [string, string][] = [
-  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。いちばん確かなもの（または、新しく確かになったもの）を1つ'],
-  ['たとえば', 'あなたの記録の中で、実際にそうなった日'],
-  ['来やすいこと', 'ほかにも、あとで元気・好奇心の言葉が来やすいこと。「あと」は、その日から3日以内のことです'],
-  ['交互に', '交互に拾うことが多い2つの言葉。良い・悪いはありません'],
-  ['見えてきたこと', 'これまでに見えてきたことと、よく拾う元気・好奇心の言葉の変わり方（はじめのころと最近）'],
+  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。いちばん確かなもの（または、新しく確かになったもの）を一つ。'],
+  ['たとえば', 'あなたの記録の中で、実際にそうなった日。'],
+  ['あとで来やすいこと', 'ほかにも、あとで元気・好奇心の言葉が来やすいこと。「あと」は、その日から3日以内のことです。'],
+  ['交互に来やすい言葉', '何日かのあいだに、行ったり来たりして拾っている二つ。良い・悪いはありません。'],
+  ['これまで', 'いつ見えはじめ、いつ確かになったか。それと、よく拾う元気・好奇心の言葉の移り変わり。'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
@@ -41,7 +46,6 @@ function heroText(x: SourceItem): string {
   return `「${x.word}」の日のあとに、\n「${x.to}」を\n拾った日がありました`;
 }
 const STAGE_LABEL = { sure: '多いみたい', tentative: '多いかも', seen: 'あった日がある' } as const;
-const CHIP = { tentative: '確かめ中', seen: '見えはじめ' } as const;
 
 const mdDay = (day: number, shiftDays = 0) => {
   const d = new Date((day + shiftDays) * 86400000); // dayNumber は UTC の日で数えている
@@ -106,65 +110,80 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
   const nothing = !showSample && real.result !== null && (real.result.few || !real.result.top);
 
   const top = result && !result.few ? result.top : null;
-  const faint = top && top.stage !== 'sure';
+  // 下の紙が見出しの下まで来たら、見出しの帯を紙の色にする（夜明けの青い帯が白い紙の上に重なって見えないように）
+  const [onSheet, setOnSheet] = useState(false);
+  const sheetTop = useRef(0);
 
   return (
     <View style={[StyleSheet.absoluteFill, { width, height }]}>
       <LinearGradient colors={DAWN} style={StyleSheet.absoluteFill} />
-      <ScrollView style={StyleSheet.absoluteFill} contentContainerStyle={{ paddingBottom: 80, paddingTop: 0 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={StyleSheet.absoluteFill}
+        contentContainerStyle={{ paddingBottom: 0 }}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={32}
+        onScroll={(e) => {
+          const on = sheetTop.current > 0 && e.nativeEvent.contentOffset.y > sheetTop.current - HEADER_H;
+          if (on !== onSheet) setOnSheet(on);
+        }}
+      >
         {/* 開いたときの1画面：いちばん上の源を1つだけ大きく。疲れている日はここだけ読めばよい */}
-        <View style={{ height, justifyContent: 'center', paddingHorizontal: 28 }}>
+        <View style={[styles.first, { minHeight: height }]}>
           {!result ? (
             <Text style={styles.wait}>{progress ? (showSample ? '見本を用意しています…' : '夜が明けるのを待っています…') : ''}</Text>
           ) : result.few ? (
-            <Text style={styles.heroFew}>元気な日が、あと少し集まると{'\n'}見えてきます</Text>
+            <Text style={styles.heroQuiet}>元気な日が、あと少し集まると{'\n'}見えてきます</Text>
           ) : top ? (
             <View style={{ alignItems: 'center' }}>
-              {top.stage !== 'sure' && <Text style={styles.chip}>{CHIP[top.stage]}</Text>}
-              <Text style={[styles.hero, faint && styles.heroFaint]}>{heroText(top)}</Text>
+              {/* 確かさは、画面のどこでも同じ点で表す（言葉を増やさない） */}
+              <View style={styles.heroMeter}>
+                <Meter stage={top.stage} />
+                <Text style={styles.heroMeterText}>{STAGE_LABEL[top.stage]}</Text>
+              </View>
+              <Text style={styles.hero}>{heroText(top)}</Text>
               {/* たとえば：実際にそうなった日（割合の数字より分かりやすい） */}
               {numbers && numbers.length > 0 && (
-                <View style={styles.exBox}>
-                  <Text style={styles.exHead}>たとえば</Text>
+                <View style={styles.ex}>
+                  <Rule label="たとえば" />
                   {numbers.map((e) => (
                     <View key={e.from} style={styles.exRow}>
                       <Text style={styles.exDate}>{mdDay(e.from, shiftDays)}</Text>
-                      <Pill word={top.word} small />
-                      <Text style={styles.arrowSmall}>→</Text>
+                      <Word word={top.word} />
+                      <Text style={styles.arrow}>⟶</Text>
                       <Text style={styles.exDate}>{mdDay(e.to, shiftDays)}</Text>
-                      <Pill word={top.to} small />
+                      <Word word={top.to} />
                     </View>
                   ))}
                 </View>
               )}
             </View>
           ) : (
-            <Text style={styles.heroFew}>まだ、はっきりした流れは{'\n'}見えていません</Text>
+            <Text style={styles.heroQuiet}>まだ、はっきりした流れは{'\n'}見えていません</Text>
           )}
           {nothing && (
             <Pressable hitSlop={12} onPress={openSample} style={styles.sampleBtn} accessibilityRole="button">
               <Text style={styles.sampleBtnText}>見本を見る</Text>
             </Pressable>
           )}
-          {result && !result.few && <Text style={styles.more}>▼ ほかのこと</Text>}
+          {result && !result.few && <Text style={styles.more}>ほかのこと　︾</Text>}
         </View>
 
         {result && !result.few && (
-          <View style={styles.lower}>
-            {/* 下の部分のデザイン（2026-10-10 作り直し。ユーザー「ほかのことが見にくいし、デザインも悪い」）：
-                言葉は種類の色の札（夕空と同じ色）。確かさは字のうすさではなく、点（●●●／●●○／●○○）で表す。字はいつも読める濃さ */}
-            <Section title={top ? 'ほかにも、あとで来やすいこと' : 'あとで来やすいこと'} sub="その日から3日以内に、元気・好奇心の言葉を拾ったこと">
+          // 下の部分（2026-10-10 作り直し。ユーザー「美しく、洗練されたデザインがいい」）：箱・枠・影をやめ、
+          // 夜明けの空から1枚の紙がせり上がるように置く。区切りは細い線と余白、文字は明朝。確かさは点（●●●／●●○／●○○）だけ
+          <View style={styles.sheet} onLayout={(e) => (sheetTop.current = e.nativeEvent.layout.y)}>
+            <Section title="あとで来やすいこと" sub="その日から3日以内に、元気・好奇心の言葉を拾ったこと">
               {(() => {
                 const xs = result.list.filter((x) => x.word !== top?.word).slice(0, 5);
                 return xs.length ? (
-                  xs.map((x, i) => (
-                    <View key={x.word} style={[styles.row, i === xs.length - 1 && styles.rowLast]}>
+                  xs.map((x) => (
+                    <View key={x.word} style={styles.row}>
                       <View style={styles.pair}>
-                        <Pill word={x.word} />
-                        <Text style={styles.arrowSmall}>→</Text>
-                        <Pill word={x.to} />
+                        <Word word={x.word} />
+                        <Text style={styles.arrow}>⟶</Text>
+                        <Word word={x.to} />
                       </View>
-                      <Sureness stage={x.stage} />
+                      <Meter stage={x.stage} />
                     </View>
                   ))
                 ) : (
@@ -174,16 +193,16 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               <Legend />
             </Section>
 
-            <Section title="交互に来やすい言葉" sub="何日かのあいだに、行ったり来たりして拾っている2つ">
+            <Section title="交互に来やすい言葉" sub="何日かのあいだに、行ったり来たりして拾っている二つ">
               {result.loops.length ? (
-                result.loops.map((x, i) => (
-                  <View key={x.a + x.b} style={[styles.row, i === result.loops.length - 1 && styles.rowLast]}>
+                result.loops.map((x) => (
+                  <View key={x.a + x.b} style={styles.row}>
                     <View style={styles.pair}>
-                      <Pill word={x.a} />
-                      <Text style={styles.arrowSmall}>⇄</Text>
-                      <Pill word={x.b} />
+                      <Word word={x.a} />
+                      <Text style={styles.arrow}>⇄</Text>
+                      <Word word={x.b} />
                     </View>
-                    <Sureness stage={x.stage} />
+                    <Meter stage={x.stage} />
                   </View>
                 ))
               ) : (
@@ -191,47 +210,51 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               )}
             </Section>
 
-            <Section title="これまでに見えてきたこと">
+            <Section title="これまで" sub="いつ見えはじめ、いつ確かになったか">
               {!result.story ? (
                 <Text style={styles.empty}>さかのぼって調べています…</Text>
               ) : result.story.length ? (
-                <View style={styles.timeline}>
-                  <View style={styles.timelineLine} />
-                  {/* 組ごとに1行。見えてきた日 → はっきりしてきた日 と、進み具合を並べる */}
-                  {storyRows(result.story).slice(-5).map((g) => (
-                    <View key={g.word + g.to} style={styles.tlRow}>
-                      <View style={[styles.tlDot, g.sure !== undefined && styles.tlDotSure]} />
-                      <View style={styles.tlBody}>
-                        <View style={styles.pair}>
-                          <Pill word={g.word} small />
-                          <Text style={styles.arrowSmall}>→</Text>
-                          <Pill word={g.to} small />
-                        </View>
-                        <Text style={styles.tlState}>
-                          {g.seen !== undefined && `${md(g.seen, shiftDays)} 見えてきた`}
-                          {g.seen !== undefined && g.sure !== undefined && '　→　'}
-                          {g.sure !== undefined && <Text style={styles.tlStateSure}>{md(g.sure, shiftDays)} はっきりしてきた</Text>}
-                        </Text>
-                      </View>
+                storyRows(result.story).slice(-5).map((g) => (
+                  <View key={g.word + g.to} style={styles.tl}>
+                    <View style={styles.pair}>
+                      <Word word={g.word} />
+                      <Text style={styles.arrow}>⟶</Text>
+                      <Word word={g.to} />
                     </View>
-                  ))}
-                </View>
+                    {/* 進み具合：見えはじめた日（●●○）→ 確かになった日（●●●）。上の点と同じ印で */}
+                    <View style={styles.steps}>
+                      {g.seen !== undefined && (
+                        <View style={styles.step}>
+                          <Text style={styles.stepDate}>{md(g.seen, shiftDays)}</Text>
+                          <Meter stage="tentative" />
+                        </View>
+                      )}
+                      {g.seen !== undefined && g.sure !== undefined && <Text style={styles.stepArrow}>›</Text>}
+                      {g.sure !== undefined && (
+                        <View style={styles.step}>
+                          <Text style={styles.stepDate}>{md(g.sure, shiftDays)}</Text>
+                          <Meter stage="sure" />
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                ))
               ) : (
                 <Text style={styles.empty}>まだ、はっきり見えてきたことはありません</Text>
               )}
             </Section>
 
-            <Section title="よく拾う元気・好奇心の言葉">
+            <Section title="よく拾う元気・好奇心の言葉" last>
               {result.shift ? (
-                <View>
-                  <View style={styles.shiftRow}>
+                <View style={styles.shift}>
+                  <View style={styles.shiftCol}>
                     <Text style={styles.shiftHead}>はじめのころ</Text>
-                    <View style={styles.pills}>{result.shift.before.map((w) => <Pill key={w} word={w} />)}</View>
+                    {result.shift.before.map((w) => <Word key={w} word={w} />)}
                   </View>
-                  <Text style={styles.shiftArrow}>↓</Text>
-                  <View style={styles.shiftRow}>
+                  <Text style={styles.shiftArrow}>⟶</Text>
+                  <View style={styles.shiftCol}>
                     <Text style={styles.shiftHead}>最近</Text>
-                    <View style={styles.pills}>{result.shift.after.map((w) => <Pill key={w} word={w} />)}</View>
+                    {result.shift.after.map((w) => <Word key={w} word={w} />)}
                   </View>
                 </View>
               ) : (
@@ -243,7 +266,11 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
       </ScrollView>
 
       {/* 上の見出しの下に、夜明けの空の色の帯（スクロールした文字が見出しと重ならないように） */}
-      <LinearGradient colors={[DAWN[0], DAWN[0], 'rgba(143,163,207,0)']} locations={[0, 0.7, 1]} style={[styles.headerFade, { pointerEvents: 'none' }]} />
+      <LinearGradient
+        colors={onSheet ? [SHEET, SHEET, 'rgba(253,249,246,0)'] : [DAWN[0], DAWN[0], 'rgba(143,163,207,0)']}
+        locations={[0, 0.7, 1]}
+        style={[styles.headerFade, { pointerEvents: 'none' }]}
+      />
       <Text style={[styles.title, { pointerEvents: 'none' }]}>{showSample ? 'わたしのこと（見本）' : 'わたしのこと'}</Text>
       {/* 左上：ふだんは「← 水辺へ」。見本を見ているときは、見本をとじる「×」（星空と同じ） */}
       {introOpen ? null : showSample ? (
@@ -269,72 +296,80 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
         </Pressable>
       )}
       {introOpen && (
-        <Pressable style={styles.intro} onPress={() => setIntroOpen(false)}>
+        <View style={styles.intro}>
+          <LinearGradient colors={['#f6eef2', '#fbf3ec']} style={StyleSheet.absoluteFill} />
           <ScrollView contentContainerStyle={styles.introScroll} showsVerticalScrollIndicator={false}>
-            <Pressable style={styles.introCard} onPress={() => setIntroOpen(false)}>
-              <Text style={styles.introTitle}>わたしのことの見方</Text>
-              <Text style={styles.introLead}>水辺で拾った言葉の、日をまたいだ順番を見ています。何をした日のあとに、どんな元気・好奇心の言葉を拾うことが多いかが分かります。</Text>
-              {INTRO_LINES.map(([label, body]) => (
-                <View key={label} style={styles.introRow}>
+            <Text style={styles.introTitle}>わたしのことの見方</Text>
+            <Text style={styles.introLead}>水辺で拾った言葉の、日をまたいだ順番を見ています。何をした日のあとに、どんな元気・好奇心の言葉を拾うことが多いかが分かります。</Text>
+            <View style={styles.introBlock}>
+              {INTRO_LINES.map(([label, body], i) => (
+                <View key={label} style={[styles.introRow, i === INTRO_LINES.length - 1 && { borderBottomWidth: 0 }]}>
                   <Text style={styles.introLabel}>{label}</Text>
                   <Text style={styles.introBody}>{body}</Text>
                 </View>
               ))}
-              <View style={styles.introRow}>
-                <Text style={styles.introLabel}>確かさ</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.introBody, { color: INK }]}>多いみたい：何週も見て、たまたまではなさそうなもの</Text>
-                  <Text style={[styles.introBody, { color: 'rgba(47,42,72,0.6)' }]}>多いかも：確かめている途中。たまたまのこともあります</Text>
-                  <Text style={[styles.introBody, { color: 'rgba(47,42,72,0.42)' }]}>拾った日がありました：起きたことを、そのまま書いています</Text>
-                  <Text style={styles.introNote}>拾う日が増えるほど、うすい字から濃い字へ、だんだん確かになっていきます。</Text>
+            </View>
+            <Text style={styles.introSub}>確かさ</Text>
+            <View style={styles.introBlock}>
+              {(['sure', 'tentative', 'seen'] as const).map((st, i) => (
+                <View key={st} style={[styles.introRow, i === 2 && { borderBottomWidth: 0 }]}>
+                  <View style={styles.introMeter}>
+                    <Meter stage={st} />
+                    <Text style={styles.introMeterText}>{STAGE_LABEL[st]}</Text>
+                  </View>
+                  <Text style={styles.introBody}>
+                    {st === 'sure' ? '何週も見て、たまたまではなさそうなもの。' : st === 'tentative' ? '確かめている途中。たまたまのこともあります。' : '起きたことを、そのまま書いています。'}
+                  </Text>
                 </View>
-              </View>
-              <Text style={styles.introEnd}>「〜のあと」は順番のことで、「〜したから」という意味ではありません。</Text>
-              {/* 見本は、見方の中からいつでも見られる（星空と同じ） */}
-              {!showSample && (
-                <Pressable
-                  hitSlop={12}
-                  onPress={() => {
-                    setIntroOpen(false);
-                    openSample();
-                  }}
-                  style={[styles.sampleBtn, { alignSelf: 'center' }]}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.sampleBtnText}>見本を見る</Text>
-                </Pressable>
-              )}
-            </Pressable>
+              ))}
+            </View>
+            <Text style={styles.introNote}>拾う日が増えるほど、点が一つずつ増えて、確かになっていきます。{'\n'}「〜のあと」は順番のことで、「〜したから」という意味ではありません。</Text>
+            {/* 見本は、見方の中からいつでも見られる（星空と同じ） */}
+            {!showSample && (
+              <Pressable
+                hitSlop={12}
+                onPress={() => {
+                  setIntroOpen(false);
+                  openSample();
+                }}
+                style={styles.sampleBtn}
+                accessibilityRole="button"
+              >
+                <Text style={styles.sampleBtnText}>見本を見る</Text>
+              </Pressable>
+            )}
           </ScrollView>
-          <View style={[styles.closeBtn, styles.closeRight]}>
+          <Pressable style={[styles.closeBtn, styles.closeRight]} hitSlop={14} onPress={() => setIntroOpen(false)} accessibilityLabel="見方をとじる">
             <Text style={styles.closeBtnText}>×</Text>
-          </View>
-        </Pressable>
+          </Pressable>
+        </View>
       )}
     </View>
   );
 }
 
-// 言葉の札：種類の色（夕空と同じ CATEGORY_COLOR）をうすく敷き、字は濃いまま
-function Pill({ word, small }: { word: string; small?: boolean }) {
+// 言葉：明朝の字の前に、種類の色（夕空と同じ CATEGORY_COLOR）の小さな丸
+function Word({ word }: { word: string }) {
   const [r, g, b] = CATEGORY_COLOR[WORD_CATEGORY[word] ?? 'emotion'];
+  const k = 0.78; // 丸は少し濃くして、明るい紙の上でも見えるように
   return (
-    <View style={[styles.pill, small && styles.pillSmall, { backgroundColor: `rgba(${r},${g},${b},0.55)`, borderColor: `rgba(${Math.round(r * 0.7)},${Math.round(g * 0.7)},${Math.round(b * 0.7)},0.45)` }]}>
-      <Text style={[styles.pillText, small && styles.pillTextSmall]} numberOfLines={1}>
+    <View style={styles.word}>
+      <View style={[styles.wordDot, { backgroundColor: `rgb(${Math.round(r * k)},${Math.round(g * k)},${Math.round(b * k)})` }]} />
+      <Text style={styles.wordText} numberOfLines={1}>
         {word}
       </Text>
     </View>
   );
 }
 
-// 確かさ：●●●（多いみたい）／●●○（多いかも）／●○○（あった日がある）
+// 確かさ：●●●（多いみたい）／●●○（多いかも）／●○○（あった日がある）。画面のどこでも、確かさはこの点だけで表す
 const SURE_DOTS = { sure: 3, tentative: 2, seen: 1 } as const;
-function Sureness({ stage }: { stage: 'sure' | 'tentative' | 'seen' }) {
+function Meter({ stage }: { stage: 'sure' | 'tentative' | 'seen' }) {
   const n = SURE_DOTS[stage];
   return (
-    <View style={styles.dots} accessibilityLabel={STAGE_LABEL[stage]}>
+    <View style={styles.meter} accessibilityLabel={STAGE_LABEL[stage]}>
       {[0, 1, 2].map((i) => (
-        <View key={i} style={[styles.dot, i < n && styles.dotOn]} />
+        <View key={i} style={[styles.meterDot, i < n && styles.meterDotOn]} />
       ))}
     </View>
   );
@@ -344,118 +379,111 @@ function Legend() {
     <View style={styles.legend}>
       {(['sure', 'tentative', 'seen'] as const).map((st) => (
         <View key={st} style={styles.legendItem}>
-          <Sureness stage={st} />
+          <Meter stage={st} />
           <Text style={styles.legendText}>{STAGE_LABEL[st]}</Text>
         </View>
       ))}
     </View>
   );
 }
+// 細い線のあいだに小さな見出し（「たとえば」）
+function Rule({ label }: { label: string }) {
+  return (
+    <View style={styles.rule}>
+      <View style={styles.ruleLine} />
+      <Text style={styles.ruleText}>{label}</Text>
+      <View style={styles.ruleLine} />
+    </View>
+  );
+}
 
-// 歩みを組（言葉 → 行き先）ごとにまとめる：見えてきた日（かも）と、はっきりしてきた日（多いみたい）。はじめて出た順
+// 歩みを組（言葉 → 行き先）ごとにまとめる：見えはじめた日（多いかも）と、確かになった日（多いみたい）。はじめて出た順
 function storyRows(story: { at: number; word: string; to: string; stage: 'tentative' | 'sure' }[]) {
   const rows = new Map<string, { word: string; to: string; seen?: number; sure?: number; first: number }>();
   for (const e of story) {
-    const k = e.word;
-    const r = rows.get(k) ?? { word: e.word, to: e.to, first: e.at };
+    const r = rows.get(e.word) ?? { word: e.word, to: e.to, first: e.at };
     if (e.stage === 'tentative') r.seen ??= e.at;
     else r.sure ??= e.at;
     r.to = e.to;
-    rows.set(k, r);
+    rows.set(e.word, r);
   }
   return [...rows.values()].sort((a, b) => a.first - b.first);
 }
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+function Section({ title, sub, last, children }: { title: string; sub?: string; last?: boolean; children: React.ReactNode }) {
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, last && { borderBottomWidth: 0 }]}>
       <Text style={styles.secTitle}>{title}</Text>
       {sub && <Text style={styles.secSub}>{sub}</Text>}
-      <View style={{ marginTop: 10 }}>{children}</View>
+      <View style={{ marginTop: 14 }}>{children}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  lower: { paddingHorizontal: 16, paddingTop: 8, gap: 14 },
-  section: { backgroundColor: 'rgba(255,255,255,0.62)', borderRadius: 18, paddingVertical: 16, paddingHorizontal: 16, boxShadow: '0px 2px 10px rgba(80,60,110,0.08)' },
-  secTitle: { fontSize: 16, color: INK, fontWeight: '600', letterSpacing: 0.5 },
-  secSub: { fontSize: 12, color: SUB, marginTop: 4, lineHeight: 17 },
-  empty: { fontSize: 13, color: SUB },
-  rowLast: { borderBottomWidth: 0 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(47,42,72,0.12)' },
-  pair: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, flexWrap: 'wrap', gap: 6 },
-  pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  pill: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4, borderWidth: 1 },
-  pillSmall: { paddingHorizontal: 8, paddingVertical: 2 },
-  pillText: { fontSize: 14, color: INK },
-  pillTextSmall: { fontSize: 12.5 },
-  arrowSmall: { fontSize: 14, color: '#8f5f8a' },
-  dots: { flexDirection: 'row', gap: 4, marginLeft: 8 },
-  dot: { width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: '#8f5f8a' },
-  dotOn: { backgroundColor: '#8f5f8a' },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendText: { fontSize: 11.5, color: SUB },
-  timeline: { position: 'relative', paddingLeft: 2 },
-  timelineLine: { position: 'absolute', left: 5, top: 10, bottom: 10, width: 2, backgroundColor: 'rgba(143,95,138,0.25)', borderRadius: 1 },
-  tlRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, gap: 12 },
-  tlDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4, borderWidth: 2, borderColor: '#b98fb2', backgroundColor: '#fbf2f2' },
-  tlDotSure: { backgroundColor: '#8f5f8a', borderColor: '#8f5f8a' },
-  tlDate: { width: 62, marginLeft: 10, fontSize: 12, color: SUB, marginTop: 2 },
-  tlBody: { flex: 1, gap: 4 },
-  tlState: { fontSize: 12, color: SUB, lineHeight: 18 },
-  tlStateSure: { color: '#8f5f8a', fontWeight: '600' },
-  shiftRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  shiftArrow: { fontSize: 16, color: '#8f5f8a', marginVertical: 4, marginLeft: 30 },
-  sampleBtn: { marginTop: 22, alignSelf: 'center', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(143,95,138,0.55)' },
-  sampleBtnText: { fontSize: 13, color: '#6b4a72', letterSpacing: 1 },
+  first: { justifyContent: 'center', paddingHorizontal: 28, paddingTop: 90, paddingBottom: 90 },
+  wait: { textAlign: 'center', fontSize: 13, color: SUB, fontFamily: SERIF },
+  heroMeter: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 22 },
+  heroMeterText: { fontSize: 12, color: PLUM, letterSpacing: 2, fontFamily: SERIF },
+  hero: { textAlign: 'center', fontSize: 25, lineHeight: 44, color: INK, fontFamily: SERIF, letterSpacing: 1 },
+  heroQuiet: { textAlign: 'center', fontSize: 18, lineHeight: 34, color: SUB, fontFamily: SERIF, letterSpacing: 1 },
+  ex: { marginTop: 34, alignSelf: 'stretch', paddingHorizontal: 6 },
+  exRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
+  exDate: { fontSize: 12, color: SUB, fontFamily: SERIF, minWidth: 46, textAlign: 'right' },
+  rule: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ruleLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(43,38,64,0.25)' },
+  ruleText: { fontSize: 12, color: PLUM, letterSpacing: 3, fontFamily: SERIF },
+  sampleBtn: { marginTop: 30, alignSelf: 'center', paddingHorizontal: 26, paddingVertical: 9, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: 'rgba(125,88,120,0.6)' },
+  sampleBtnText: { fontSize: 13, color: PLUM, letterSpacing: 3, fontFamily: SERIF },
+  more: { position: 'absolute', bottom: 34, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: SUB, letterSpacing: 3, fontFamily: SERIF },
+  // 下の部分：夜明けの空から1枚の紙がせり上がる
+  sheet: { backgroundColor: SHEET, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 26, paddingTop: 10, paddingBottom: 90 },
+  section: { paddingVertical: 26, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: LINE },
+  secTitle: { fontSize: 13, color: PLUM, letterSpacing: 3, fontFamily: SERIF },
+  secSub: { fontSize: 12, color: SUB, marginTop: 6, lineHeight: 19, fontFamily: SERIF },
+  empty: { fontSize: 13, color: SUB, fontFamily: SERIF },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  pair: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, flexWrap: 'wrap', gap: 10 },
+  word: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  wordDot: { width: 6, height: 6, borderRadius: 3 },
+  wordText: { fontSize: 16, color: INK, fontFamily: SERIF },
+  arrow: { fontSize: 13, color: 'rgba(43,38,64,0.45)' },
+  meter: { flexDirection: 'row', gap: 4 },
+  meterDot: { width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: PLUM },
+  meterDotOn: { backgroundColor: PLUM },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 6, marginTop: 14 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendText: { fontSize: 11, color: SUB, fontFamily: SERIF },
+  tl: { paddingVertical: 10, gap: 8 },
+  steps: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 12 },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepDate: { fontSize: 12, color: SUB, fontFamily: SERIF },
+  stepArrow: { fontSize: 14, color: 'rgba(43,38,64,0.4)' },
+  shift: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  shiftCol: { flex: 1, gap: 8 },
+  shiftHead: { fontSize: 11, color: SUB, letterSpacing: 2, fontFamily: SERIF, marginBottom: 2 },
+  shiftArrow: { fontSize: 14, color: 'rgba(43,38,64,0.45)', marginTop: 22 },
+  // 上の見出し・ボタン
+  headerFade: { position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_H },
+  back: { position: 'absolute', top: 50, left: 16, zIndex: 2 },
+  backText: { fontSize: 13, color: '#4a4566', fontFamily: SERIF, letterSpacing: 1 },
+  title: { position: 'absolute', top: 48, left: 0, right: 0, textAlign: 'center', fontSize: 15, letterSpacing: 4, color: '#3a3450', fontFamily: SERIF },
   help: { position: 'absolute', top: 44, right: 16, zIndex: 3 },
-  closeBtn: { position: 'absolute', top: 46, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(47,42,72,0.35)', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  closeBtnText: { fontSize: 18, lineHeight: 20, color: 'rgba(47,42,72,0.75)' },
+  closeBtn: { position: 'absolute', top: 46, width: 28, height: 28, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: 'rgba(43,38,64,0.35)', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
+  closeBtnText: { fontSize: 16, lineHeight: 18, color: 'rgba(43,38,64,0.75)' },
   closeLeft: { left: 16 },
   closeRight: { right: 16 },
-  intro: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(250,238,232,0.99)', zIndex: 4 },
-  introScroll: { paddingTop: 96, paddingBottom: 60, paddingHorizontal: 26, alignItems: 'center' },
-  introCard: { width: '100%', maxWidth: 380 },
-  introTitle: { fontSize: 17, color: INK, letterSpacing: 2, textAlign: 'center', marginBottom: 14 },
-  introLead: { fontSize: 13, lineHeight: 21, color: SUB, marginBottom: 18 },
-  introRow: { flexDirection: 'row', marginBottom: 12 },
-  introLabel: { width: 98, fontSize: 13, color: '#8f5f8a', paddingTop: 1 },
-  introBody: { flex: 1, fontSize: 13, lineHeight: 21, color: SUB },
-  introNote: { fontSize: 12, lineHeight: 19, color: MUTE, marginTop: 4 },
-  introEnd: { marginTop: 8, fontSize: 12, lineHeight: 19, color: MUTE, textAlign: 'center' },
-  headerFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 96 },
-  back: { position: 'absolute', top: 50, left: 16, zIndex: 2 },
-  backText: { fontSize: 14, color: '#4a4566' },
-  title: { position: 'absolute', top: 48, left: 0, right: 0, textAlign: 'center', fontSize: 16, letterSpacing: 1.6, color: '#3a3450' },
-  wait: { textAlign: 'center', fontSize: 13, color: MUTE },
-  hero: { textAlign: 'center', fontSize: 25, lineHeight: 40, color: INK },
-  heroFaint: { color: 'rgba(47,42,72,0.55)' },
-  heroFew: { textAlign: 'center', fontSize: 19, lineHeight: 32, color: SUB },
-  exBox: { marginTop: 26, alignSelf: 'center', backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 16, boxShadow: '0px 2px 10px rgba(80,60,110,0.08)' },
-  exHead: { fontSize: 12, color: SUB, marginBottom: 4 },
-  exRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 4 },
-  exDate: { fontSize: 12, color: SUB, minWidth: 44 },
-  chip: {
-    marginBottom: 14, fontSize: 11, color: 'rgba(47,42,72,0.6)', paddingHorizontal: 10, paddingVertical: 2,
-    borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(47,42,72,0.4)', borderRadius: 999, overflow: 'hidden',
-  },
-  more: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: MUTE },
-  card: { backgroundColor: 'rgba(255,255,255,0.45)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
-  h: { fontSize: 12, color: MUTE, marginBottom: 6 },
-  note: { fontSize: 11, color: MUTE, marginTop: 4, lineHeight: 16 },
-  level: { fontSize: 11, color: MUTE, marginTop: 6, marginBottom: 2 },
-  item: { fontSize: 15, color: INK, marginLeft: 8, marginVertical: 2, lineHeight: 21 },
-  itemMaybe: { color: 'rgba(47,42,72,0.6)' },
-  itemSeen: { color: 'rgba(47,42,72,0.4)', fontSize: 14 },
-  sub: { fontSize: 11, color: '#8f5f8a', marginTop: 10, marginBottom: 4, paddingBottom: 2, borderBottomWidth: 1, borderBottomColor: 'rgba(143,95,138,0.25)' },
-  ev: { flexDirection: 'row', marginVertical: 3 },
-  evDate: { width: 64, fontSize: 11, color: MUTE, paddingTop: 2 },
-  evText: { flex: 1, fontSize: 13, color: INK, lineHeight: 19 },
-  shift: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  shiftCol: { flex: 1, alignItems: 'center' },
-  shiftHead: { width: 78, fontSize: 12, color: SUB, paddingTop: 7 },
-  shiftWords: { fontSize: 15, color: INK, textAlign: 'center', marginTop: 2 },
-  arrow: { fontSize: 18, color: '#8f5f8a', marginHorizontal: 6 },
+  // 見方
+  intro: { ...StyleSheet.absoluteFill, zIndex: 4 },
+  introScroll: { paddingTop: 104, paddingBottom: 70, paddingHorizontal: 30 },
+  introTitle: { fontSize: 20, color: INK, letterSpacing: 4, textAlign: 'center', fontFamily: SERIF },
+  introLead: { fontSize: 13.5, lineHeight: 24, color: SUB, marginTop: 20, fontFamily: SERIF },
+  introSub: { fontSize: 13, color: PLUM, letterSpacing: 3, marginTop: 30, fontFamily: SERIF },
+  introBlock: { marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LINE },
+  introRow: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: LINE, gap: 6 },
+  introLabel: { fontSize: 14, color: INK, fontFamily: SERIF, letterSpacing: 1 },
+  introBody: { fontSize: 13, lineHeight: 22, color: SUB, fontFamily: SERIF },
+  introMeter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  introMeterText: { fontSize: 14, color: INK, fontFamily: SERIF },
+  introNote: { fontSize: 12.5, lineHeight: 22, color: SUB, marginTop: 22, fontFamily: SERIF },
 });
