@@ -8,16 +8,16 @@ import Animated, {
   withDecay,
   withDelay,
   withRepeat,
-  withSequence,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, Line as SvgLine, LinearGradient as SvgLinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line as SvgLine, LinearGradient as SvgLinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { WIDE_CAPS, layoutSky, lineTiers, skeleton, selectConstellation, starBox, type Mag, type StarLink, type Star, type TentativeLink } from '../constellation';
 import { useCaptures } from '../useCaptures';
+import HelpStar from './HelpStar';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
 // ふりかえり（夜）。川の画面の上に重ねて出す。背景（夜の静止画）は川の画面が持つ。
@@ -27,53 +27,6 @@ import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 const TWINKLE_MS = 3200;
 const TWINKLE_GROUPS = 3;
 // 星座の上と下に空ける高さ（上: タイトル、下: 期間・ヒント・川へ戻る）
-// 右上の「星の見方」の印（4つの角の星。「?」はつけない：ユーザー「はてなマークいらないかも」2026-10-10）
-const HELP_STAR = 'M15 3l1.6 6.4L23 11l-6.4 1.6L15 19l-1.6-6.4L7 11l6.4-1.6z';
-
-const HELP_TWINKLE_EVERY_MS = 4000;
-const HELP_GLINT = 24;
-// 右上の「星の見方」の印。色は星座の線と同じ金色を、ひかえめに（白だと浮いた。ユーザー「色を変えたほうが良いかも」→ B 2026-10-10）。
-// 押せると分かるように、4秒に1回「きらん」と光る（水辺の月と星と同じ。ユーザー「きらんと光ってほしい４秒に一回ぐらい」2026-10-10）
-function HelpStar() {
-  const kiran = useSharedValue(0);
-  useEffect(() => {
-    kiran.set(
-      withRepeat(
-        withSequence(
-          withDelay(HELP_TWINKLE_EVERY_MS - 700, withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })),
-          withTiming(0, { duration: 500, easing: Easing.in(Easing.quad) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-    return () => cancelAnimation(kiran);
-  }, [kiran]);
-  const iconStyle = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * kiran.value }));
-  const glintStyle = useAnimatedStyle(() => ({
-    opacity: kiran.value,
-    transform: [{ scale: 0.3 + 0.9 * kiran.value }, { rotate: `${kiran.value * 20}deg` }],
-  }));
-  const g = HELP_GLINT;
-  return (
-    <View style={{ width: 32, height: 32 }}>
-      <Animated.View style={iconStyle}>
-        <Svg width={32} height={32} viewBox="0 -4 30 30">
-          <Path d={HELP_STAR} fill={LINE_COLOR} />
-        </Svg>
-      </Animated.View>
-      {/* 星の真ん中（32px の箱の真ん中）に、細い十字の光 */}
-      <Animated.View style={[{ position: 'absolute', left: 16 - g / 2, top: 16 - g / 2, width: g, height: g }, glintStyle]} pointerEvents="none">
-        <Svg width={g} height={g}>
-          <Path d={`M${g / 2} 0 L${g / 2 + 0.9} ${g / 2} L${g / 2} ${g} L${g / 2 - 0.9} ${g / 2} Z`} fill="#fff4d8" />
-          <Path d={`M0 ${g / 2} L${g / 2} ${g / 2 - 0.9} L${g} ${g / 2} L${g / 2} ${g / 2 + 0.9} Z`} fill="#fff4d8" />
-          <Circle cx={g / 2} cy={g / 2} r={2} fill="#fffaf0" />
-        </Svg>
-      </Animated.View>
-    </View>
-  );
-}
-
 // 星の見方（右上の「星の見方」を押したときだけ出す）
 // 3つ目：線の見本（名前の下に小さく描く。点線とつぶの線を、言葉だけでは見分けにくいため 2026-10-10）
 const INTRO_LINES: [string, string, ('solid' | 'cross' | 'tentative')?][] = [
@@ -691,7 +644,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
           accessibilityRole="button"
           accessibilityLabel="星の見方"
         >
-          <HelpStar />
+          <HelpStar color={LINE_COLOR} />
         </Pressable>
       )}
 

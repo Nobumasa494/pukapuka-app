@@ -153,6 +153,7 @@ pukapukaアプリのUI/UX設計・実装を行うためのスキル。デザイ�
 - 遷移中（`river` 以外）は泡の計算を止める（`paused`）。泡は行きで空へ昇って消え（`rise`）、帰りの後半に元の水面から浮かび上がる（`appear`）
 - **拾ったことば ⇄ ふりかえり（夜）も同じ画面に重ねる（2026-10-04）**: 「つながりを見る」と言葉のタップで `stage` `toNight` → `night`。動画 `cloud_to_night.mp4`（3秒、最初のコマ＝`cloud_bg.jpg`、最後のコマ＝`night_bg.jpg`）。夜はループの動画を持たず、終わり際に夜の静止画を被せて `player.pause()`。戻りは `nightToRiver`: 下に川の静止画を置き、夜の静止画を 900ms でフェードしてから川ループ。夜の UI は `src/components/NightOverlay.tsx`（左上「← ことばへ」・タイトル「ふりかえり」・下「川へ戻る」。星座はこの上に足す）。**夜→拾ったことば**は `nightToCloud`: 行きの動画を逆順にした `night_to_cloud.mp4`（ffmpeg の `reverse`、レンダリングなし。最初のコマ＝`night_bg.jpg`、最後のコマ＝`cloud_bg.jpg`、差 0.3/255）を流して空ループへ。旧 `src/app/archive.tsx` へは移らない（画面を切り替えると下の画面の動画の描画面が捨てられて黒く光るため）
 - 静止画は `covers`（river / cloud / night）。各動画の `CLIPS` に `first`（差し替えの瞬間に被せる）と `last`（終わり際に被せる）を書けば、`playClip` / `precover` が対応する静止画を使う。遷移を足すときは `CLIPS` に1行足す
+- **web で押させない指定（`pointerEvents`）を切りかえない**（2026-10-10）：react-native-web は `'box-none'` を書けず（'auto' と同じになる）、一度 `'none'` にすると `'none'` が残る。月と星が2回目から押せなくなった。画面全体をおおう層で切りかえず、押す部品そのものを `'auto'`/`'none'` で切る（`/pukapuka-me` の 7.）
 - **画面の土台の色は空の藍色 `#1a1c45`**（`_layout.tsx` の `GestureHandlerRootView` と `Stack` の `contentStyle`）。既定の白のままだと、画面の切り替えの途中で白く光る
 
 ### 起動

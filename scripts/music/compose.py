@@ -441,6 +441,42 @@ def version_night():
     return m.render(loop, wet=0.65, t60=7.0, t60_hi=2.8)
 
 
+# ---- わたしのこと（夜明け）: D メジャー（鳴るのは A メジャー）、拍のない静かな曲。読むのをじゃましない（2026-10-10） ----
+# 夜（低い持続音・暗い・ずっと高いガラス）と川（58 BPM のピアノとハープ）の間。柔らかい和音の上に、フェルトピアノがまばらに鳴る。
+# 夜よりも明るく（長調・中くらいの音域）、川よりも音の数を少なく。低い音は B1 より上
+ME_SECTIONS = [  # (秒, ベース, 和音)
+    (9.0, 50, [62, 66, 69, 76]),  # Dadd9
+    (9.0, 43, [62, 66, 67, 71]),  # GM7
+    (9.0, 47, [62, 66, 69, 71]),  # Bm7
+    (9.0, 45, [62, 64, 67, 69]),  # A7sus4（頭の D へ戻る）
+]
+
+
+def version_me(up=12, bass_gain=0.18, piano_gain=0.55, bright=5):
+    """わたしのこと（夜明け）: 柔らかい和音（ゆっくり息づく）＋フェルトピアノのまばらな音。拍なし・中くらいの残響"""
+    global rng
+    rng = np.random.default_rng(31)
+    loop = sum(sec for sec, *_ in ME_SECTIONS)
+    m = Mix(loop + 8)
+    t0 = 0.0
+    for sec, bass, chord in ME_SECTIONS:
+        m.add(pad([bass, bass + 12], sec, 0.6, bright=3, atk=2.5, rel=3.0), t0, gain=bass_gain, send=0.7)
+        m.add(pad([c + up for c in chord], sec, 0.4, bright=bright, vib=True, atk=3.0, rel=3.0), t0, gain=0.2, send=0.9)
+        t0 += sec
+    # フェルトピアノ: 五音音階（レ ミ ファ# ラ シ）の中くらいの高さを、3〜6秒に1つ。ときどき2音を少しずらして
+    notes = [66, 69, 71, 74, 76, 78, 81]
+    t = 1.2
+    while t < loop - 2:
+        n = int(rng.choice(notes))
+        v = float(rng.uniform(0.35, 0.6))
+        m.add(felt_piano(mtof(n), 2.5, v), t, pan=float(rng.uniform(-0.5, 0.5)), gain=piano_gain, send=0.8)
+        if rng.uniform() < 0.3:
+            n2 = notes[max(0, notes.index(n) - 2)]
+            m.add(felt_piano(mtof(n2), 2.0, v * 0.7), t + 0.45, pan=float(rng.uniform(-0.5, 0.5)), gain=piano_gain * 0.85, send=0.8)
+        t += float(rng.uniform(3.0, 6.0))
+    return m.render(loop, wet=0.4, t60=4.0, t60_hi=1.8)
+
+
 def bubble(f, vel):
     """泡: 低いところから目標の音へ 25ms ですっと上がる純音（水の中の泡が上がって、水面ではじける感じ）"""
     t = tvec(0.35)

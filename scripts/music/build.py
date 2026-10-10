@@ -130,7 +130,10 @@ def main():
     approved = json.load(open(APPROVED, encoding='utf-8')) if os.path.exists(APPROVED) else {}
     prints = {}
     with tempfile.TemporaryDirectory() as tmp:
-        for name, fn in (('river', compose.version_river), ('cloud', compose.version_cloud), ('night', compose.version_night)):
+        only = sys.argv[sys.argv.index('--only') + 1].split(',') if '--only' in sys.argv else None  # 例: --only me（ほかの決めた曲の m4a を書き直さない）
+        for name, fn in (('river', compose.version_river), ('cloud', compose.version_cloud), ('night', compose.version_night), ('me', compose.version_me)):
+            if only and name not in only:
+                continue
             x = fn()
             prints[name] = fingerprint(x)
             n = int(np.ceil(x.shape[1] / 1024) * 1024)
@@ -141,17 +144,21 @@ def main():
             head, tail, mid = encode_loop(y, os.path.join(OUT, f'bgm_{name}.m4a'), gain, tmp)
             print(f'bgm_{name}.m4a  {n / compose.SR:.1f}s  gain {gain:+.1f}dB  AAC の誤差 頭 {head:.4f} / 終わり {tail:.4f} / 真ん中 {mid:.4f}'
                   f'  {compare(name, prints[name], approved)}')
-        compose.chimes(tmp)
-        for i in range(5):
-            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', os.path.join(tmp, f'chime_{i}.wav'),
-                            '-c:a', 'aac', '-b:a', CHIME_BITRATE, os.path.join(OUT, f'chime_{i}.m4a')], check=True)
-        for i in range(5):
-            x = wavfile.read(os.path.join(tmp, f'chime_{i}.wav'))[1].T.astype(float) / 32767
-            prints[f'chime_{i}'] = fingerprint(x)
-        results = {compare(f'chime_{i}', prints[f'chime_{i}'], approved) for i in range(5)}
-        print('chime_0..4.m4a  ' + ' / '.join(sorted(results)))
+        if only:
+            print('--only のため、拾った音は作り直さない')
+        if not only:
+            compose.chimes(tmp)
+            for i in range(5):
+                subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', os.path.join(tmp, f'chime_{i}.wav'),
+                                '-c:a', 'aac', '-b:a', CHIME_BITRATE, os.path.join(OUT, f'chime_{i}.m4a')], check=True)
+            for i in range(5):
+                x = wavfile.read(os.path.join(tmp, f'chime_{i}.wav'))[1].T.astype(float) / 32767
+                prints[f'chime_{i}'] = fingerprint(x)
+            results = {compare(f'chime_{i}', prints[f'chime_{i}'], approved) for i in range(5)}
+            print('chime_0..4.m4a  ' + ' / '.join(sorted(results)))
     if approve:
-        json.dump(prints, open(APPROVED, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        approved.update(prints)  # --only のときに、ほかの決めた音の指紋を消さない
+        json.dump(approved, open(APPROVED, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
         print('approved.json を今の音で書き直した（ユーザーが聴いて決めた音として記録）')
 
 

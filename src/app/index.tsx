@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue, useAnimatedStyle, useAnimatedProps, useAnimatedReaction, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI,
@@ -14,6 +14,7 @@ import { useAddCapture } from '../useCaptures';
 import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
+import MeOverlay from '../components/MeOverlay';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
@@ -40,7 +41,7 @@ const VIDEO_SURFACE = 'textureView' as const;
 // 新しい動画を動かし始めた瞬間に表示中の動画が黒くなった（ボタンを押した瞬間に画面が黒く光る）
 // 夜はループの動画を持たない。遷移の最後のコマと同じ静止画で止める
 type Clip = 'river' | 'toCloud' | 'cloud' | 'toRiver' | 'toNight' | 'nightToCloud';
-type Stage = Clip | 'night' | 'nightToRiver' | 'riverToNight';
+type Stage = Clip | 'night' | 'nightToRiver' | 'riverToNight' | 'me' | 'riverToMe' | 'meToRiver';
 
 // 段階ごとに流す曲と、切り替えにかける時間（遷移の動画と同じ長さ）
 const SCENE_OF: Record<Stage, Scene> = {
@@ -53,6 +54,9 @@ const SCENE_OF: Record<Stage, Scene> = {
   nightToCloud: 'cloud',
   nightToRiver: 'river',
   riverToNight: 'night',
+  me: 'me',
+  riverToMe: 'me',
+  meToRiver: 'river',
 };
 const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
   river: 1500,
@@ -62,6 +66,8 @@ const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
   nightToCloud: 3000,
   nightToRiver: 900,
   riverToNight: 900,
+  riverToMe: 900,
+  meToRiver: 900,
 };
 type Still = 'river' | 'cloud' | 'night';
 // first: 最初のコマと同じ静止画（差し替えの瞬間に被せる）。last: 遷移の最後のコマと同じ静止画（終わり際に被せる）
@@ -86,7 +92,7 @@ const GLINT = 26;
 // 押せると分かるように、4秒に1回、星が「きらん」と光り、月のうしろの淡い光（月の暈）も一瞬明るくなる。
 // 押した瞬間は少し縮んで明るくなり、軽く振動する
 // （ユーザー「月ボタンが押せる感を出したい」→ 暈が息づく案 →「きらんと光るがいいかも、４秒に一回くらい」2026-10-10）
-function LookBackMoon({ onPress }: { onPress: () => void }) {
+function LookBackMoon({ onPress, disabled }: { onPress: () => void; disabled?: boolean }) {
   const kiran = useSharedValue(0);
   const pressed = useSharedValue(0);
   useEffect(() => {
@@ -110,7 +116,8 @@ function LookBackMoon({ onPress }: { onPress: () => void }) {
   const moonStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 - 0.12 * pressed.value }] }));
   return (
     <Pressable
-      style={styles.archiveBtn}
+      // 水辺以外では押させない。ここ（ふつうの部品）の style なら、web でも戻したときに正しく効く
+      style={[styles.archiveBtn, { pointerEvents: disabled ? 'none' : 'auto' }]}
       hitSlop={16}
       onPressIn={() => {
         pressed.set(withTiming(1, { duration: 80 }));
@@ -118,6 +125,7 @@ function LookBackMoon({ onPress }: { onPress: () => void }) {
       }}
       onPressOut={() => pressed.set(withTiming(0, { duration: 220 }))}
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel="振り返る"
     >
@@ -820,7 +828,7 @@ export default function Home() {
   // 川が見えていない段階（拾ったことば・夜空と、その間の動画）。泡の揺れを止める
   const riverHidden = useSharedValue(false);
   useEffect(() => {
-    riverHidden.set(stage === 'cloud' || stage === 'toNight' || stage === 'night' || stage === 'nightToCloud' || stage === 'riverToNight');
+    riverHidden.set(stage === 'cloud' || stage === 'toNight' || stage === 'night' || stage === 'nightToCloud' || stage === 'riverToNight' || stage === 'me' || stage === 'riverToMe');
   }, [stage, riverHidden]);
   const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
   // 「振り返る」を押すと出る、行き先（夕空・星空）の選び
@@ -849,6 +857,7 @@ export default function Home() {
   const coverNight = useSharedValue(0);
   const covers: Record<Still, SharedValue<number>> = { river: coverRiver, cloud: coverCloud, night: coverNight };
   const nightUi = useSharedValue(0);
+  const meUi = useSharedValue(0);
   const riverUi = useSharedValue(1);
   const cloudUi = useSharedValue(0);
   const rise = useSharedValue(0);
@@ -1078,10 +1087,43 @@ export default function Home() {
     }, NIGHT_FADE_MS);
   };
 
+  // 川 → わたしのこと（夜明け）。動画は使わず、夜明けの画面をふわっと重ねる（SPEC F.「川 → わたしのこと」案：0.9秒）
+  const riverToMe = () => {
+    if (stageRef.current !== 'river') return;
+    setLookBackOpen(false);
+    goStage('riverToMe');
+    paused.set(true);
+    rise.set(0);
+    riverUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    appear.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    meUi.set(withTiming(1, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    later(() => {
+      if (stageRef.current !== 'riverToMe') return;
+      goStage('me');
+      player.pause();
+    }, NIGHT_FADE_MS);
+  };
+
+  // わたしのこと → 川。夜明けが淡く消えて、夕方の川に戻る
+  const meToRiver = () => {
+    if (stageRef.current !== 'me') return;
+    goStage('meToRiver');
+    player.play();
+    meUi.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    appear.set(withTiming(1, { duration: BACK_SURFACE_MS, easing: Easing.out(Easing.quad) }));
+    later(() => {
+      if (stageRef.current !== 'meToRiver') return;
+      goStage('river');
+      paused.set(false);
+      riverUi.set(withTiming(1, { duration: UI_FADE_MS }));
+    }, NIGHT_FADE_MS);
+  };
+
   const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
   const coverCloudStyle = useAnimatedStyle(() => ({ opacity: coverCloud.value }));
   const coverNightStyle = useAnimatedStyle(() => ({ opacity: coverNight.value }));
   const nightUiStyle = useAnimatedStyle(() => ({ opacity: nightUi.value }));
+  const meUiStyle = useAnimatedStyle(() => ({ opacity: meUi.value }));
   // 行き: カメラが空を見上げるのに合わせて泡は空へ昇って消える。帰り: 水面から少し浮かび上がって現れる
   const riseStyle = useAnimatedStyle(() => ({
     opacity: (1 - rise.value) * appear.value,
@@ -1108,23 +1150,29 @@ export default function Home() {
       />
 
       {/* 押させない指定は style で（props の pointerEvents は古い書き方で、効かないことがあった。夜空の右上を押すと、見えない「島（試作）」が押されて、島の画面が上に開き、夜空のボタンが全部押せなくなった 2026-10-09） */}
-      <Animated.View style={[styles.uiLayer, uiStyle, { pointerEvents: atRiver ? 'box-none' : 'none' }]}>
-        {/* 開いている間は、ほかの所を押すと閉じる */}
-        {lookBackOpen && atRiver && <Pressable style={StyleSheet.absoluteFill} onPress={() => setLookBackOpen(false)} />}
-        {/* 振り返る：右上の小さな月と星（文字のボタンは景色から浮いた。ユーザー「ダサい」→ 印だけ「月と星」2026-10-10） */}
-        <LookBackMoon onPress={() => setLookBackOpen((o) => !o)} />
-        {/* 行き先を選ぶ（決定 2026-10-10。ユーザー「振り返るのボタン、夕空か夜空かを選べるようにしたい」） */}
-        {lookBackOpen && atRiver && (
-          <View style={styles.lookBackMenu}>
-            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={startTransition}>
-              <Text style={styles.lookBackItem}>夕空</Text>
-            </Pressable>
-            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToNight}>
-              <Text style={styles.lookBackItem}>星空</Text>
-            </Pressable>
-          </View>
-        )}
+      {/* 月と星・行き先のメニュー・閉じるための面は、画面全体をおおう層に入れず、それぞれ直接置く（2026-10-10、ユーザー「1回目は反応するが2回目は反応しない」）。
+          web では、押させない指定の 'box-none' が書けず（'auto' と同じになる）、一度 'none' にすると 'none' が残った。
+          月と星は自分で押させない指定を持ち（水辺以外では押せない）、メニューと閉じる面は水辺で開いているときだけ置く */}
+      {lookBackOpen && atRiver && <Pressable style={[StyleSheet.absoluteFill, { zIndex: 9 }]} onPress={() => setLookBackOpen(false)} />}
+      {/* 振り返る：右上の小さな月と星（文字のボタンは景色から浮いた。ユーザー「ダサい」→ 印だけ「月と星」2026-10-10） */}
+      {/* 包みは押させない（切りかえない）。押せるかどうかは中の月と星が決める。web は子の 'auto' で押せ、スマホは 'box-none' で子だけ押せる */}
+      <Animated.View style={[styles.moonSpot, uiStyle, { pointerEvents: Platform.OS === 'web' ? 'none' : 'box-none' }]}>
+        <LookBackMoon onPress={() => setLookBackOpen((o) => !o)} disabled={!atRiver} />
       </Animated.View>
+      {/* 行き先を選ぶ（決定 2026-10-10。ユーザー「振り返るのボタン、夕空か夜空かを選べるようにしたい」） */}
+      {lookBackOpen && atRiver && (
+        <View style={styles.lookBackMenu}>
+          <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={startTransition}>
+            <Text style={styles.lookBackItem}>夕空</Text>
+          </Pressable>
+          <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToNight}>
+            <Text style={styles.lookBackItem}>星空</Text>
+          </Pressable>
+          <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToMe}>
+            <Text style={styles.lookBackItem}>わたしのこと</Text>
+          </Pressable>
+        </View>
+      )}
 
       <Animated.View style={[styles.bubbleClip, riseStyle, { pointerEvents: atRiver ? 'auto' : 'none' }]}>
         <BubbleLayer
@@ -1156,6 +1204,13 @@ export default function Home() {
       {(stage === 'night' || stage === 'nightToRiver' || stage === 'nightToCloud' || stage === 'riverToNight') && (
         <Animated.View style={[StyleSheet.absoluteFill, nightUiStyle, { pointerEvents: stage === 'night' ? 'box-none' : 'none' }]}>
           <NightOverlay width={width} height={height} focus={nightFocus} onBack={nightToCloud} onRiver={nightToRiver} />
+        </Animated.View>
+      )}
+
+      {/* わたしのこと（夜明け）。背景の夜明けは画面が自分で持つ */}
+      {(stage === 'me' || stage === 'riverToMe' || stage === 'meToRiver') && (
+        <Animated.View style={[StyleSheet.absoluteFill, meUiStyle, { pointerEvents: stage === 'me' ? 'auto' : 'none' }]}>
+          <MeOverlay width={width} height={height} onBack={meToRiver} />
         </Animated.View>
       )}
 
@@ -1221,7 +1276,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.3,
   },
-  archiveBtn: { position: 'absolute', top: 52, right: 16, zIndex: 10, alignItems: 'center', justifyContent: 'center' },
+  moonSpot: { position: 'absolute', top: 52, right: 16, zIndex: 10 },
+  archiveBtn: { alignItems: 'center', justifyContent: 'center' },
   // 星の真ん中（viewBox 30×26 の (24, 7.1) を 34×30 に広げた位置）
   moonGlint: { position: 'absolute', left: 27.2 - GLINT / 2, top: 8.2 - GLINT / 2, width: GLINT, height: GLINT },
   moonHalo: { position: 'absolute', left: 17 - MOON_HALO / 2, top: 15 - MOON_HALO / 2, width: MOON_HALO, height: MOON_HALO },
