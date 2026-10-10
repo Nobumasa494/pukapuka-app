@@ -28,10 +28,10 @@ const SERIF = Platform.select({ ios: 'Hiragino Mincho ProN', android: 'serif', d
 
 // 見方（右上の印を押したときだけ出す。星空の「星の見方」と同じ形）
 const INTRO_LINES: [string, string][] = [
-  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。新しく見つかったものがあれば、それを上に出します。「たとえば」は、実際にそうなった日。'],
-  ['01 そのあとに', '左の言葉を拾った日の、次の日から3日のうちに、右の言葉（元気・好奇心の言葉）を拾った回数。この12週で数えています。'],
-  ['02 行ったり来たり', '行きも帰りも、よく起きている二つ。数字は、左の言葉の日の、次の日から3日のうちに右の言葉を拾った回数。良い・悪いはありません。'],
-  ['03 元気・好奇心の言葉の変化', '元気・好奇心の言葉を拾った日の数を、前の期間と最近の期間とで並べたもの。期間は、上の日付のとおりです。'],
+  ['いちばん上', 'いちばん見つかった「◯◯のあと、△△を拾う」'],
+  ['01 そのあとに', 'ほかの「◯◯のあと、△△を拾う」と、その回数'],
+  ['02 行ったり来たり', '行ったり来たりして拾っている二つ'],
+  ['03 元気・好奇心の言葉の変化', 'その言葉を拾った日が、前より増えたか、減ったか'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
@@ -272,7 +272,6 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
           <LinearGradient colors={['#f6eef2', '#fbf3ec']} style={StyleSheet.absoluteFill} />
           <ScrollView contentContainerStyle={styles.introScroll} showsVerticalScrollIndicator={false}>
             <Text style={styles.introTitle}>わたしのことの見方</Text>
-            <Text style={styles.introLead}>水辺で拾った言葉の、日をまたいだ順番を見ています。何をした日のあとに、どんな元気・好奇心の言葉を拾うことが多いかが分かります。</Text>
             <View style={styles.introBlock}>
               {INTRO_LINES.map(([label, body], i) => (
                 <View key={label} style={[styles.introRow, i === INTRO_LINES.length - 1 && { borderBottomWidth: 0 }]}>
@@ -281,7 +280,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
                 </View>
               ))}
             </View>
-            <Text style={styles.introNote}>ここに並ぶのは、たまたまではないと確かめられたものだけです。拾う日が増えると、少しずつ増えていきます。{'\n'}「〜のあと」は順番のことで、「〜したから」という意味ではありません。</Text>
+            <Text style={styles.introNote}>「あと」は、次の日から3日のうちのことです。{'\n'}順番のことで、「〜したから」ではありません。</Text>
             {/* 見本は、見方の中からいつでも見られる（星空と同じ） */}
             {!showSample && (
               <Pressable
@@ -477,7 +476,7 @@ const styles = StyleSheet.create({
   // 見方
   intro: { ...StyleSheet.absoluteFill, zIndex: 4 },
   introScroll: { paddingTop: 104, paddingBottom: 70, paddingHorizontal: 30 },
-  introTitle: { fontSize: 20, color: INK, letterSpacing: 4, textAlign: 'center', fontFamily: SERIF },
+  introTitle: { fontSize: 20, color: INK, letterSpacing: 4, textAlign: 'center', fontFamily: SERIF, marginBottom: 26 },
   introLead: { fontSize: 13.5, lineHeight: 24, color: SUB, marginTop: 20, fontFamily: SERIF },
   introSub: { fontSize: 13, color: PLUM, letterSpacing: 3, marginTop: 30, fontFamily: SERIF },
   introBlock: { marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LINE },
