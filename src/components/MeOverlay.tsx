@@ -40,7 +40,7 @@ const HELP_COLOR = '#8f5f8a';
 function heroText(x: SourceItem, n: number): string {
   if (x.stage === 'sure') return `「${x.word}」の日のあとは、\n「${x.to}」を\n拾うことが多いみたい`;
   // 確かめ中・見えはじめ：確かさは言わず、数えた事実だけ（2026-10-10 ユーザー「多いかもは曖昧で混乱する」）
-  return `「${x.word}」の日のあとに、\n「${x.to}」を拾った日が\n${n}回ありました`;
+  return `「${x.word}」の日のあとに、\n「${x.to}」を拾った日は、\nいま${n}回です`;
 }
 const monthOf = (day: number, shiftDays = 0) => `${new Date((day + shiftDays + 14) * 86400000).getUTCMonth() + 1}月`; // 4週の真ん中のあたりの月
 const mdDay = (day: number, shiftDays = 0) => {
@@ -130,6 +130,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               {result.topIsNew && <Text style={styles.heroNew}>新しく見つかりました</Text>}
               <Text style={styles.hero}>{heroText(top, counts[`${top.word}→${top.to}`] ?? 0)}</Text>
               {top.stage === 'sure' && <Text style={styles.heroCount}>この12週で {counts[`${top.word}→${top.to}`] ?? 0}回</Text>}
+              {top.stage !== 'sure' && <Text style={styles.heroCount}>あと数回増えると、はっきりしてくるかもしれません</Text>}
               {/* たとえば：実際にそうなった日（割合の数字より分かりやすい） */}
               {numbers && numbers.length > 0 && (
                 <View style={styles.ex}>
