@@ -6,6 +6,7 @@ import { useCaptures, useDeviceId } from '../useCaptures';
 import { meCache } from '../meCache';
 import SAMPLE from '../meSampleResult.json';
 import HelpStar from './HelpStar';
+import Svg, { Path } from 'react-native-svg';
 import { SOURCE_DAYS, computeMe, examples, type Example, type MeResult, type SourceItem } from '../flow';
 
 // わたしのこと（夜明け）。川の画面の上に重ねて出す（SPEC 第2部 C3.）。
@@ -28,11 +29,11 @@ const SERIF = Platform.select({ ios: 'Hiragino Mincho ProN', android: 'serif', d
 
 // 見方（右上の印を押したときだけ出す。星空の「星の見方」と同じ形）
 const INTRO_LINES: [string, string][] = [
-  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。いちばん確かなもの（または、新しく確かになったもの）を一つ。'],
-  ['たとえば', 'あなたの記録の中で、実際にそうなった日。'],
-  ['あとで来やすいこと', 'ほかにも、あとで元気・好奇心の言葉が来やすいこと。「あと」は、その日から3日以内のことです。'],
-  ['交互に来やすい言葉', '何日かのあいだに、行ったり来たりして拾っている二つ。良い・悪いはありません。'],
-  ['これまで', 'いつ見えはじめ、いつ確かになったか。それと、よく拾う元気・好奇心の言葉の移り変わり。'],
+  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。いちばん確かなもの（または、新しく確かになったもの）を一つ。「たとえば」は、実際にそうなった日。'],
+  ['01 そのあとに', 'ほかにも、その日から3日以内に、元気・好奇心の言葉を拾ったこと。'],
+  ['02 行ったり来たり', '何日かのあいだに、交互に拾っている二つ。良い・悪いはありません。'],
+  ['03 これまで', 'それぞれが、いつ見えはじめ（○）、いつ確かになったか（●）。'],
+  ['04 うつりかわり', 'よく拾う元気・好奇心の言葉の、はじめのころと最近。'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
@@ -49,11 +50,6 @@ const mdDay = (day: number, shiftDays = 0) => {
   const d = new Date((day + shiftDays) * 86400000); // dayNumber は UTC の日で数えている
   return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
 };
-const md = (t: number, shiftDays = 0) => {
-  const d = new Date(t);
-  d.setDate(d.getDate() + shiftDays);
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
-};
 
 type Caps = { word: string; capturedAt: number }[];
 type Numbers = Example[];
@@ -62,7 +58,7 @@ type Numbers = Example[];
 // make は計算を始めるときに呼ぶ（今の時刻を読むため、描くたびには呼ばない）
 type Input = { caps: Caps; now: number; cacheId: string };
 function useMe(key: string | null, make: () => Input) {
-  const [state, setState] = useState<{ key: string; result: MeResult; numbers: Numbers | null; shiftDays: number } | null>(null);
+  const [state, setState] = useState<{ key: string; result: MeResult; numbers: Numbers | null; shiftDays: number; now: number } | null>(null);
   const running = useRef(0);
   useEffect(() => {
     if (!key) return;
@@ -70,14 +66,14 @@ function useMe(key: string | null, make: () => Input) {
     const { caps, now, cacheId } = make();
     const show = (r: MeResult) => {
       if (run !== running.current) return;
-      setState({ key, result: r, shiftDays: 0, numbers: !r.few && r.top ? examples(caps, now, r.top.word, r.top.to) : null });
+      setState({ key, result: r, shiftDays: 0, now, numbers: !r.few && r.top ? examples(caps, now, r.top.word, r.top.to) : null });
     };
     computeMe(caps, now, meCache(cacheId), undefined, show).then(show, () => {});
     // make は key が変わったときだけ呼ぶ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   const cur = state && state.key === key ? state : null;
-  return { result: cur?.result ?? null, numbers: cur?.numbers ?? null, shiftDays: cur?.shiftDays ?? 0, busy: !!key && !cur };
+  return { result: cur?.result ?? null, numbers: cur?.numbers ?? null, shiftDays: cur?.shiftDays ?? 0, now: cur?.now ?? 0, busy: !!key && !cur };
 }
 
 export default function MeOverlay({ width, height, onBack }: { width: number; height: number; onBack: () => void }) {
@@ -96,13 +92,13 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
   // 見本はいつも同じ人・同じ日なので、前もって計算した結果を使う（scripts/me/make-sample.ts。スマホで計算すると3〜6秒かかった）。
   // 日付だけ、見本の日から今日までずらして見せる
   const [sampleShift, setSampleShift] = useState(0);
-  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.examples as Numbers, shiftDays: sampleShift, busy: false };
+  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.examples as Numbers, shiftDays: sampleShift, now: SAMPLE.at, busy: false };
   const openSample = () => {
     const a = new Date(SAMPLE.at), t = new Date();
     setSampleShift(Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() - new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()) / 86400000));
     setShowSample(true);
   };
-  const { result, numbers, shiftDays } = showSample ? sample : real;
+  const { result, numbers, shiftDays, now } = showSample ? sample : real;
   const progress = showSample ? sample.busy : real.busy;
   // 何も出ない（①文だけ、または源が1つもない）とき、真ん中に「見本を見る」を出す
   const nothing = !showSample && real.result !== null && (real.result.few || !real.result.top);
@@ -135,8 +131,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             <View style={{ alignItems: 'center' }}>
               {/* 確かさは、画面のどこでも同じ点で表す（言葉を増やさない） */}
               <View style={styles.heroMeter}>
-                <Meter stage={top.stage} />
-                <Text style={styles.heroMeterText}>{STAGE_LABEL[top.stage]}</Text>
+                <Meter stage={top.stage} big />
               </View>
               <Text style={styles.hero}>{heroText(top)}</Text>
               {/* たとえば：実際にそうなった日（割合の数字より分かりやすい） */}
@@ -170,95 +165,53 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
           // 下の部分（2026-10-10 作り直し。ユーザー「美しく、洗練されたデザインがいい」）：箱・枠・影をやめ、
           // 夜明けの空から1枚の紙がせり上がるように置く。区切りは細い線と余白、文字は明朝。確かさは点（●●●／●●○／●○○）だけ
           <View style={styles.sheet} onLayout={(e) => (sheetTop.current = e.nativeEvent.layout.y)}>
-            <Section title="あとで来やすいこと" sub="その日から3日以内に、元気・好奇心の言葉を拾ったこと">
+            {/* 01 そのあとに：言葉を細い線でつなぎ、線の真ん中に確かさの点 */}
+            <Chapter no="01" title="そのあとに" note="3日以内に拾った、元気・好奇心の言葉">
               {(() => {
                 const xs = result.list.filter((x) => x.word !== top?.word).slice(0, 5);
-                return xs.length ? (
-                  xs.map((x) => (
-                    <View key={x.word} style={styles.row}>
-                      <View style={styles.pair}>
-                        <Word word={x.word} />
-                        <Text style={styles.arrow}>⟶</Text>
-                        <Word word={x.to} />
-                      </View>
-                      <Meter stage={x.stage} />
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.empty}>まだ、ほかには見えていません</Text>
-                );
+                return xs.length ? xs.map((x) => <Link key={x.word} a={x.word} b={x.to} stage={x.stage} />) : <Text style={styles.empty}>まだ、ほかには見えていません</Text>;
               })()}
-              <Legend />
-            </Section>
+            </Chapter>
 
-            <Section title="交互に来やすい言葉" sub="何日かのあいだに、行ったり来たりして拾っている二つ">
+            {/* 02 行ったり来たり：行きと帰りの2本の弧 */}
+            <Chapter no="02" title="行ったり来たり" note="何日かのあいだに、交互に拾っている二つ">
               {result.loops.length ? (
-                result.loops.map((x) => (
-                  <View key={x.a + x.b} style={styles.row}>
-                    <View style={styles.pair}>
-                      <Word word={x.a} />
-                      <Text style={styles.arrow}>⇄</Text>
-                      <Word word={x.b} />
-                    </View>
-                    <Meter stage={x.stage} />
-                  </View>
-                ))
+                result.loops.map((x) => <Loop key={x.a + x.b} a={x.a} b={x.b} stage={x.stage} width={width} />)
               ) : (
-                <Text style={styles.empty}>まだ、はっきりしたものは見えていません</Text>
+                <Text style={styles.empty}>まだ見えていません</Text>
               )}
-            </Section>
+            </Chapter>
 
-            <Section title="これまで" sub="いつ見えはじめ、いつ確かになったか">
+            {/* 03 これまで：12週の時間の軸に、見えはじめた日（○）と確かになった日（●） */}
+            <Chapter no="03" title="これまで">
               {!result.story ? (
                 <Text style={styles.empty}>さかのぼって調べています…</Text>
               ) : result.story.length ? (
-                storyRows(result.story).slice(-5).map((g) => (
-                  <View key={g.word + g.to} style={styles.tl}>
-                    <View style={styles.pair}>
-                      <Word word={g.word} />
-                      <Text style={styles.arrow}>⟶</Text>
-                      <Word word={g.to} />
-                    </View>
-                    {/* 進み具合：見えはじめた日（●●○）→ 確かになった日（●●●）。上の点と同じ印で */}
-                    <View style={styles.steps}>
-                      {g.seen !== undefined && (
-                        <View style={styles.step}>
-                          <Text style={styles.stepDate}>{md(g.seen, shiftDays)}</Text>
-                          <Meter stage="tentative" />
-                        </View>
-                      )}
-                      {g.seen !== undefined && g.sure !== undefined && <Text style={styles.stepArrow}>›</Text>}
-                      {g.sure !== undefined && (
-                        <View style={styles.step}>
-                          <Text style={styles.stepDate}>{md(g.sure, shiftDays)}</Text>
-                          <Meter stage="sure" />
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                ))
+                <Timeline rows={storyRows(result.story).slice(-5)} end={now} shiftDays={shiftDays} />
               ) : (
-                <Text style={styles.empty}>まだ、はっきり見えてきたことはありません</Text>
+                <Text style={styles.empty}>まだ見えていません</Text>
               )}
-            </Section>
+            </Chapter>
 
-            <Section title="よく拾う元気・好奇心の言葉" last>
+            {/* 04 うつりかわり：よく拾う元気・好奇心の言葉の、はじめのころと最近 */}
+            <Chapter no="04" title="うつりかわり" note="よく拾う、元気・好奇心の言葉" last>
               {result.shift ? (
                 <View style={styles.shift}>
                   <View style={styles.shiftCol}>
                     <Text style={styles.shiftHead}>はじめのころ</Text>
-                    {result.shift.before.map((w) => <Word key={w} word={w} />)}
+                    {result.shift.before.map((w) => <Text key={w} style={styles.shiftWordOld}>{w}</Text>)}
                   </View>
                   <Text style={styles.shiftArrow}>⟶</Text>
                   <View style={styles.shiftCol}>
                     <Text style={styles.shiftHead}>最近</Text>
-                    {result.shift.after.map((w) => <Word key={w} word={w} />)}
+                    {result.shift.after.map((w) => <Text key={w} style={styles.shiftWord}>{w}</Text>)}
                   </View>
                 </View>
               ) : (
                 <Text style={styles.empty}>8週間たまると見えてきます</Text>
               )}
-            </Section>
+            </Chapter>
+            <Legend />
           </View>
         )}
       </ScrollView>
@@ -357,12 +310,12 @@ function Word({ word }: { word: string }) {
 
 // 確かさ：●●●（多いみたい）／●●○（多いかも）／●○○（あった日がある）。画面のどこでも、確かさはこの点だけで表す
 const SURE_DOTS = { sure: 3, tentative: 2, seen: 1 } as const;
-function Meter({ stage }: { stage: 'sure' | 'tentative' | 'seen' }) {
+function Meter({ stage, big }: { stage: 'sure' | 'tentative' | 'seen'; big?: boolean }) {
   const n = SURE_DOTS[stage];
   return (
-    <View style={styles.meter} accessibilityLabel={STAGE_LABEL[stage]}>
+    <View style={[styles.meter, big && { gap: 6 }]} accessibilityLabel={STAGE_LABEL[stage]}>
       {[0, 1, 2].map((i) => (
-        <View key={i} style={[styles.meterDot, i < n && styles.meterDotOn]} />
+        <View key={i} style={[styles.meterDot, big && styles.meterDotBig, i < n && styles.meterDotOn]} />
       ))}
     </View>
   );
@@ -403,12 +356,126 @@ function storyRows(story: { at: number; word: string; to: string; stage: 'tentat
   return [...rows.values()].sort((a, b) => a.first - b.first);
 }
 
-function Section({ title, sub, last, children }: { title: string; sub?: string; last?: boolean; children: React.ReactNode }) {
+// 章：小さな番号と短い名前。説明は1行だけ（冗長にしない）
+function Chapter({ no, title, note, last, children }: { no: string; title: string; note?: string; last?: boolean; children: React.ReactNode }) {
   return (
-    <View style={[styles.section, last && { borderBottomWidth: 0 }]}>
-      <Text style={styles.secTitle}>{title}</Text>
-      {sub && <Text style={styles.secSub}>{sub}</Text>}
-      <View style={{ marginTop: 14 }}>{children}</View>
+    <View style={[styles.chapter, last && { borderBottomWidth: 0 }]}>
+      <View style={styles.chHead}>
+        <Text style={styles.chNo}>{no}</Text>
+        <Text style={styles.chTitle}>{title}</Text>
+      </View>
+      {note && <Text style={styles.chNote}>{note}</Text>}
+      <View style={{ marginTop: 18 }}>{children}</View>
+    </View>
+  );
+}
+
+// 散歩 ———●●○——— わくわく
+function Link({ a, b, stage }: { a: string; b: string; stage: 'sure' | 'tentative' | 'seen' }) {
+  // 左右の言葉は同じ幅の箱に入れ、点がどの行でも真ん中にそろうようにする
+  return (
+    <View style={styles.link}>
+      <View style={styles.linkSide}>
+        <Text style={styles.linkText} numberOfLines={1}>
+          {a}
+        </Text>
+      </View>
+      <View style={styles.linkLine} />
+      <Meter stage={stage} />
+      <View style={styles.linkLine} />
+      <View style={[styles.linkSide, { alignItems: 'flex-end' }]}>
+        <Text style={styles.linkText} numberOfLines={1}>
+          {b}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// 行きと帰りの2本の弧で、2つの言葉をつなぐ
+function Loop({ a, b, stage }: { a: string; b: string; stage: 'sure' | 'tentative' | 'seen'; width: number }) {
+  const W = 78, H = 30;
+  const c = 'rgba(125,88,120,0.55)';
+  return (
+    <View style={styles.loop}>
+      <View style={styles.linkSide}>
+        <Text style={styles.linkText} numberOfLines={1}>
+          {a}
+        </Text>
+      </View>
+      <View style={styles.loopMid}>
+        <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+          {/* 上の弧（行き）と下の弧（帰り）、それぞれ小さな矢じり */}
+          <Path d={`M8 ${H / 2 - 3} Q ${W / 2} -4 ${W - 8} ${H / 2 - 3}`} stroke={c} strokeWidth={1} fill="none" />
+          <Path d={`M${W - 14} ${H / 2 - 7} L ${W - 8} ${H / 2 - 3} L ${W - 15} ${H / 2 - 1}`} stroke={c} strokeWidth={1} fill="none" />
+          <Path d={`M${W - 8} ${H / 2 + 3} Q ${W / 2} ${H + 4} 8 ${H / 2 + 3}`} stroke={c} strokeWidth={1} fill="none" />
+          <Path d={`M14 ${H / 2 + 7} L 8 ${H / 2 + 3} L 15 ${H / 2 + 1}`} stroke={c} strokeWidth={1} fill="none" />
+        </Svg>
+        <View style={styles.loopMeter}>
+          <Meter stage={stage} />
+        </View>
+      </View>
+      <View style={[styles.linkSide, { alignItems: 'flex-end' }]}>
+        <Text style={styles.linkText} numberOfLines={1}>
+          {b}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// 12週の時間の軸。組ごとに1本の細い線、見えはじめた日に ○、確かになった日に ●（その間を少し濃い線で）
+const DAY = 86400000;
+function Timeline({ rows, end, shiftDays }: { rows: { word: string; to: string; seen?: number; sure?: number }[]; end: number; shiftDays: number }) {
+  const start = end - SOURCE_DAYS * DAY;
+  const pos = (t: number) => `${Math.min(100, Math.max(0, ((t - start) / (end - start)) * 100))}%` as const;
+  // 月のはじめに目盛り
+  const ticks: number[] = [];
+  const d = new Date(start);
+  for (let m = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(); m < end; ) {
+    if ((end - m) / (end - start) > 0.14) ticks.push(m); // 「いま」と重ならないよう、右の端の近くは出さない
+    const x = new Date(m);
+    m = new Date(x.getFullYear(), x.getMonth() + 1, 1).getTime();
+  }
+  return (
+    <View>
+      {rows.map((g) => {
+        const from = g.seen ?? g.sure!;
+        return (
+          <View key={g.word + g.to} style={styles.tlRow}>
+            <Text style={styles.tlLabel} numberOfLines={1}>
+              {g.word}
+              <Text style={styles.tlArrow}>{'  ⟶  '}</Text>
+              {g.to}
+            </Text>
+            <View style={styles.track}>
+              <View style={styles.trackBase} />
+              {g.sure !== undefined && g.seen !== undefined && <View style={[styles.trackSpan, { left: pos(g.seen), right: `${100 - parseFloat(pos(g.sure))}%` }]} />}
+              {g.sure !== undefined && <View style={[styles.trackSpanTail, { left: pos(g.sure) }]} />}
+              <View style={[styles.tlMark, { left: pos(from) }, g.seen === undefined && styles.tlMarkOn]} />
+              {g.sure !== undefined && g.seen !== undefined && <View style={[styles.tlMark, styles.tlMarkOn, { left: pos(g.sure) }]} />}
+            </View>
+          </View>
+        );
+      })}
+      <View style={styles.axis}>
+        {ticks.map((t) => (
+          <Text key={t} style={[styles.axisTick, { left: pos(t) }]}>
+            {new Date(t + shiftDays * DAY).getMonth() + 1}月
+          </Text>
+        ))}
+        <Text style={[styles.axisTick, styles.axisNow]}>いま</Text>
+      </View>
+      <View style={styles.tlKey}>
+        <View style={styles.tlKeyItem}>
+          <View style={[styles.tlMark, styles.tlMarkStatic]} />
+          <Text style={styles.legendText}>見えはじめた</Text>
+        </View>
+        <View style={styles.tlKeyItem}>
+          <View style={[styles.tlMark, styles.tlMarkStatic, styles.tlMarkOn]} />
+          <Text style={styles.legendText}>確かになった</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -442,7 +509,7 @@ const styles = StyleSheet.create({
   meter: { flexDirection: 'row', gap: 4 },
   meterDot: { width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: PLUM },
   meterDotOn: { backgroundColor: PLUM },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 6, marginTop: 14 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 16, rowGap: 6, marginTop: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendText: { fontSize: 11, color: SUB, fontFamily: SERIF },
   tl: { paddingVertical: 10, gap: 8 },
@@ -454,6 +521,41 @@ const styles = StyleSheet.create({
   shiftCol: { flex: 1, gap: 8 },
   shiftHead: { fontSize: 11, color: SUB, letterSpacing: 2, fontFamily: SERIF, marginBottom: 2 },
   shiftArrow: { fontSize: 14, color: 'rgba(43,38,64,0.45)', marginTop: 22 },
+  // 章
+  chapter: { paddingVertical: 34, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: LINE },
+  chHead: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  chNo: { fontSize: 12, color: PLUM, letterSpacing: 2, fontFamily: SERIF, opacity: 0.8 },
+  chTitle: { fontSize: 19, color: INK, letterSpacing: 3, fontFamily: SERIF },
+  chNote: { fontSize: 12, color: SUB, marginTop: 8, fontFamily: SERIF, letterSpacing: 0.5 },
+  // そのあとに
+  link: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 },
+  linkSide: { width: '35%' },
+  linkText: { fontSize: 15, color: INK, fontFamily: SERIF },
+  linkLine: { flex: 1, minWidth: 6, marginHorizontal: 6, height: StyleSheet.hairlineWidth * 2, backgroundColor: 'rgba(125,88,120,0.3)' },
+  // 行ったり来たり
+  loop: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  loopMid: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loopMeter: { position: 'absolute' },
+  // これまで
+  tlRow: { paddingVertical: 9 },
+  tlLabel: { fontSize: 14, color: INK, fontFamily: SERIF, marginBottom: 8 },
+  tlArrow: { color: 'rgba(43,38,64,0.4)', fontSize: 12 },
+  track: { height: 10, justifyContent: 'center' },
+  trackBase: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth * 2, backgroundColor: LINE },
+  trackSpan: { position: 'absolute', height: 2, backgroundColor: 'rgba(125,88,120,0.45)' },
+  trackSpanTail: { position: 'absolute', right: 0, height: 2, backgroundColor: PLUM },
+  tlMark: { position: 'absolute', width: 9, height: 9, marginLeft: -4.5, borderRadius: 4.5, borderWidth: 1.2, borderColor: PLUM, backgroundColor: SHEET },
+  tlMarkOn: { backgroundColor: PLUM },
+  tlMarkStatic: { position: 'relative', marginLeft: 0 },
+  axis: { height: 18, marginTop: 10 },
+  axisTick: { position: 'absolute', fontSize: 10.5, color: SUB, fontFamily: SERIF, marginLeft: -8 },
+  axisNow: { right: 0, marginLeft: 0 },
+  tlKey: { flexDirection: 'row', gap: 18, marginTop: 10 },
+  tlKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // うつりかわり
+  shiftWordOld: { fontSize: 17, color: SUB, fontFamily: SERIF },
+  shiftWord: { fontSize: 19, color: INK, fontFamily: SERIF },
+  meterDotBig: { width: 8, height: 8, borderRadius: 4 },
   // 上の見出し・ボタン
   headerFade: { position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_H },
   back: { position: 'absolute', top: 50, left: 16, zIndex: 2 },
