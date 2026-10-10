@@ -152,6 +152,9 @@ export function growth(captures: Cap[], unit: 'week' | 'month'): { start: number
 export const FLOW_ALPHA = 0.01; // 仮の値（scripts/me/tune-test.ts で決める）
 export const SHUFFLES = 500;
 
+// 大きい順に並べる比べ方。「当たりなし」（-Infinity）どうしを b - a で比べると NaN になり、並べ方が乱れる（2026-10-10 に見つけた）
+const desc = (a: number, b: number) => (a < b ? 1 : a > b ? -1 : 0);
+
 function rng(seed: number) {
   let s = seed >>> 0;
   return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
@@ -280,7 +283,7 @@ function sourcesScored(captures: Cap[], shuffles = SHUFFLES, seed = 2, onlyDoing
     });
     LEVELS.forEach((L) => maxima[L].push(mx[L]));
   });
-  maxima.forEach((m) => m.sort((a, b) => b - a));
+  maxima.forEach((m) => m.sort(desc));
   const cutAt = (alpha: number, minWeight: number) =>
     alpha >= 1 ? -Infinity : (maxima[Math.min(3, Math.ceil(minWeight))][Math.floor(alpha * shuffles)] ?? -Infinity);
   const best = new Map<number, ScoredSource>();
@@ -431,7 +434,7 @@ export function loopsTested(
     for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) mx = Math.max(mx, loopZ(m, a, b));
     maxima.push(mx);
   });
-  maxima.sort((x, y) => y - x);
+  maxima.sort(desc);
   const cut = maxima[Math.floor(familyAlpha * shuffles)] ?? -Infinity;
   const real = arrowMatrix(days, sets, n);
   const out: { a: string; b: string; z: number }[] = [];
@@ -587,7 +590,9 @@ export function snapshot(captures: Cap[], t: number, shuffles = SNAP_SHUFFLES, s
     if (m[x] < LOOP_MIN_WEIGHT || m[ba] < LOOP_MIN_WEIGHT) return -Infinity;
     return Math.min(zOf(m, x), zOf(m, ba));
   };
-  const cut = (arr: number[], alpha: number) => arr.sort((a, b) => b - a)[Math.floor(alpha * shuffles)] ?? -Infinity;
+  // 大きい順に並べて、上位 alpha の所を境目にする。「当たりなし」（-Infinity）どうしを b - a で比べると NaN になり、
+  // 並べ方が乱れて境目が -Infinity になっていた（2026-10-10、見本で一覧の8つが全部「よく来る」になった）。数の大小で比べる
+  const cut = (arr: number[], alpha: number) => [...arr].sort(desc)[Math.floor(alpha * shuffles)] ?? -Infinity;
   const cutSure = cut(srcMax3, SOURCE_ALPHA), cutMaybe = cut(srcMax2, TENTATIVE_ALPHA);
   const loopSure = cut(loopMax, LOOP_ALPHA), loopMaybe = cut(loopMax, LOOP_TENTATIVE_ALPHA);
   const real = Float64Array.from(count(sets));
