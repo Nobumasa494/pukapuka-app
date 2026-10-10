@@ -6,7 +6,7 @@ import { useCaptures, useDeviceId } from '../useCaptures';
 import { meCache } from '../meCache';
 import SAMPLE from '../meSampleResult.json';
 import HelpStar from './HelpStar';
-import { SOURCE_DAYS, computeMe, examples, type Example, type MeResult, type SourceItem } from '../flow';
+import { SOURCE_DAYS, computeMe, countsFor, examples, type Counts, type Example, type MeResult, type SourceItem } from '../flow';
 
 // わたしのこと（夜明け）。川の画面の上に重ねて出す（SPEC 第2部 C3.）。
 // 開くと、いちばん上に元気・好奇心の源が1つだけ大きく出る。下へスクロールすると、数字・いろいろな源・めぐり・育っていること。
@@ -28,23 +28,21 @@ const SERIF = Platform.select({ ios: 'Hiragino Mincho ProN', android: 'serif', d
 
 // 見方（右上の印を押したときだけ出す。星空の「星の見方」と同じ形）
 const INTRO_LINES: [string, string][] = [
-  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。いちばん確かなもの（または、新しく確かになったもの）を一つ。「たとえば」は、実際にそうなった日。'],
-  ['01 そのあとに', 'ほかにも、その日から3日以内に、元気・好奇心の言葉を拾ったこと。'],
+  ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。「たとえば」は、実際にそうなった日。'],
+  ['01 そのあとに', 'その日から3日以内に、元気・好奇心の言葉を拾ったこと。数字は、この12週でそうなった回数。'],
   ['02 行ったり来たり', '何日かのあいだに、交互に拾っている二つ。良い・悪いはありません。'],
-  ['03 わかってきた順', 'それぞれが、いつ「多いかも」になり、いつ「多いみたい」になったか。'],
+  ['03 見つかった日', '上に並んでいるものが、確かになった日。'],
   ['04 うつりかわり', 'よく拾う元気・好奇心の言葉の、はじめのころと最近。'],
 ];
 const HELP_COLOR = '#8f5f8a';
 
 
 // 言い方の決まり（スキル /pukapuka-me の 3.）：「〜のあとに」と書く。「〜のせいで」「〜すると」とは書かない
-function heroText(x: SourceItem): string {
+function heroText(x: SourceItem, n: number): string {
   if (x.stage === 'sure') return `「${x.word}」の日のあとは、\n「${x.to}」を\n拾うことが多いみたい`;
-  if (x.stage === 'tentative') return `「${x.word}」の日のあとは、\n「${x.to}」を\n拾うことが多いかも`;
-  return `「${x.word}」の日のあとに、\n「${x.to}」を\n拾った日がありました`;
+  // 確かめ中・見えはじめ：確かさは言わず、数えた事実だけ（2026-10-10 ユーザー「多いかもは曖昧で混乱する」）
+  return `「${x.word}」の日のあとに、\n「${x.to}」を拾った日が\n${n}回ありました`;
 }
-const STAGE_LABEL = { sure: '多いみたい', tentative: '多いかも', seen: 'あった日がある' } as const;
-
 const mdDay = (day: number, shiftDays = 0) => {
   const d = new Date((day + shiftDays) * 86400000); // dayNumber は UTC の日で数えている
   return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
@@ -57,7 +55,7 @@ type Numbers = Example[];
 // make は計算を始めるときに呼ぶ（今の時刻を読むため、描くたびには呼ばない）
 type Input = { caps: Caps; now: number; cacheId: string };
 function useMe(key: string | null, make: () => Input) {
-  const [state, setState] = useState<{ key: string; result: MeResult; numbers: Numbers | null; shiftDays: number; now: number } | null>(null);
+  const [state, setState] = useState<{ key: string; result: MeResult; numbers: Numbers | null; counts: Counts; shiftDays: number; now: number } | null>(null);
   const running = useRef(0);
   useEffect(() => {
     if (!key) return;
@@ -65,14 +63,14 @@ function useMe(key: string | null, make: () => Input) {
     const { caps, now, cacheId } = make();
     const show = (r: MeResult) => {
       if (run !== running.current) return;
-      setState({ key, result: r, shiftDays: 0, now, numbers: !r.few && r.top ? examples(caps, now, r.top.word, r.top.to) : null });
+      setState({ key, result: r, shiftDays: 0, now, counts: countsFor(caps, now, r), numbers: !r.few && r.top ? examples(caps, now, r.top.word, r.top.to) : null });
     };
     computeMe(caps, now, meCache(cacheId), undefined, show).then(show, () => {});
     // make は key が変わったときだけ呼ぶ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   const cur = state && state.key === key ? state : null;
-  return { result: cur?.result ?? null, numbers: cur?.numbers ?? null, shiftDays: cur?.shiftDays ?? 0, now: cur?.now ?? 0, busy: !!key && !cur };
+  return { result: cur?.result ?? null, numbers: cur?.numbers ?? null, counts: cur?.counts ?? {}, shiftDays: cur?.shiftDays ?? 0, now: cur?.now ?? 0, busy: !!key && !cur };
 }
 
 export default function MeOverlay({ width, height, onBack }: { width: number; height: number; onBack: () => void }) {
@@ -91,13 +89,13 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
   // 見本はいつも同じ人・同じ日なので、前もって計算した結果を使う（scripts/me/make-sample.ts。スマホで計算すると3〜6秒かかった）。
   // 日付だけ、見本の日から今日までずらして見せる
   const [sampleShift, setSampleShift] = useState(0);
-  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.examples as Numbers, shiftDays: sampleShift, now: SAMPLE.at, busy: false };
+  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.examples as Numbers, counts: SAMPLE.counts as Counts, shiftDays: sampleShift, now: SAMPLE.at, busy: false };
   const openSample = () => {
     const a = new Date(SAMPLE.at), t = new Date();
     setSampleShift(Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() - new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()) / 86400000));
     setShowSample(true);
   };
-  const { result, numbers, shiftDays } = showSample ? sample : real;
+  const { result, numbers, counts, shiftDays } = showSample ? sample : real;
   const progress = showSample ? sample.busy : real.busy;
   // 何も出ない（①文だけ、または源が1つもない）とき、真ん中に「見本を見る」を出す
   const nothing = !showSample && real.result !== null && (real.result.few || !real.result.top);
@@ -128,7 +126,8 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             <Text style={styles.heroQuiet}>元気な日が、あと少し集まると{'\n'}見えてきます</Text>
           ) : top ? (
             <View style={{ alignItems: 'center' }}>
-              <Text style={styles.hero}>{heroText(top)}</Text>
+              <Text style={styles.hero}>{heroText(top, counts[`${top.word}→${top.to}`] ?? 0)}</Text>
+              {top.stage === 'sure' && <Text style={styles.heroCount}>この12週で {counts[`${top.word}→${top.to}`] ?? 0}回</Text>}
               {/* たとえば：実際にそうなった日（割合の数字より分かりやすい） */}
               {numbers && numbers.length > 0 && (
                 <View style={styles.ex}>
@@ -161,58 +160,48 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
           // 確かさは記号ではなく、短い言葉の札（多いみたい／多いかも／あった日がある）で各行に書く。
           // 点（●●○）や時間の軸の絵は、意味を読み解く必要があり分かりにくかった（2026-10-10 ユーザー「記号の意味も分かりづらい」）
           <View style={styles.sheet} onLayout={(e) => (sheetTop.current = e.nativeEvent.layout.y)}>
-            <Chapter no="01" title="そのあとに" note="その日から3日以内に拾った、元気・好奇心の言葉">
+            {/* 確かなもの（偶然ではないと確かめられたもの）だけを並べ、回数だけを書く。確かさは見せない（2026-10-10 ユーザー「それがいいね」） */}
+            <Chapter no="01" title="そのあとに" note="その日から3日以内に、元気・好奇心の言葉を拾った回数">
               {(() => {
-                const xs = result.list.filter((x) => x.word !== top?.word).slice(0, 5);
+                const xs = result.list.filter((x) => x.stage === 'sure').slice(0, 5);
                 return xs.length ? (
-                  xs.map((x) => <Row key={x.word} a={x.word} b={x.to} mark="⟶" stage={x.stage} />)
+                  xs.map((x) => <Row key={x.word} a={x.word} b={x.to} mark="⟶" n={counts[`${x.word}→${x.to}`] ?? 0} />)
                 ) : (
-                  <Text style={styles.empty}>まだ、ほかには見えていません</Text>
+                  <Text style={styles.empty}>拾う日が増えると、ここに並んでいきます</Text>
                 );
               })()}
             </Chapter>
 
             <Chapter no="02" title="行ったり来たり" note="何日かのあいだに、交互に拾っている二つ">
-              {result.loops.length ? (
-                result.loops.map((x) => <Row key={x.a + x.b} a={x.a} b={x.b} mark="⇄" stage={x.stage} />)
+              {result.loops.some((x) => x.stage === 'sure') ? (
+                result.loops.filter((x) => x.stage === 'sure').map((x) => <Row key={x.a + x.b} a={x.a} b={x.b} mark="⇄" n={counts[`${x.a}⇄${x.b}`] ?? 0} />)
               ) : (
-                <Text style={styles.empty}>まだ見えていません</Text>
+                <Text style={styles.empty}>拾う日が増えると、ここに並んでいきます</Text>
               )}
             </Chapter>
 
-            <Chapter no="03" title="わかってきた順" note="「多いかも」「多いみたい」になった日">
+            {/* 見つかった日：いま並んでいるものが、いつ確かになったか（新しい順） */}
+            <Chapter no="03" title="見つかった日" note="上に並んでいるものが、確かになった日">
               {!result.story ? (
                 <Text style={styles.empty}>さかのぼって調べています…</Text>
-              ) : result.story.length ? (
-                storyRows(result.story)
-                  .slice(-5)
-                  .map((g) => (
-                    <View key={g.word + g.to} style={styles.hist}>
-                      <Text style={styles.histWords}>
-                        {g.word}
-                        <Text style={styles.mark}>{'  ⟶  '}</Text>
-                        {g.to}
-                      </Text>
-                      <View style={styles.histSteps}>
-                        {g.seen !== undefined && (
-                          <View style={styles.histStep}>
-                            <Text style={styles.histDate}>{mdDayT(g.seen, shiftDays)}</Text>
-                            <Tag stage="tentative" />
-                          </View>
-                        )}
-                        {g.seen !== undefined && g.sure !== undefined && <Text style={styles.histArrow}>⟶</Text>}
-                        {g.sure !== undefined && (
-                          <View style={styles.histStep}>
-                            <Text style={styles.histDate}>{mdDayT(g.sure, shiftDays)}</Text>
-                            <Tag stage="sure" />
-                          </View>
-                        )}
+              ) : (() => {
+                  const now = new Set([...result.list.filter((x) => x.stage === 'sure').map((x) => x.word), ...(top && top.stage === 'sure' ? [top.word] : [])]);
+                  const found = result.story.filter((e) => e.stage === 'sure' && now.has(e.word)).reverse();
+                  return found.length ? (
+                    found.map((e) => (
+                      <View key={e.word} style={styles.found}>
+                        <Text style={styles.foundDate}>{mdDayT(e.at, shiftDays)}</Text>
+                        <View style={styles.rowWordsBox}>
+                          <Text style={styles.rowWords}>{e.word}</Text>
+                          <Text style={styles.mark}>⟶</Text>
+                          <Text style={styles.rowWords}>{e.to}</Text>
+                        </View>
                       </View>
-                    </View>
-                  ))
-              ) : (
-                <Text style={styles.empty}>まだ見えていません</Text>
-              )}
+                    ))
+                  ) : (
+                    <Text style={styles.empty}>まだありません</Text>
+                  );
+                })()}
             </Chapter>
 
             <Chapter no="04" title="うつりかわり" note="よく拾う、元気・好奇心の言葉" last>
@@ -280,20 +269,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
                 </View>
               ))}
             </View>
-            <Text style={styles.introSub}>確かさ</Text>
-            <View style={styles.introBlock}>
-              {(['sure', 'tentative', 'seen'] as const).map((st, i) => (
-                <View key={st} style={[styles.introRow, i === 2 && { borderBottomWidth: 0 }]}>
-                  <View style={styles.introMeter}>
-                    <Tag stage={st} />
-                  </View>
-                  <Text style={styles.introBody}>
-                    {st === 'sure' ? '何週も見て、たまたまではなさそうなもの。' : st === 'tentative' ? '確かめている途中。たまたまのこともあります。' : '起きたことを、そのまま書いています。'}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.introNote}>拾う日が増えるほど、「あった日がある」から「多いかも」「多いみたい」へ、確かになっていきます。{'\n'}「〜のあと」は順番のことで、「〜したから」という意味ではありません。</Text>
+            <Text style={styles.introNote}>ここに並ぶのは、たまたまではないと確かめられたものだけです。拾う日が増えると、少しずつ増えていきます。{'\n'}「〜のあと」は順番のことで、「〜したから」という意味ではありません。</Text>
             {/* 見本は、見方の中からいつでも見られる（星空と同じ） */}
             {!showSample && (
               <Pressable
@@ -338,31 +314,9 @@ function Rule({ label }: { label: string }) {
   );
 }
 
-// 歩みを組（言葉 → 行き先）ごとにまとめる：見えはじめた日（多いかも）と、確かになった日（多いみたい）。はじめて出た順
-function storyRows(story: { at: number; word: string; to: string; stage: 'tentative' | 'sure' }[]) {
-  const rows = new Map<string, { word: string; to: string; seen?: number; sure?: number; first: number }>();
-  for (const e of story) {
-    const r = rows.get(e.word) ?? { word: e.word, to: e.to, first: e.at };
-    if (e.stage === 'tentative') r.seen ??= e.at;
-    else r.sure ??= e.at;
-    r.to = e.to;
-    rows.set(e.word, r);
-  }
-  return [...rows.values()].sort((a, b) => a.first - b.first);
-}
-
 // 章：小さな番号と短い名前。説明は1行だけ（冗長にしない）
-// 確かさの札：言葉で書く（記号の意味を覚えなくてよいように）。濃さで強さを添える
-function Tag({ stage }: { stage: 'sure' | 'tentative' | 'seen' }) {
-  return (
-    <View style={[styles.tag, stage === 'sure' ? styles.tagSure : stage === 'tentative' ? styles.tagMaybe : styles.tagSeen]}>
-      <Text style={[styles.tagText, stage === 'sure' && styles.tagTextSure, stage === 'seen' && styles.tagTextSeen]}>{STAGE_LABEL[stage]}</Text>
-    </View>
-  );
-}
-
-// 1行：散歩 ⟶ わくわく ……［多いみたい］
-function Row({ a, b, mark, stage }: { a: string; b: string; mark: string; stage: 'sure' | 'tentative' | 'seen' }) {
+// 1行：散歩 ⟶ わくわく ……… 9回
+function Row({ a, b, mark, n }: { a: string; b: string; mark: string; n: number }) {
   return (
     <View style={styles.row}>
       {/* 言葉は途中で切らない：入りきらないときは、言葉ごと次の行へ */}
@@ -371,7 +325,10 @@ function Row({ a, b, mark, stage }: { a: string; b: string; mark: string; stage:
         <Text style={styles.mark}>{mark}</Text>
         <Text style={styles.rowWords}>{b}</Text>
       </View>
-      <Tag stage={stage} />
+      <Text style={styles.count}>
+        {n}
+        <Text style={styles.countUnit}>回</Text>
+      </Text>
     </View>
   );
 }
@@ -450,6 +407,11 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 11.5, color: PLUM, fontFamily: SERIF, letterSpacing: 0.5 },
   tagTextSure: { color: '#fffaf6' },
   tagTextSeen: { color: SUB },
+  count: { fontSize: 18, color: INK, fontFamily: SERIF },
+  countUnit: { fontSize: 11, color: SUB },
+  heroCount: { marginTop: 14, fontSize: 13, color: SUB, fontFamily: SERIF, letterSpacing: 1 },
+  found: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
+  foundDate: { width: 64, fontSize: 13, color: SUB, fontFamily: SERIF },
   // わかってきた順
   hist: { paddingVertical: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
   histWords: { fontSize: 16, color: INK, fontFamily: SERIF },

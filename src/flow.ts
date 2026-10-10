@@ -747,3 +747,21 @@ export function examples(captures: Cap[], now: number, word: string, to: string,
   }
   return out;
 }
+
+// 回数：その言葉の日のあと3日以内に、行き先の言葉を拾ったことが何回あったか（直近12週）。画面には確かさの代わりに、この数えた事実だけを出す（2026-10-10）
+export function pairCount(captures: Cap[], now: number, word: string, to: string): number {
+  return examples(captures, now, word, to, Infinity).length;
+}
+// 行ったり来たりの回数：行き（a のあと b）と帰り（b のあと a）を合わせた回数
+export function loopCount(captures: Cap[], now: number, a: string, b: string): number {
+  return pairCount(captures, now, a, b) + pairCount(captures, now, b, a);
+}
+// 画面に出す回数をまとめて数える（一覧・行ったり来たり・いちばん上）
+export type Counts = Record<string, number>; // 鍵は「a→b」（行ったり来たりは「a⇄b」）
+export function countsFor(captures: Cap[], now: number, r: MeResult): Counts {
+  const out: Counts = {};
+  if (r.few) return out;
+  for (const x of [...r.list, ...(r.top ? [r.top] : [])]) out[`${x.word}→${x.to}`] = pairCount(captures, now, x.word, x.to);
+  for (const x of r.loops) out[`${x.a}⇄${x.b}`] = loopCount(captures, now, x.a, x.b);
+  return out;
+}

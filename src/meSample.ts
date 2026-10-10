@@ -31,6 +31,16 @@ export function meSample(now: number): { captures: { word: string; capturedAt: n
       if (r() < 0.7) caps.push({ word: 'もっと知りたい', strength: 0.6, capturedAt: d.start + 86400000 + 19 * 3600000 });
     }
   });
+  // ほかにも、見本として一覧に並ぶよう、はっきりした流れを足す（2026-10-10。確かなものだけを並べる形にしたら、見本の一覧がほとんど空になったため）
+  //  ・お風呂の次の日、6割で「ほっとした」　・音楽の次の日、7割で「わくわく」　・読書の次の日、7割半で「もっと知りたい」　・料理の次の日、7割半で「やってみたい」
+  const add = (from: string, to: string, p: number) => {
+    const ds = new Set(caps.filter((c) => c.word === from).map((c) => dayNumber(c.capturedAt)));
+    for (const d of days) if (ds.has(dayNumber(d.start)) && r() < p) caps.push({ word: to, strength: 0.6, capturedAt: d.start + 86400000 + 20 * 3600000 });
+  };
+  add('お風呂', 'ほっとした', 0.6);
+  add('音楽', 'わくわく', 0.7);
+  add('読書', 'もっと知りたい', 0.75);
+  add('料理', 'やってみたい', 0.75);
   const at = days[days.length - 1].start + 22 * 3600000; // ANCHOR の日の夜に開いたことにする
   const today = new Date(now);
   const shiftDays = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() - ANCHOR.getTime()) / 86400000);

@@ -16,7 +16,7 @@ await p.screenshot({ path: `${out}/s1-empty.png` });
 check('何も出ないとき「見本を見る」がある', (await p.getByText('見本を見る').count()) > 0);
 await p.getByText('見本を見る').first().click();
 const t0 = Date.now();
-await p.waitForFunction(() => /多いみたい|多いかも|ありました/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {});
+await p.waitForFunction(() => /多いみたい|ありました/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {});
 console.log('見本が出るまで', Date.now() - t0, 'ms');
 await p.waitForTimeout(1500);
 await p.screenshot({ path: `${out}/s2-sample.png` });
