@@ -23,6 +23,6 @@ await p.mouse.click(200, 800); // 一度さわる（自動再生の制限をは�
 await p.waitForTimeout(4000);
 console.log('水辺:', await state());
 await p.mouse.click(390 - 33, 67); await p.waitForTimeout(700);
-await p.getByText('わたしのこと', { exact: true }).first().click();
+await p.getByText('夜明け', { exact: true }).first().click();
 for (const ms of [500, 1500, 3000]) { await p.waitForTimeout(ms); console.log(`わたしのこと +${ms}:`, await state()); }
 await b.close();

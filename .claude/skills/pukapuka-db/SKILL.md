@@ -30,8 +30,8 @@ Convex の表と保存する項目を決めるためのスキル。**Convex の�
 
 ## いまの形（2026-10-08。事実は SPEC G.、コードは `convex/schema.ts`）
 
-- 表は `captures` だけ：`deviceId?`・`userId?`・`capturedAt`・`word`・`strength`
-- 関数は `captures.add`（保存）と `captures.listRecent`（直近 N 日、新しい順）
+- 表 `captures`：`deviceId?`・`userId?`・`capturedAt`・`word`・`strength`。関数は `captures.add`（保存）と `captures.listRecent`（直近 N 日、新しい順）
+- 表 `diaries`（日記、2026-10-11）：`deviceId`・`day`（dayKey の文字）・`text`（4000字まで）・`savedAt`。index `by_deviceId_and_day`。関数は `diary.save`（1日1つ、同じ日はおきかえ、空なら消す）・`diary.remove`・`diary.list`。拾った記録とはつなげない（作り方は `/pukapuka-diary`）
 - 端末の ID は `src/useCaptures.ts` が作って AsyncStorage（ブラウザは localStorage）に覚える。**ブラウザは開くアドレスごとに別 ID になる**（`localhost` と `127.0.0.1` は別。127.0.0.1 で開く）
 - 日付は保存しない（決定 2026-10-09）。時刻だけ残し、「同じ日」は端末の時計で0時切り。海外の人が使う公開のときに決め直す
 - 保存の確認は済み（ブラウザ・スマホ。2026-10-08）
@@ -42,7 +42,7 @@ Convex の表と保存する項目を決めるためのスキル。**Convex の�
 
 1. **「していること」の持ち方**：言葉の1種類として `captures` に入れる（いまの作り）か、別の表か
 2. **流れ（何のあとに何が来たか）**：保存せず、時刻の順から毎回計算する（案）。計算が重くなったら集計表を足す
-3. **気づきの日記の表**：どの言葉に・いつ・メモ（なくてもよい）。拾った記録とはつなげない（MVP のあと）
+3. ~~気づきの日記の表~~ → 決めて作った（2026-10-11。上の `diaries`）
 4. **ログインの引き継ぎ**：`deviceId` の記録を `userId` に付け替える手順
 5. **データが増えたときの読み方**：`listRecent` は5000件まで。1年・毎日拾う場合は足りるか
 

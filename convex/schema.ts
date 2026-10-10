@@ -14,4 +14,11 @@ export default defineSchema({
   })
     .index("by_user", ["userId", "capturedAt"])
     .index("by_deviceId_and_capturedAt", ["deviceId", "capturedAt"]),
+  // 日記（SPEC 第1部「日記」・第2部 G.）。自分で書くだけの場所。1日1つ。拾った記録とはつなげない
+  diaries: defineTable({
+    deviceId: v.string(),
+    day: v.string(), // 端末の暦の日（src/period.ts の dayKey）
+    text: v.string(),
+    savedAt: v.number(),
+  }).index("by_deviceId_and_day", ["deviceId", "day"]),
 });

@@ -12,7 +12,7 @@ await p.waitForTimeout(4000);
 // 右上の月と星 → わたしのこと
 await p.mouse.click(390 - 16 - 17, 52 + 15);
 await p.waitForTimeout(800);
-await p.getByText('わたしのこと', { exact: true }).first().click();
+await p.getByText('夜明け', { exact: true }).first().click();
 const t0 = Date.now();
 await p.waitForFunction(() => /のあとに|見えてきます|見えていません/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {});
 console.log('表示まで', Date.now() - t0, 'ms');

@@ -46,7 +46,7 @@ tr:last-child td { border-bottom: 0; }
 /* 夜空 */
 .sky { background: radial-gradient(ellipse at 50% 120%, #2c2f6e, #0f1033 70%); }
 .sky svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* わたしのこと */
+/* 夜明け */
 .me { background: #fbf8fb; color: #2b2838; padding: 16px 12px; font-size: 9.5px; line-height: 1.5; }
 .me h3 { font-family: var(--display); font-size: 14px; margin: 0 0 8px; }
 .me .row { display: flex; justify-content: space-between; gap: 6px; padding: 4px 0; border-bottom: 1px dashed #e6dfe8; }
@@ -62,7 +62,7 @@ tr:last-child td { border-bottom: 0; }
     <span class="chip" style="background:var(--river)">ことばの川</span><span class="arrow">→</span>
     <span class="chip" style="background:var(--words)">拾ったことば</span><span class="arrow">→</span>
     <span class="chip" style="background:var(--sky)">夜空</span><span class="arrow">→</span>
-    <span class="chip" style="background:var(--me)">わたしのこと</span><span class="arrow">→</span>
+    <span class="chip" style="background:var(--me)">夜明け</span><span class="arrow">→</span>
     <span class="chip" style="background:#a9927a">気づきの日記（MVP のあと）</span>
   </div>
 
@@ -147,7 +147,7 @@ tr:last-child td { border-bottom: 0; }
 
   <section>
     <div class="phone"><div class="screen me">
-      <h3>わたしのこと</h3>
+      <h3>夜明け</h3>
       <div class="row"><b>元気の源</b><span>散歩・計画を立てる → わくわく</span></div>
       <div class="row"><b>めぐり</b><span>疲れ ⇄ 不安</span></div>
       <div class="row"><b>育っている</b><span>「やってみたい」が増えた</span></div>
@@ -171,11 +171,11 @@ tr:last-child td { border-bottom: 0; }
     </div></div>
     <div class="info">
       <span class="tag" style="background:var(--me)">集大成</span>
-      <h2>わたしのこと</h2>
+      <h2>夜明け</h2>
       <p class="q">何のあとに元気・好奇心が来る？ それは育ってる？</p>
       <dl>
         <dt>輪郭の面</dt><dd>流れと、わたしの輪郭。ほかの画面と同じこと（よく感じる言葉・本音・テーマ）は見せない</dd>
-        <dt>見え方</dt><dd>上に短いことば、下に育ちのグラフと数字。疲れている日は上だけ読めばよい。源の言葉に「やってみた」を押すと、気づきの日記に残る（MVP のあと）</dd>
+        <dt>見え方</dt><dd>上に短いことば、下に育ちのグラフと数字。疲れている日は上だけ読めばよい。気づいたあとのことは、日記に自分で書いて残せる</dd>
         <dt>分析</dt><dd>有向ネットワーク（向きのある網の目：ある日の言葉 → 3日以内の言葉）＋時間の変化</dd>
         <dt>期間</dt><dd>数週間〜。少ない間は「あと少し集まると見えてきます」だけ</dd>
         <dt>数字</dt><dd><span class="num">この画面だけ出す</span></dd>
@@ -191,22 +191,25 @@ tr:last-child td { border-bottom: 0; }
 
   <section>
     <div class="phone"><div class="screen me" style="background:#fffaf5">
-      <h3>気づきの日記</h3>
-      <div class="row"><b>10/12</b><span>散歩 ✿ 遠回りして帰った</span></div>
-      <div class="row"><b>10/15</b><span>計画を立てる ✿</span></div>
-      <div class="row"><b>10/19</b><span>散歩 ✿ 川沿いを歩いた</span></div>
-      <div class="row"><b>10/24</b><span>カフェ ✿ 新しい店</span></div>
-      <div class="sub">数・連続日数は出さない</div>
+      <h3>日記</h3>
+      <div class="row" style="justify-content:center"><b>2026年 10月</b></div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:.72rem;text-align:center;margin:6px 0 10px">
+        <span></span><span></span><span></span><span></span><span>1</span><span>2</span><span>3</span>
+        <span style="background:#f0cfae;border-radius:50%">4</span><span style="background:#f0cfae;border-radius:50%">5</span><span>6</span><span>7</span><span style="background:#f0cfae;border-radius:50%">8</span><span>9</span><span style="background:#f0cfae;border-radius:50%">10</span>
+        <span style="background:#cc6830;color:#fff;border-radius:50%">11</span><span style="opacity:.3">12</span><span style="opacity:.3">13</span><span style="opacity:.3">14</span><span style="opacity:.3">15</span><span style="opacity:.3">16</span><span style="opacity:.3">17</span>
+      </div>
+      <div class="row" style="display:block;text-align:left"><b>10/11（日）</b><br>帰りに川沿いを遠回りした。夕日がきれいで、しばらく見ていた。</div>
+      <div class="row" style="display:block;text-align:left"><b>10/10（土）</b><br>仕事がばたばたした日。</div>
     </div></div>
     <div class="info">
       <span class="tag" style="background:#a9927a">5つ目の画面・MVP のあと</span>
-      <h2>気づきの日記</h2>
-      <p class="q">気づいたあと、自分で試したことを残す</p>
+      <h2>日記</h2>
+      <p class="q">自分で書くだけの場所。カレンダーで振り返る</p>
       <dl>
-        <dt>すること</dt><dd>わたしのことの源の言葉に「やってみた」スタンプ。書きたい日だけ一言メモ</dd>
-        <dt>見え方</dt><dd>スタンプとメモが日記として並ぶだけ</dd>
-        <dt>川との関係</dt><dd>仕組みの上では独立（データを渡し合わない）。本人の気づきでだけつながる：気づく → 試す・日記 → 興味が変わる → 川で選ぶ言葉が変わる → また気づく</dd>
-        <dt>出さないもの</dt><dd>スタンプの数・連続日数・催促。「日記のおかげで変わった」とも言わない</dd>
+        <dt>すること</dt><dd>日を選んで自由に書く。あとから書き足す・直す・消す</dd>
+        <dt>見え方</dt><dd>書いた日にカレンダーの丸い印。下にその月の日記が並ぶ</dd>
+        <dt>川との関係</dt><dd>仕組みの上では独立（データを渡し合わない）。アプリは日記に何もコメントしない</dd>
+        <dt>出さないもの</dt><dd>数・連続日数・催促。「日記のおかげで変わった」とも言わない</dd>
       </dl>
     </div>
   </section>

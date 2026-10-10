@@ -3,7 +3,7 @@ import { Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue, useAnimatedStyle, useAnimatedProps, useAnimatedReaction, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI,
-  cancelAnimation, withRepeat, withSequence, Easing, type SharedValue,
+  cancelAnimation, withRepeat, withSequence, Easing, FadeIn, FadeOut, type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -15,6 +15,7 @@ import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
+import DiaryOverlay from '../components/DiaryOverlay';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
@@ -833,6 +834,8 @@ export default function Home() {
   const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
   // 「振り返る」を押すと出る、行き先（夕空・星空）の選び
   const [lookBackOpen, setLookBackOpen] = useState(false);
+  // 日記（5つ目の画面。設計書の名前は気づきの日記）。動画で移らず、川の上にふわっと重ねる。開いている間は川と動画を止める（重くしない）
+  const [diaryOpen, setDiaryOpen] = useState(false);
   // 拾ったことばの画面は、離れるときに消え終わったら外す。外さないと、次の動画が流れている間（2〜3秒）も
   // 見えないキラキラと光のアニメーションが動き続け、動画の読み込みと重なってスマホで重かった（2026-10-05）
   const [cloudUiOn, setCloudUiOn] = useState(true);
@@ -1119,6 +1122,19 @@ export default function Home() {
     }, NIGHT_FADE_MS);
   };
 
+  const openDiary = () => {
+    if (stageRef.current !== 'river') return;
+    setLookBackOpen(false);
+    setDiaryOpen(true);
+    paused.set(true);
+    player.pause();
+  };
+  const closeDiary = () => {
+    setDiaryOpen(false);
+    paused.set(false);
+    player.play();
+  };
+
   const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
   const coverCloudStyle = useAnimatedStyle(() => ({ opacity: coverCloud.value }));
   const coverNightStyle = useAnimatedStyle(() => ({ opacity: coverNight.value }));
@@ -1169,7 +1185,10 @@ export default function Home() {
             <Text style={styles.lookBackItem}>星空</Text>
           </Pressable>
           <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToMe}>
-            <Text style={styles.lookBackItem}>わたしのこと</Text>
+            <Text style={styles.lookBackItem}>夜明け</Text>
+          </Pressable>
+          <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={openDiary}>
+            <Text style={styles.lookBackItem}>日記</Text>
           </Pressable>
         </View>
       )}
@@ -1207,10 +1226,17 @@ export default function Home() {
         </Animated.View>
       )}
 
-      {/* わたしのこと（夜明け）。背景の夜明けは画面が自分で持つ */}
+      {/* 夜明け（前の名前は「わたしのこと」）。背景の夜明けは画面が自分で持つ */}
       {(stage === 'me' || stage === 'riverToMe' || stage === 'meToRiver') && (
         <Animated.View style={[StyleSheet.absoluteFill, meUiStyle, { pointerEvents: stage === 'me' ? 'auto' : 'none' }]}>
           <MeOverlay width={width} height={height} onBack={meToRiver} />
+        </Animated.View>
+      )}
+
+      {/* 日記。紙の画面をふわっと重ねる */}
+      {diaryOpen && (
+        <Animated.View entering={FadeIn.duration(350)} exiting={FadeOut.duration(250)} style={[StyleSheet.absoluteFill, { zIndex: 20 }]}>
+          <DiaryOverlay width={width} height={height} onBack={closeDiary} />
         </Animated.View>
       )}
 

@@ -10,7 +10,7 @@ let cached: string | null = null;
 
 // 開発用：web で ?demo=1 をつけて開くと、ダミーの人の記録（convex/demo.ts）で動く。この間は、拾っても保存しない
 const DEMO_DEVICE_ID = 'demo-persona-0000000000000001';
-const isDemo = typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]demo=1\b/.test(window.location.search);
+export const isDemo = typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]demo=1\b/.test(window.location.search);
 
 function newId(): string {
   const a = 'abcdefghijklmnopqrstuvwxyz0123456789';
