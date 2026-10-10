@@ -43,13 +43,22 @@ export function createAmbient(): Ambient {
   // マナーモードでは鳴らさない。ほかのアプリの音楽は止めずに重ねる。裏に回ったら止める
   setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false }).catch(() => {});
 
-  const players = {} as Record<Scene, AudioPlayer>;
-  for (const s of Object.keys(BGM) as Scene[]) {
-    const p = createAudioPlayer(BGM[s]);
-    p.loop = true;
-    p.volume = 0;
-    players[s] = p;
-  }
+  // 曲のプレーヤー。作れなかったとき（開発中に読みこみ直しを何度もくり返すと、Android で作れないことがあった。2026-10-10）は、
+  // その曲が要るとき（setScene）にもう一度作る。作れないまま止まらないよう、ここで失敗しても先へ進む
+  const players = {} as Partial<Record<Scene, AudioPlayer>>;
+  const ensure = (s: Scene) => {
+    if (players[s]) return players[s];
+    try {
+      const p = createAudioPlayer(BGM[s]);
+      p.loop = true;
+      p.volume = 0;
+      players[s] = p;
+    } catch {
+      // 次に要るときに、もう一度作る
+    }
+    return players[s];
+  };
+  for (const s of Object.keys(BGM) as Scene[]) ensure(s);
   // 鳴り終わったら頭へ戻しておき（ready）、押したときは巻き戻しを待たずにすぐ鳴らす。
   // 巻き戻しは非同期で、待たずに play すると iPhone では前の音の終わりが一瞬鳴る・鳴り出しが遅れることがある。
   // keepAudioSessionActive: 鳴り終わるたびに iOS の音のセッションを切らない（切ると、ほかのアプリの音楽の音量が揺れる）
@@ -83,7 +92,7 @@ export function createAmbient(): Ambient {
   const tick = () => {
     let moving = false;
     for (const s of Object.keys(players) as Scene[]) {
-      const p = players[s];
+      const p = players[s]!;
       const goal = muted || !active ? 0 : target[s];
       const v = p.volume;
       if (v === goal) {
@@ -117,6 +126,7 @@ export function createAmbient(): Ambient {
     setScene(next, fadeMs) {
       if (next === scene) return;
       scene = next;
+      ensure(next);
       for (const s of Object.keys(players) as Scene[]) {
         target[s] = s === next ? BGM_VOLUME * SCENE_VOLUME[s] : 0;
         rate[s] = BGM_VOLUME / Math.max(1, fadeMs);
