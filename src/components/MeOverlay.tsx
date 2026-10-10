@@ -6,7 +6,7 @@ import { useCaptures, useDeviceId } from '../useCaptures';
 import { meCache } from '../meCache';
 import SAMPLE from '../meSampleResult.json';
 import HelpStar from './HelpStar';
-import { SOURCE_DAYS, computeMe, countsFor, examples, type Counts, type Example, type MeResult, type SourceItem } from '../flow';
+import { SOURCE_DAYS, computeMe, dayNumber, countsFor, examples, type Counts, type Example, type MeResult, type SourceItem } from '../flow';
 
 // わたしのこと（夜明け）。川の画面の上に重ねて出す（SPEC 第2部 C3.）。
 // 開くと、いちばん上に元気・好奇心の源が1つだけ大きく出る。下へスクロールすると、数字・いろいろな源・めぐり・育っていること。
@@ -29,8 +29,8 @@ const SERIF = Platform.select({ ios: 'Hiragino Mincho ProN', android: 'serif', d
 // 見方（右上の印を押したときだけ出す。星空の「星の見方」と同じ形）
 const INTRO_LINES: [string, string][] = [
   ['いちばん上', '何をした日のあとに、どんな言葉を拾うことが多いか。新しく見つかったものがあれば、それを上に出します。「たとえば」は、実際にそうなった日。'],
-  ['01 そのあとに', 'その日から3日以内に、元気・好奇心の言葉を拾ったこと。数字は、この12週でそうなった回数。'],
-  ['02 行ったり来たり', '行きも帰りも、よく起きている二つ。数字は、その日のあと3日以内に拾った回数。良い・悪いはありません。'],
+  ['01 そのあとに', '左の言葉を拾った日の、次の日から3日のうちに、右の言葉（元気・好奇心の言葉）を拾った回数。この12週で数えています。'],
+  ['02 行ったり来たり', '行きも帰りも、よく起きている二つ。数字は、左の言葉の日の、次の日から3日のうちに右の言葉を拾った回数。良い・悪いはありません。'],
   ['03 よく拾う言葉の変化', '元気・好奇心の言葉を拾った日の数を、前の期間と最近の期間とで並べたもの。期間は、上の日付のとおりです。'],
 ];
 const HELP_COLOR = '#8f5f8a';
@@ -60,7 +60,7 @@ type Numbers = Example[];
 // make は計算を始めるときに呼ぶ（今の時刻を読むため、描くたびには呼ばない）
 type Input = { caps: Caps; now: number; cacheId: string };
 function useMe(key: string | null, make: () => Input) {
-  const [state, setState] = useState<{ key: string; result: MeResult; numbers: Numbers | null; counts: Counts; shiftDays: number; now: number } | null>(null);
+  const [state, setState] = useState<{ key: string; result: MeResult; numbers: Numbers | null; counts: Counts; shiftDays: number; now: number; first: number } | null>(null);
   const running = useRef(0);
   useEffect(() => {
     if (!key) return;
@@ -68,14 +68,14 @@ function useMe(key: string | null, make: () => Input) {
     const { caps, now, cacheId } = make();
     const show = (r: MeResult) => {
       if (run !== running.current) return;
-      setState({ key, result: r, shiftDays: 0, now, counts: countsFor(caps, now, r), numbers: !r.few && r.top ? examples(caps, now, r.top.word, r.top.to) : null });
+      setState({ key, result: r, shiftDays: 0, now, first: caps.length ? Math.min(...caps.map((c) => c.capturedAt)) : now, counts: countsFor(caps, now, r), numbers: !r.few && r.top ? examples(caps, now, r.top.word, r.top.to) : null });
     };
     computeMe(caps, now, meCache(cacheId), undefined, show).then(show, () => {});
     // make は key が変わったときだけ呼ぶ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   const cur = state && state.key === key ? state : null;
-  return { result: cur?.result ?? null, numbers: cur?.numbers ?? null, counts: cur?.counts ?? {}, shiftDays: cur?.shiftDays ?? 0, now: cur?.now ?? 0, busy: !!key && !cur };
+  return { result: cur?.result ?? null, numbers: cur?.numbers ?? null, counts: cur?.counts ?? {}, shiftDays: cur?.shiftDays ?? 0, now: cur?.now ?? 0, first: cur?.first ?? 0, busy: !!key && !cur };
 }
 
 export default function MeOverlay({ width, height, onBack }: { width: number; height: number; onBack: () => void }) {
@@ -94,13 +94,16 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
   // 見本はいつも同じ人・同じ日なので、前もって計算した結果を使う（scripts/me/make-sample.ts。スマホで計算すると3〜6秒かかった）。
   // 日付だけ、見本の日から今日までずらして見せる
   const [sampleShift, setSampleShift] = useState(0);
-  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.examples as Numbers, counts: SAMPLE.counts as Counts, shiftDays: sampleShift, now: SAMPLE.at, busy: false };
+  const sample = { result: SAMPLE.result as MeResult, numbers: SAMPLE.examples as Numbers, counts: SAMPLE.counts as Counts, shiftDays: sampleShift, now: SAMPLE.at, first: SAMPLE.first, busy: false };
   const openSample = () => {
     const a = new Date(SAMPLE.at), t = new Date();
     setSampleShift(Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() - new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()) / 86400000));
     setShowSample(true);
   };
-  const { result, numbers, counts, shiftDays } = showSample ? sample : real;
+  const { result, numbers, counts, shiftDays, now, first } = showSample ? sample : real;
+  // 数える期間：今日から12週前まで。使い始めて12週たっていなければ、使い始めから今日まで（2026-10-11）
+  const periodStart = first ? Math.max(dayNumber(first), dayNumber(now) - SOURCE_DAYS + 1) : 0;
+  const period = first ? `${dayText(periodStart, shiftDays)}〜${dayText(dayNumber(now), shiftDays)}` : '';
   const progress = showSample ? sample.busy : real.busy;
   // 何も出ない（①文だけ、または源が1つもない）とき、真ん中に「見本を見る」を出す
   const nothing = !showSample && real.result !== null && (real.result.few || !real.result.top);
@@ -169,7 +172,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
           // 点（●●○）や時間の軸の絵は、意味を読み解く必要があり分かりにくかった（2026-10-10 ユーザー「記号の意味も分かりづらい」）
           <View style={styles.sheet} onLayout={(e) => (sheetTop.current = e.nativeEvent.layout.y)}>
             {/* 確かなもの（偶然ではないと確かめられたもの）だけを並べ、回数だけを書く。確かさは見せない（2026-10-10 ユーザー「それがいいね」） */}
-            <Chapter no="01" title="そのあとに" note="その日から3日以内に、元気・好奇心の言葉を拾った回数">
+            <Chapter no="01" title="そのあとに" note={`左の言葉を拾った日の、次の日から3日のうちに、右の言葉を拾った回数\n（${period} のあいだ）`}>
               {(() => {
                 const xs = result.list.filter((x) => x.stage === 'sure').slice(0, 5);
                 return xs.length ? (
@@ -180,7 +183,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
               })()}
             </Chapter>
 
-            <Chapter no="02" title="行ったり来たり" note="行きも帰りも、よく起きている二つ">
+            <Chapter no="02" title="行ったり来たり" note={`行きも帰りも、よく起きている二つ\n（${period} のあいだ）`}>
               {result.loops.some((x) => x.stage === 'sure') ? (
                 result.loops
                   .filter((x) => x.stage === 'sure')

@@ -7,5 +7,5 @@ import { computeMeSync, countsFor, examples } from '../../src/flow';
 const sm = meSample(Date.now());
 const result = computeMeSync(sm.captures, sm.at);
 const ex = !result.few && result.top ? examples(sm.captures, sm.at, result.top.word, result.top.to) : [];
-writeFileSync('src/meSampleResult.json', JSON.stringify({ at: sm.at, result, examples: ex, counts: countsFor(sm.captures, sm.at, result) }, null, 1) + '\n');
+writeFileSync('src/meSampleResult.json', JSON.stringify({ at: sm.at, result, examples: ex, first: Math.min(...sm.captures.map((c) => c.capturedAt)), counts: countsFor(sm.captures, sm.at, result) }, null, 1) + '\n');
 console.log('top', !result.few && result.top?.word, 'examples', ex);
