@@ -453,13 +453,14 @@ export const SHIFT_WEEKS = 4;
 // よく拾う言葉の変化：直近12週の、はじめの4週と最近の4週で、元気・好奇心の言葉を拾った日の数を比べる。
 // どちらかでよく拾った言葉を4つまで、増えた順に（2026-10-10、ユーザー「うつりかわりの意味」→ 時期と日数を出す形に）
 export type ShiftRow = { word: string; before: number; after: number };
-export type Shift = { beforeFrom: number; afterFrom: number; rows: ShiftRow[] }; // beforeFrom・afterFrom は暦の日の番号（dayNumber）
+export type Shift = { beforeFrom: number; afterFrom: number; span: number; rows: ShiftRow[] }; // span＝比べる日数（7・14・28・42。記録がたまるほど長くなる） // beforeFrom・afterFrom は暦の日の番号（dayNumber）
 export function genkiShift(captures: Cap[], now: number): Shift | null {
   if (!captures.length) return null;
   const firstDay = dayNumber(Math.min(...captures.map((c) => c.capturedAt)));
   const today = dayNumber(now);
-  const span = SHIFT_WEEKS * 7;
-  if (today - firstDay + 1 < span * 2) return null;
+  // 比べる期間は、記録がたまるほど長くする：直近1週と、その前の1週 → 2週 → 4週 → 6週（2026-10-10）
+  const span = [42, 28, 14, 7].find((n) => today - firstDay + 1 >= n * 2); // 12週の中で前後に分けるので、片側は最長6週
+  if (!span) return null;
   const from = Math.max(firstDay, today - SOURCE_DAYS + 1); // 源と同じ12週の中で比べる
   const count = (lo: number, hi: number) => {
     const days = new Map<string, Set<number>>();
@@ -477,7 +478,7 @@ export function genkiShift(captures: Cap[], now: number): Shift | null {
     .sort((x, y) => Math.max(y.before, y.after) - Math.max(x.before, x.after) || x.word.localeCompare(y.word))
     .slice(0, 4)
     .sort((x, y) => y.after - y.before - (x.after - x.before) || x.word.localeCompare(y.word));
-  return { beforeFrom: from, afterFrom: today - span + 1, rows };
+  return { beforeFrom: from, afterFrom: today - span + 1, span, rows };
 }
 
 // ---- わたしのこと全体の計算（速くした形。2026-10-10） ----

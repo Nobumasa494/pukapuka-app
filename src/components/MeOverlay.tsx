@@ -42,6 +42,7 @@ function heroText(x: SourceItem, n: number): string {
   // 確かめ中・見えはじめ：確かさは言わず、数えた事実だけ（2026-10-10 ユーザー「多いかもは曖昧で混乱する」）
   return `「${x.word}」の日のあとに、\n「${x.to}」を拾った日は、\nいま${n}回です`;
 }
+const shiftLabel = (n: number) => (n === 7 ? '1週' : n === 14 ? '2週' : n === 28 ? '4週' : '6週');
 const monthOf = (day: number, shiftDays = 0) => `${new Date((day + shiftDays + 14) * 86400000).getUTCMonth() + 1}月`; // 4週の真ん中のあたりの月
 const mdDay = (day: number, shiftDays = 0) => {
   const d = new Date((day + shiftDays) * 86400000); // dayNumber は UTC の日で数えている
@@ -196,9 +197,10 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
             </Chapter>
 
             {/* よく拾う言葉の変化：時期と日数で、前と最近を並べる（増えた順） */}
-            <Chapter no="03" title="よく拾う言葉の変化" note="元気・好奇心の言葉を拾った日の数" last>
+            <Chapter no="03" title="よく拾う言葉の変化" note={`元気・好奇心の言葉を拾った日の数（${shiftLabel(result.shift?.span ?? 7)}どうしの比べ）`} last>
               {result.shift ? (
                 <View>
+                  {result.shift.span < 42 && <Text style={styles.shiftNote}>まだ少ない記録での比べです。記録がたまると、比べる期間が長くなります。</Text>}
                   <View style={styles.shiftHeadRow}>
                     <Text style={styles.shiftWordCol} />
                     <Text style={styles.shiftHead}>{monthOf(result.shift.beforeFrom, shiftDays)}ごろ</Text>
@@ -221,7 +223,7 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
                   ))}
                 </View>
               ) : (
-                <Text style={styles.empty}>8週間たまると見えてきます</Text>
+                <Text style={styles.empty}>あと少し記録がたまると見えてきます</Text>
               )}
             </Chapter>
           </View>
@@ -411,6 +413,7 @@ const styles = StyleSheet.create({
   histStep: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   histDate: { fontSize: 12, color: SUB, fontFamily: SERIF },
   histArrow: { fontSize: 12, color: 'rgba(43,38,64,0.4)' },
+  shiftNote: { fontSize: 11.5, color: SUB, lineHeight: 18, marginBottom: 10, fontFamily: SERIF },
   shiftHeadRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 6 },
   shiftRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(43,38,64,0.08)' },
   shiftWordCol: { flex: 1 },

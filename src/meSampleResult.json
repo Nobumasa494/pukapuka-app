@@ -134,27 +134,28 @@
   ],
   "shift": {
    "beforeFrom": 20653,
-   "afterFrom": 20709,
+   "afterFrom": 20695,
+   "span": 42,
    "rows": [
+    {
+     "word": "もっと知りたい",
+     "before": 7,
+     "after": 20
+    },
     {
      "word": "やってみたい",
      "before": 3,
-     "after": 13
-    },
-    {
-     "word": "もっと知りたい",
-     "before": 2,
-     "after": 10
-    },
-    {
-     "word": "ほっとした",
-     "before": 4,
-     "after": 6
+     "after": 16
     },
     {
      "word": "わくわく",
-     "before": 7,
-     "after": 8
+     "before": 13,
+     "after": 11
+    },
+    {
+     "word": "ひらめいた",
+     "before": 10,
+     "after": 6
     }
    ]
   }
