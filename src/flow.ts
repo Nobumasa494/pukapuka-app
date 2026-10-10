@@ -241,14 +241,10 @@ export function significantFlow(captures: Cap[], alpha = FLOW_ALPHA, shuffles = 
 // 日をまたいだ流れのない人では、何か1つでも源が出るのは、およそ familyAlpha の割合になる
 export const SOURCE_ALPHA = 0.1; // ③確か（決定 2026-10-10。scripts/me/tune-test.ts：12週で、流れのない人に出るのは約3%）
 export const SOURCE_MIN_WEIGHT = 3; // 1回きりの偶然を出さない（次の日なら3回ぶん）
-export function genkiSourcesTested(
-  captures: Cap[],
-  familyAlpha = SOURCE_ALPHA,
-  minWeight = SOURCE_MIN_WEIGHT,
-  shuffles = SHUFFLES,
-  seed = 2,
-  onlyDoing = true,
-): { word: string; to: string; weight: number; z: number }[] {
+export type ScoredSource = { word: string; to: string; weight: number; z: number; zAt: number[] }; // zAt[L]＝重さ L 以上の矢印の中での、いちばん大きい z
+
+// 1回の並べかえで、どの厳しさ・重さの下限でも決められるように、重さの下限（1・2・3）ごとの「いちばんの当たり」を記録する
+function sourcesScored(captures: Cap[], shuffles = SHUFFLES, seed = 2, onlyDoing = true) {
   const byDay = wordsByDay(captures);
   const days = [...byDay.keys()].sort((a, b) => a - b);
   const words = [...new Set(captures.map((c) => c.word))].sort();
@@ -274,26 +270,45 @@ export function genkiSourcesTested(
   shuffled((m) => cand.forEach((x, k) => ((sum[k] += m[x]), (sq[k] += m[x] * m[x]))));
   const mean = cand.map((_, k) => sum[k] / shuffles);
   const sd = cand.map((_, k) => Math.sqrt(Math.max(sq[k] / shuffles - mean[k] ** 2, 0)) || 0.25); // ばらつき0は、いちばん小さい重さで代える
-  const maxima: number[] = [];
+  const LEVELS = [0, 1, 2, 3];
+  const maxima = LEVELS.map(() => [] as number[]);
   shuffled((m) => {
-    let mx = -Infinity;
+    const mx = LEVELS.map(() => -Infinity);
     cand.forEach((x, k) => {
-      if (m[x] >= minWeight) mx = Math.max(mx, (m[x] - mean[k]) / sd[k]);
+      const z = (m[x] - mean[k]) / sd[k];
+      for (const L of LEVELS) if (m[x] >= L && z > mx[L]) mx[L] = z;
     });
-    maxima.push(mx);
+    LEVELS.forEach((L) => maxima[L].push(mx[L]));
   });
-  maxima.sort((a, b) => b - a);
-  const cut = maxima[Math.floor(familyAlpha * shuffles)] ?? -Infinity;
-  const best = new Map<number, { word: string; to: string; weight: number; z: number }>();
+  maxima.forEach((m) => m.sort((a, b) => b - a));
+  const cutAt = (alpha: number, minWeight: number) =>
+    alpha >= 1 ? -Infinity : (maxima[Math.min(3, Math.ceil(minWeight))][Math.floor(alpha * shuffles)] ?? -Infinity);
+  const best = new Map<number, ScoredSource>();
   cand.forEach((x, k) => {
-    if (real[x] < minWeight) return;
+    if (real[x] <= 0) return;
     const z = (real[x] - mean[k]) / sd[k];
-    if (z <= cut) return;
     const a = Math.floor(x / n);
-    const prev = best.get(a);
-    if (!prev || z > prev.z) best.set(a, { word: words[a], to: words[x % n], weight: real[x], z });
+    const cur = best.get(a) ?? { word: words[a], to: words[x % n], weight: real[x], z, zAt: LEVELS.map(() => -Infinity) };
+    if (z > cur.z) Object.assign(cur, { to: words[x % n], weight: real[x], z });
+    for (const L of LEVELS) if (real[x] >= L && z > cur.zAt[L]) cur.zAt[L] = z;
+    best.set(a, cur);
   });
-  return [...best.values()].sort((p, q) => q.z - p.z || p.word.localeCompare(q.word));
+  const scored = [...best.values()].sort((p, q) => q.z - p.z || p.word.localeCompare(q.word));
+  return { scored, cutAt };
+}
+
+export function genkiSourcesTested(
+  captures: Cap[],
+  familyAlpha = SOURCE_ALPHA,
+  minWeight = SOURCE_MIN_WEIGHT,
+  shuffles = SHUFFLES,
+  seed = 2,
+  onlyDoing = true,
+): { word: string; to: string; weight: number; z: number }[] {
+  const { scored, cutAt } = sourcesScored(captures, shuffles, seed, onlyDoing);
+  const cut = cutAt(familyAlpha, minWeight);
+  const L = Math.min(3, Math.ceil(minWeight));
+  return scored.filter((x) => x.zAt[L] > cut).sort((p, q) => q.zAt[L] - p.zAt[L] || p.word.localeCompare(q.word));
 }
 
 // 源を見る期間：直近12週（決定 2026-10-10。6週より本物が見つかりやすく、偽物も少ない）
@@ -327,58 +342,73 @@ function isFew(captures: Cap[], now: number): boolean {
 const recentOf = (captures: Cap[], t: number) =>
   captures.filter((c) => c.capturedAt <= t && dayNumber(t) - dayNumber(c.capturedAt) < SOURCE_DAYS);
 
-// 今日の結果が③でなければ、1週間前・2週間前の結果も見て、そのころ②③で出ていたものを②で残す
-function withHold<T extends { stage: Stage }>(captures: Cap[], now: number, at: (t: number) => T): T {
-  const cur = at(now);
-  if (cur.stage === 'sure' || cur.stage === 'few') return cur;
-  for (let k = 7; k <= HOLD_DAYS; k += 7) {
-    const past = at(now - k * 86400000);
-    if (past.stage === 'sure' || past.stage === 'tentative') return cur.stage === 'tentative' ? cur : { ...past, stage: 'tentative' };
-  }
-  return cur;
+const STAGE_RANK: Record<Stage, number> = { sure: 3, tentative: 2, seen: 1, none: 0, few: 0 };
+export type SourceItem = { word: string; to: string; weight: number; stage: 'seen' | 'tentative' | 'sure'; z: number };
+export type LoopItem = { a: string; b: string; stage: 'tentative' | 'sure'; z: number };
+
+// ある日の時点の源を、全部の「していること」について段階つきで出す（1回の並べかえで決める）
+function sourcesAt(captures: Cap[], t: number): SourceItem[] {
+  const { scored, cutAt } = sourcesScored(recentOf(captures, t));
+  const sure = cutAt(SOURCE_ALPHA, SOURCE_MIN_WEIGHT), maybe = cutAt(TENTATIVE_ALPHA, TENTATIVE_MIN_WEIGHT);
+  return scored.map((x) => ({
+    word: x.word, to: x.to, weight: x.weight, z: x.z,
+    stage: x.zAt[3] > sure ? 'sure' : x.zAt[2] > maybe ? 'tentative' : 'seen',
+  }));
 }
 
-function sourceAt(captures: Cap[], t: number): SourceStage {
-  if (isFew(captures.filter((c) => c.capturedAt <= t), t)) return { stage: 'few' };
+// 一度②③に出た言葉は、2週間は②で残す（今日の段階が低いときだけ。なくなっていても②で足す）
+function holdItems<T extends { stage: string; z: number }>(cur: T[], past: T[][], key: (x: T) => string): T[] {
+  const out = new Map(cur.map((x) => [key(x), x]));
+  for (const list of past)
+    for (const p of list) {
+      if (p.stage !== 'sure' && p.stage !== 'tentative') continue;
+      const c = out.get(key(p));
+      if (!c || STAGE_RANK[c.stage as Stage] < 2) out.set(key(p), { ...(c ?? p), stage: 'tentative' });
+    }
+  return [...out.values()];
+}
+
+const sortItems = <T extends { stage: string; z: number }>(l: T[]) =>
+  l.sort((a, b) => STAGE_RANK[b.stage as Stage] - STAGE_RANK[a.stage as Stage] || b.z - a.z);
+
+// 源の一覧（決定 2026-10-10、ユーザー「いろんなやつをみたいよね」）：確かさの順に、多くて LIST_MAX まで。
+// いちばん上の1つ（top）は、新しく③になったもの（2週間前は③でなかった）を優先。当たり前のことは、たいてい前から③のまま
+export const LIST_MAX = 8;
+export function sourceList(captures: Cap[], now: number): { few: true } | { few: false; top: SourceItem | null; list: SourceItem[] } {
+  if (isFew(captures.filter((c) => c.capturedAt <= now), now)) return { few: true };
+  const at = (k: number) => (isFew(captures.filter((c) => c.capturedAt <= now - k * 86400000), now - k * 86400000) ? [] : sourcesAt(captures, now - k * 86400000));
+  const cur = sourcesAt(captures, now);
+  const past = [at(7), at(HOLD_DAYS)];
+  const list = sortItems(holdItems(cur, past, (x) => x.word)).slice(0, LIST_MAX);
+  const wasSure = new Set(past[1].filter((x) => x.stage === 'sure').map((x) => x.word));
+  const top = list.find((x) => x.stage === 'sure' && !wasSure.has(x.word)) ?? list[0] ?? null;
+  return { few: false, top, list };
+}
+
+// めぐりの一覧：②③だけ（見えはじめは出さない。決定 2026-10-10。偶然と区別できない間は、ころころ変わって意味のない組になるため）
+function loopsAt(captures: Cap[], t: number): LoopItem[] {
   const recent = recentOf(captures, t);
-  const sure = genkiSourcesTested(recent, SOURCE_ALPHA, SOURCE_MIN_WEIGHT)[0];
-  if (sure) return { stage: 'sure', word: sure.word, to: sure.to, weight: sure.weight };
-  const maybe = genkiSourcesTested(recent, TENTATIVE_ALPHA, TENTATIVE_MIN_WEIGHT)[0];
-  if (maybe) return { stage: 'tentative', word: maybe.word, to: maybe.to, weight: maybe.weight };
-  // 見えはじめ：「していること」→ 元気・好奇心の言葉で、いちばん重い矢印（なければ、どの言葉からでも）
-  const list = arrows(recent).filter((a) => isGenki(a.to));
-  const best = (l: Arrow[]) => l.sort((x, y) => y.weight - x.weight || x.from.localeCompare(y.from) || x.to.localeCompare(y.to))[0];
-  const seen = best(list.filter((a) => WORD_CATEGORY[a.from] === 'doing')) ?? best(list.filter((a) => !isGenki(a.from))) ?? best(list);
-  return seen ? { stage: 'seen', word: seen.from, to: seen.to, weight: seen.weight } : { stage: 'none' };
+  const sure = loopsTested(recent, LOOP_ALPHA, LOOP_MIN_WEIGHT);
+  const keys = new Set(sure.map((x) => x.a + '\n' + x.b));
+  const maybe = loopsTested(recent, LOOP_TENTATIVE_ALPHA, LOOP_MIN_WEIGHT).filter((x) => !keys.has(x.a + '\n' + x.b));
+  return [...sure.map((x) => ({ ...x, stage: 'sure' as const })), ...maybe.map((x) => ({ ...x, stage: 'tentative' as const }))];
+}
+export function loopList(captures: Cap[], now: number): LoopItem[] {
+  if (isFew(captures.filter((c) => c.capturedAt <= now), now)) return [];
+  const at = (k: number) => (isFew(captures.filter((c) => c.capturedAt <= now - k * 86400000), now - k * 86400000) ? [] : loopsAt(captures, now - k * 86400000));
+  return sortItems(holdItems(loopsAt(captures, now), [at(7), at(HOLD_DAYS)], (x) => x.a + '\n' + x.b)).slice(0, 3);
 }
 
-// いちばん上に出す源を1つ選ぶ（① → ②' → ② → ③ と、記録がたまるほど確かになる）
+// いちばん上の源（一覧の top）。前の形（topSource）も残す
 export function topSource(captures: Cap[], now: number): SourceStage {
-  return withHold(captures, now, (t) => sourceAt(captures, t));
+  const r = sourceList(captures, now);
+  if (r.few) return { stage: 'few' };
+  return r.top ? { stage: r.top.stage, word: r.top.word, to: r.top.to, weight: r.top.weight } : { stage: 'none' };
 }
-
-function loopAt(captures: Cap[], t: number): LoopStage {
-  if (isFew(captures.filter((c) => c.capturedAt <= t), t)) return { stage: 'few' };
-  const recent = recentOf(captures, t);
-  const sure = loopsTested(recent, LOOP_ALPHA, LOOP_MIN_WEIGHT)[0];
-  if (sure) return { stage: 'sure', a: sure.a, b: sure.b };
-  const maybe = loopsTested(recent, LOOP_TENTATIVE_ALPHA, LOOP_MIN_WEIGHT)[0];
-  if (maybe) return { stage: 'tentative', a: maybe.a, b: maybe.b };
-  // 見えはじめ：行きと帰りの、弱いほうの重さがいちばん大きい組
-  const w = new Map(arrows(recent).map((a) => [`${a.from}\n${a.to}`, a.weight]));
-  let best: { a: string; b: string; v: number } | undefined;
-  for (const [key, v] of w) {
-    const [a, b] = key.split('\n');
-    if (a > b) continue;
-    const m = Math.min(v, w.get(`${b}\n${a}`) ?? 0);
-    if (m > 0 && (!best || m > best.v)) best = { a, b, v: m };
-  }
-  return best ? { stage: 'seen', a: best.a, b: best.b } : { stage: 'none' };
-}
-
-// くり返すめぐりを1つ選ぶ（源と同じ段階・同じ残し方）
 export function topLoop(captures: Cap[], now: number): LoopStage {
-  return withHold(captures, now, (t) => loopAt(captures, t));
+  if (isFew(captures.filter((c) => c.capturedAt <= now), now)) return { stage: 'few' };
+  const l = loopList(captures, now)[0];
+  return l ? { stage: l.stage, a: l.a, b: l.b } : { stage: 'none' };
 }
 
 // くり返すめぐり（A ⇄ B の2語の輪。max-T の並べかえ検定）：行き（A→B）と帰り（B→A）の z の、弱いほうを輪の強さにする。
