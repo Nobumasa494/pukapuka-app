@@ -8,13 +8,15 @@ import Animated, {
   withDecay,
   withDelay,
   withRepeat,
+  withSequence,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, Line as SvgLine, LinearGradient as SvgLinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line as SvgLine, LinearGradient as SvgLinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { WIDE_CAPS, layoutSky, lineTiers, skeleton, selectConstellation, starBox, type Mag, type StarLink, type Star } from '../constellation';
+import { WIDE_CAPS, layoutSky, lineTiers, skeleton, selectConstellation, starBox, type Mag, type StarLink, type Star, type TentativeLink } from '../constellation';
 import { useCaptures } from '../useCaptures';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
@@ -25,12 +27,61 @@ import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 const TWINKLE_MS = 3200;
 const TWINKLE_GROUPS = 3;
 // 星座の上と下に空ける高さ（上: タイトル、下: 期間・ヒント・川へ戻る）
+// 右上の「星の見方」の印（4つの角の星。「?」はつけない：ユーザー「はてなマークいらないかも」2026-10-10）
+const HELP_STAR = 'M15 3l1.6 6.4L23 11l-6.4 1.6L15 19l-1.6-6.4L7 11l6.4-1.6z';
+
+const HELP_TWINKLE_EVERY_MS = 4000;
+const HELP_GLINT = 24;
+// 右上の「星の見方」の印。色は星座の線と同じ金色を、ひかえめに（白だと浮いた。ユーザー「色を変えたほうが良いかも」→ B 2026-10-10）。
+// 押せると分かるように、4秒に1回「きらん」と光る（水辺の月と星と同じ。ユーザー「きらんと光ってほしい４秒に一回ぐらい」2026-10-10）
+function HelpStar() {
+  const kiran = useSharedValue(0);
+  useEffect(() => {
+    kiran.set(
+      withRepeat(
+        withSequence(
+          withDelay(HELP_TWINKLE_EVERY_MS - 700, withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })),
+          withTiming(0, { duration: 500, easing: Easing.in(Easing.quad) }),
+        ),
+        -1,
+        false,
+      ),
+    );
+    return () => cancelAnimation(kiran);
+  }, [kiran]);
+  const iconStyle = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * kiran.value }));
+  const glintStyle = useAnimatedStyle(() => ({
+    opacity: kiran.value,
+    transform: [{ scale: 0.3 + 0.9 * kiran.value }, { rotate: `${kiran.value * 20}deg` }],
+  }));
+  const g = HELP_GLINT;
+  return (
+    <View style={{ width: 32, height: 32 }}>
+      <Animated.View style={iconStyle}>
+        <Svg width={32} height={32} viewBox="0 -4 30 30">
+          <Path d={HELP_STAR} fill={LINE_COLOR} />
+        </Svg>
+      </Animated.View>
+      {/* 星の真ん中（32px の箱の真ん中）に、細い十字の光 */}
+      <Animated.View style={[{ position: 'absolute', left: 16 - g / 2, top: 16 - g / 2, width: g, height: g }, glintStyle]} pointerEvents="none">
+        <Svg width={g} height={g}>
+          <Path d={`M${g / 2} 0 L${g / 2 + 0.9} ${g / 2} L${g / 2} ${g} L${g / 2 - 0.9} ${g / 2} Z`} fill="#fff4d8" />
+          <Path d={`M0 ${g / 2} L${g / 2} ${g / 2 - 0.9} L${g} ${g / 2} L${g / 2} ${g / 2 + 0.9} Z`} fill="#fff4d8" />
+          <Circle cx={g / 2} cy={g / 2} r={2} fill="#fffaf0" />
+        </Svg>
+      </Animated.View>
+    </View>
+  );
+}
+
 // 星の見方（右上の「星の見方」を押したときだけ出す）
-const INTRO_LINES: [string, string][] = [
+// 3つ目：線の見本（名前の下に小さく描く。点線とつぶの線を、言葉だけでは見分けにくいため 2026-10-10）
+const INTRO_LINES: [string, string, ('solid' | 'cross' | 'tentative')?][] = [
   ['星', 'あなたが拾った言葉です。大きいほど、よく拾いました。'],
-  ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。'],
+  ['線', 'いっしょによく拾った言葉を、つないでいます。太いほど、よくいっしょでした。', 'solid'],
   ['星座', '線でつながった星の集まりです。いっしょに出やすい言葉たちです。'],
-  ['点線', 'ちがう星座どうしの、小さなつながりです。'],
+  ['点線', 'ちがう星座どうしの、小さなつながりです。ときどき流れ星が走ります。', 'cross'],
+  ['つぶの線', 'まだ確かめている途中のつながりです。本当かもしれないし、たまたまかもしれません。何日か拾うと、線になるか、消えていきます。', 'tentative'],
   ['動かす', '星が多いときは、なぞって動かせます。2本指で、拡大・縮小もできます。'],
 ];
 
@@ -38,6 +89,11 @@ const INTRO_LINES: [string, string][] = [
 // 前は弱い線に合わせた太さ（約0.35px）で、触れたときだけ濃くしていたが、いつも出すと見えなかった（2026-10-10 実機）
 const CROSS_WIDTH = 1.2;
 const CROSS_OPACITY = 0.45;
+// まだ確かめている途中の線：丸い粒の点線（星座をまたぐ点線は短い棒なので、形で見分ける）。偶然の確率が5%より小さい組は、少し濃く（本物らしくなってきた）
+// 細く（0.9px・濃さ0.24〜0.42）すると、スマホで見にくかった（ユーザー「薄い線みにくい」2026-10-10）
+const TENTATIVE_WIDTH = 2;
+const TENTATIVE_OPACITY = { near: 0.75, far: 0.5 };
+const TENTATIVE_NEAR_P = 0.05;
 // 「見本」：星がまだ出ない間に見られる、ダミーの人の夜空（6週間ぶん。自分の記録ではない）。
 // 毎日同じ形にする：決まった日（SAMPLE_ANCHOR）までの6週間を決まった種（SAMPLE_SEED）で作り、今日までずらす。
 // 種は、600通りから、星座がはっきり分かれて、点線もあるものを選んだ（463番：星22・5つの星座・2つ組なし・点線2本「ひらめいた」→「わくわく」「作る」。
@@ -185,9 +241,10 @@ function GlowStar({ star, index, group, clock, dim }: { star: Star; index: numbe
 }
 
 // 星座。期間を変えたら作り直し、星が浮かんでから線が引かれる
-function Constellation({ stars, lines, selected, onSelect, onClear, width, height, viewW, viewH, home }: {
+function Constellation({ stars, lines, tentative, selected, onSelect, onClear, width, height, viewW, viewH, home }: {
   stars: Star[];
   lines: StarLink[];
+  tentative: TentativeLink[];
   selected: string | null;
   onSelect: (word: string) => void;
   // 空いているところを押したとき（選んだ星を外す）
@@ -398,12 +455,12 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
     const set = new Set<string>();
     if (!selected) return set;
     set.add(selected);
-    for (const l of lines) {
+    for (const l of [...lines, ...tentative]) {
       if (l.a === selected) set.add(l.b);
       if (l.b === selected) set.add(l.a);
     }
     return set;
-  }, [lines, selected]);
+  }, [lines, tentative, selected]);
   const lit = (word: string) => !selected || neighbors.has(word);
 
   return (
@@ -416,6 +473,27 @@ function Constellation({ stars, lines, selected, onSelect, onClear, width, heigh
     <Animated.View style={[{ position: 'absolute', left: 0, top: -SKY_WINDOW_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
       <Animated.View style={[StyleSheet.absoluteFill, linesStyle]} pointerEvents="none">
         <Svg width={width} height={height}>
+          {/* まだ確かめている途中の線（いちばん下に、つぶの線で） */}
+          {tentative.map((l) => {
+            const a = at.get(l.a);
+            const b = at.get(l.b);
+            if (!a || !b) return null;
+            const on = !selected || l.a === selected || l.b === selected;
+            return (
+              <SvgLine
+                key={`t-${l.a}-${l.b}`}
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                stroke={LINE_COLOR}
+                strokeWidth={TENTATIVE_WIDTH}
+                strokeOpacity={Math.min(1, (l.p < TENTATIVE_NEAR_P ? TENTATIVE_OPACITY.near : TENTATIVE_OPACITY.far) * (on ? (selected ? 1.6 : 1) : DIM))}
+                strokeLinecap="round"
+                strokeDasharray="0.1 6"
+              />
+            );
+          })}
           {/* 点線（星座をまたぐ線）も、最初から出す（ユーザー「3で最初から表示させる」2026-10-10。前は触れたときだけ） */}
           {drawn.map((l) => {
             const a = at.get(l.a)!;
@@ -525,14 +603,14 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
   const real = useCaptures(NIGHT_DAYS);
   const sample = useMemo(() => (showSample ? sampleCaptures() : null), [showSample]);
   const captures = showSample ? sample : real;
-  const { stars, lines, canvasW, canvasH, home } = useMemo(() => {
+  const { stars, lines, tentative, canvasW, canvasH, home } = useMemo(() => {
     const f = showSample ? undefined : focus;
     // 1画面に収まらないほど星があるときは、上限をゆるめて、画面より大きな夜空にする（なぞって動かす）
     let picked = selectConstellation(captures ?? [], f);
     if (picked.truncated) picked = selectConstellation(captures ?? [], f, WIDE_CAPS);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };
-    const sky = layoutSky(picked.stats, picked.lines, area, f);
-    return { stars: sky.stars, lines: picked.lines, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height - SKY_WINDOW_BOTTOM, sky.extentH), home: sky.home };
+    const sky = layoutSky(picked.stats, picked.lines, area, f, picked.tentative);
+    return { stars: sky.stars, lines: picked.lines, tentative: picked.tentative, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height - SKY_WINDOW_BOTTOM, sky.extentH), home: sky.home };
   }, [captures, focus, showSample, width, height]);
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
@@ -551,18 +629,23 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
       ? `「${current.word}」とよく一緒の星が、光っています${
           crossPartners.length > 0 ? `\n「${current.word}」は、${crossPartners.map((w) => `「${w}」`).join('')}とも、小さくつながっています` : ''
         }`
-      : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
+      : tentative.some((l) => l.a === current.word || l.b === current.word)
+        ? `「${current.word}」のつながりは、まだ確かめている途中です`
+        : `「${current.word}」のまわりは、もう少し拾うと見えてきます`
     : showSample
       ? '星に触れてみてください'
-      : '大きな星＝よく拾った言葉　太い線＝よく一緒に拾った言葉';
-  // 読み込みが終わって、星が1つも出ないとき（使い始め）
-  const isEmpty = !showSample && real !== undefined && lines.length === 0;
+      : lines.length === 0
+        ? '何日か拾うと、星どうしがつながって星座になります'
+        : '大きな星＝よく拾った言葉　太い線＝よく一緒に拾った言葉';
+  // 読み込みが終わって、星が1つも出ないとき（まだ1つも拾っていない）
+  const isEmpty = !showSample && real !== undefined && stars.length === 0;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <Constellation
         stars={stars}
         lines={lines}
+        tentative={tentative}
         selected={current ? current.word : null}
         onSelect={(w) => setSelected((prev) => (prev === w ? null : w))}
         onClear={() => setSelected(null)}
@@ -575,7 +658,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
       {isEmpty && (
         <View style={[styles.emptyRow, { top: AREA_TOP + (height - AREA_TOP - AREA_BOTTOM) / 2 + 24 }]} pointerEvents="box-none">
-          <Text style={styles.empty}>もう少し拾うと見えてきます</Text>
+          <Text style={styles.empty}>拾った言葉が、星になって見えてきます</Text>
           <Pressable hitSlop={12} onPress={() => setShowSample(true)} style={styles.sampleBtn}>
             <Text style={styles.sampleBtnText}>見本を見る</Text>
           </Pressable>
@@ -583,7 +666,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
       )}
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
-        <Text style={styles.title}>星空</Text>
+        <Text style={styles.title}>{showSample ? "星空（見本）" : "星空"}</Text>
       </View>
 
       {/* 左上：ふだんは「← 夕空へ」。見本を見ているときは、見本をとじる「×」になる */}
@@ -599,8 +682,16 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
 
       {!introOpen && (
-        <Pressable style={styles.help} hitSlop={12} onPress={() => setIntroOpen(true)}>
-          <Text style={styles.helpText}>星の見方</Text>
+        // 星の見方：枠のない、星と小さな「?」の印（丸い枠のボタンは「ダサい」→ B 2026-10-10）
+        <Pressable
+          style={({ pressed }) => [styles.help, pressed && { transform: [{ scale: 0.88 }] }]}
+          hitSlop={16}
+          onPressIn={() => Haptics.selectionAsync()}
+          onPress={() => setIntroOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="星の見方"
+        >
+          <HelpStar />
         </Pressable>
       )}
 
@@ -608,13 +699,44 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
         <Pressable style={styles.intro} onPress={closeIntro}>
           <View style={styles.introCard}>
             <Text style={styles.introTitle}>星の見方</Text>
-            {INTRO_LINES.map(([label, body]) => (
+            {INTRO_LINES.map(([label, body, sample]) => (
               <View key={label} style={styles.introRow}>
-                <Text style={styles.introLabel}>{label}</Text>
+                <View style={styles.introLabelBox}>
+                  <Text style={styles.introLabel}>{label}</Text>
+                  {sample && (
+                    <Svg width={44} height={8} style={{ marginTop: 4 }}>
+                      <SvgLine
+                        x1={2}
+                        y1={4}
+                        x2={42}
+                        y2={4}
+                        stroke={LINE_COLOR}
+                        strokeLinecap="round"
+                        strokeWidth={sample === 'solid' ? 1.8 : sample === 'cross' ? CROSS_WIDTH : TENTATIVE_WIDTH}
+                        strokeOpacity={sample === 'solid' ? 0.85 : sample === 'cross' ? 0.8 : TENTATIVE_OPACITY.near}
+                        strokeDasharray={sample === 'solid' ? undefined : sample === 'cross' ? '3 4' : '0.1 6'}
+                      />
+                    </Svg>
+                  )}
+                </View>
                 <Text style={styles.introBody}>{body}</Text>
               </View>
             ))}
             <Text style={styles.introEnd}>どんな言葉が、いっしょに出てくるか、ながめてみてください。</Text>
+            {/* 見本は、星の見方の中からいつでも見られる（星が出たあとは、真ん中の「見本を見る」が出ないため。ユーザー「見方の中に見本残してほしい」2026-10-10） */}
+            {!showSample && (
+              <Pressable
+                hitSlop={12}
+                onPress={() => {
+                  setIntroOpen(false);
+                  setSelected(null);
+                  setShowSample(true);
+                }}
+                style={[styles.sampleBtn, { alignSelf: 'center' }]}
+              >
+                <Text style={styles.sampleBtnText}>見本を見る</Text>
+              </Pressable>
+            )}
           </View>
           <View style={[styles.closeBtn, styles.closeRight]}>
             <Text style={styles.closeBtnText}>×</Text>
@@ -662,13 +784,13 @@ const styles = StyleSheet.create({
   empty: { fontSize: 13, color: 'rgba(255,246,232,0.7)', letterSpacing: 1 },
   sampleBtn: { marginTop: 14, paddingHorizontal: 18, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.55)' },
   sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
-  help: { position: 'absolute', top: 54, right: 20, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', zIndex: 10 },
-  helpText: { fontSize: 12, color: 'rgba(255,246,232,0.8)', letterSpacing: 1 },
+  help: { position: 'absolute', top: 50, right: 18, zIndex: 10 },
   intro: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(6,12,28,0.82)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, zIndex: 30 },
   introCard: { width: '100%', maxWidth: 360 },
   introTitle: { fontSize: 17, color: 'rgba(255,246,232,0.95)', letterSpacing: 2, textAlign: 'center', marginBottom: 22 },
   introRow: { flexDirection: 'row', marginBottom: 14 },
-  introLabel: { width: 48, fontSize: 14, color: 'rgba(255,215,140,0.95)' },
+  introLabelBox: { width: 64 },
+  introLabel: { fontSize: 14, color: 'rgba(255,215,140,0.95)' },
   introBody: { flex: 1, fontSize: 14, lineHeight: 22, color: 'rgba(255,246,232,0.85)' },
   introEnd: { marginTop: 10, fontSize: 13, lineHeight: 21, color: 'rgba(255,246,232,0.7)', textAlign: 'center' },
   closeBtn: { position: 'absolute', top: 52, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
