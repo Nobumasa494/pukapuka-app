@@ -450,7 +450,7 @@ export function loopsTested(
 // B：元気の中身の変わり方。最初の4週と最近の4週で、よく拾った元気・好奇心の言葉（拾った日の数）を2つずつ。
 // 偶然とは比べない事実（「よく拾った」）。8週たまるまでは出さない
 export const SHIFT_WEEKS = 4;
-// よく拾う言葉の変化：直近12週の、はじめの4週と最近の4週で、元気・好奇心の言葉を拾った日の数を比べる。
+// 元気・好奇心の言葉の変化：直近12週の、はじめの4週と最近の4週で、元気・好奇心の言葉を拾った日の数を比べる。
 // どちらかでよく拾った言葉を4つまで、増えた順に（2026-10-10、ユーザー「うつりかわりの意味」→ 時期と日数を出す形に）
 export type ShiftRow = { word: string; before: number; after: number };
 export type Shift = { beforeFrom: number; afterFrom: number; span: number; rows: ShiftRow[] }; // span＝比べる日数（7・14・28・42。記録がたまるほど長くなる） // beforeFrom・afterFrom は暦の日の番号（dayNumber）
