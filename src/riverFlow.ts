@@ -66,6 +66,8 @@ export type SimBubble = {
   lifted: boolean;
   drift: number;  // px。押された泡や前にいる泡をよけるため横にずらす量（0=元のレーン）
   sp: number;     // いまの速さ（ふだんの速さに対する割合 0〜1）。前の泡に近づくと少しずつ落ち、離れると少しずつ戻る
+  // このコマの画面上の位置（stepBubbles の最後に1回だけ計算する）。泡ごとの見た目（位置・大きさ・もや・文字）が毎コマ何度も placeBubble を呼んでいて重かった（2026-10-10）
+  pl?: Placed;
 };
 
 export type Placed = { x: number; y: number; size: number; t: number };
@@ -300,6 +302,7 @@ export function stepBubbles(P: PathData, bs: SimBubble[], dt: number) {
       others.push(np);
       if (stopped || nb.sp < SLOW_AS_STALLED) stalled.push({ s: b.s, pl: base });
     }
+    nb.pl = placeBubble(P, nb);
     out.push(nb);
   }
   return { bs: out, exited };

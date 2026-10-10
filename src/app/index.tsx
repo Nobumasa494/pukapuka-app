@@ -312,7 +312,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   const posStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
     if (!b) return { opacity: 0 };
-    const pl = placeBubble(P, b);
+    const pl = (b.pl ?? placeBubble(P, b));
     const fadeIn = Math.min(1, b.age / SURFACE_SEC);
     // 泡の下の方がヒント文に近づいたら消える（中心で判定すると大きな泡が文字に重なる）
     const fadeOut = Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
@@ -390,7 +390,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   // 泡全体は大きさ s 倍に拡大・縮小されているので、画面上の動き（指の移動・ぷかぷか±3px・拾って昇る）は 1/s で入れる
   const bodyStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
-    const s = b ? placeBubble(P, b).size / base : 1;
+    const s = b ? (b.pl ?? placeBubble(P, b)).size / base : 1;
     return {
       transform: [
         { scale: scale.value },
@@ -408,14 +408,14 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   const textStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
     if (!b) return {};
-    const size = placeBubble(P, b).size;
+    const size = (b.pl ?? placeBubble(P, b)).size;
     const font = Math.max(10, Math.min(15, (size * 0.8) / word.length));
     return { transform: [{ scale: font / TEXT_BASE / (size / base) }] };
   });
   // 奥の泡ほど夕日のもやがかかる
   const hazeStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
-    return { opacity: b ? 1 - placeBubble(P, b).t : 0 };
+    return { opacity: b ? 1 - (b.pl ?? placeBubble(P, b)).t : 0 };
   });
   // 水面の波紋と映り込みは水に残る（上下しない）。泡が水面を離れたら（遷移で空へ昇る・指で引っぱる・拾われて昇る）すぐ消す。
   // 消さないと、泡のいない場所に波紋の輪だけが痕跡として残る
@@ -521,7 +521,7 @@ const ChargeDots = memo(function ChargeDots({ id, P, sim, charge, visible }: {
   );
   const rowStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
-    const size = b ? placeBubble(P, b).size : BASE;
+    const size = b ? (b.pl ?? placeBubble(P, b)).size : BASE;
     const s = size / BASE;
     const above = Math.max(size / 2 + DOTS_ABOVE_RIM, DOTS_ABOVE_MIN);
     return {
