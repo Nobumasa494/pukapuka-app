@@ -3,8 +3,7 @@
 // 使い方: npx tsx scripts/me/mock-data.ts <出力.json> [週=12]
 import { writeFileSync } from 'fs';
 import { makeDemoCaptures, type DemoDay } from '../../src/demoPersona';
-import { cycles, dayNumber, growth, pageRank, significantFlow, topSource, isGenki, SOURCE_DAYS } from '../../src/flow';
-import { WORD_CATEGORY } from '../../src/words';
+import { dayNumber, growth, topSource, topLoop, isGenki, SOURCE_DAYS } from '../../src/flow';
 
 export function demoWithFlow(weeks: number, seed = 418) {
   const days: DemoDay[] = []; const t = new Date(2026, 9, 10);
@@ -20,9 +19,6 @@ export function demoWithFlow(weeks: number, seed = 418) {
 const weeks = Number(process.argv[3] ?? 12);
 const { caps, now } = demoWithFlow(weeks);
 const recent = caps.filter((c) => dayNumber(now) - dayNumber(c.capturedAt) < SOURCE_DAYS);
-const flow = significantFlow(recent);
-const pr = [...pageRank(flow.arrows)].sort((a, b) => b[1] - a[1]);
-const prFeel = pr.filter(([w]) => WORD_CATEGORY[w] === 'emotion' || WORD_CATEGORY[w] === 'body');
 // 週の終わりごとに、いちばん上の源がどの段階だったか（育ちのグラフの印に使う）
 const stages = out0();
 function out0() {
@@ -35,13 +31,20 @@ function out0() {
   }
   return res;
 }
+// 数字の欄：源の言葉を拾った日のうち、次の日に元気・好奇心の言葉を拾った日（直近12週）
+const byDay = new Map<number, Set<string>>();
+for (const c of recent) { const d = dayNumber(c.capturedAt); if (!byDay.has(d)) byDay.set(d, new Set()); byDay.get(d)!.add(c.word); }
+const top0 = topSource(caps, now);
+const srcDays = 'word' in top0 ? [...byDay].filter(([, w]) => w.has(top0.word)).map(([d]) => d) : [];
+const nextGenki = srcDays.filter((d) => [...(byDay.get(d + 1) ?? [])].some(isGenki)).length;
+const allDays = [...byDay.keys()];
+const baseRate = allDays.filter((d) => [...(byDay.get(d + 1) ?? [])].some(isGenki)).length / allDays.length;
 const out = {
+  numbers: { srcDays: srcDays.length, nextGenki, baseRate },
   stages,
   weeks,
   top: topSource(caps, now),
-  arrows: flow.arrows.length,
-  cycles: cycles(flow.arrows),
-  pagerank: prFeel.slice(0, 5),
+  loop: topLoop(caps, now),
   week: growth(caps, 'week').map((g) => ({ ...g, label: `${new Date(g.start).getMonth() + 1}/${new Date(g.start).getDate()}` })),
   month: growth(caps, 'month').map((g) => ({ ...g, label: `${new Date(g.start).getMonth() + 1}月` })),
   genkiShare: recent.filter((c) => isGenki(c.word)).length / recent.length,

@@ -157,6 +157,25 @@ function rng(seed: number) {
   return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
 }
 
+// 日の入れ替え方（2026-10-10）：1日ずつ全体でばらばらにすると、「いい週に散歩もわくわくもまとまって来る」だけの人でも
+// 「散歩のあとに、わくわく」と出てしまう（気分は何日か続くため）。そこで、同じ週（月曜はじまり）の中だけで日を入れ替える。
+// 週ごとの気分のまとまりは偶然の側に残り、「その週の中で、どちらが先か」だけを比べられる。0 なら全体で入れ替える
+export let SHUFFLE_BLOCK_DAYS = 7;
+export const setShuffleBlock = (d: number) => (SHUFFLE_BLOCK_DAYS = d);
+const blockOf = (d: number) => (SHUFFLE_BLOCK_DAYS ? Math.floor((d + 3) / SHUFFLE_BLOCK_DAYS) : 0); // 1970-01-01 は木曜。+3 で月曜はじまり
+function shuffleDays<T>(perm: T[], days: number[], r: () => number) {
+  let i = 0;
+  while (i < perm.length) {
+    let j = i;
+    while (j < perm.length && blockOf(days[j]) === blockOf(days[i])) j++;
+    for (let k = j - 1; k > i; k--) {
+      const x = i + Math.floor(r() * (k - i + 1));
+      [perm[k], perm[x]] = [perm[x], perm[k]];
+    }
+    i = j;
+  }
+}
+
 // 矢印の重さを、言葉の番号の表（n×n）に数える（文字列の Map より速い。並べかえで何百回も数えるため）
 function arrowMatrix(days: number[], sets: number[][], n: number): Float64Array {
   const at = new Map(days.map((d, i) => [d, i]));
@@ -196,10 +215,7 @@ export function significantFlow(captures: Cap[], alpha = FLOW_ALPHA, shuffles = 
   const r = rng(seed);
   const perm = sets.slice();
   for (let t = 0; t < shuffles; t++) {
-    for (let i = perm.length - 1; i > 0; i--) {
-      const j = Math.floor(r() * (i + 1));
-      [perm[i], perm[j]] = [perm[j], perm[i]];
-    }
+    shuffleDays(perm, days, r);
     const m = arrowMatrix(days, perm, n);
     for (let x = 0; x < n * n; x++) if (real[x] > 0 && m[x] >= real[x]) hitA[x]++;
     const s = srcOf(m);
@@ -249,10 +265,7 @@ export function genkiSourcesTested(
     const r = rng(seed);
     const perm = sets.slice();
     for (let t = 0; t < shuffles; t++) {
-      for (let i = perm.length - 1; i > 0; i--) {
-        const j = Math.floor(r() * (i + 1));
-        [perm[i], perm[j]] = [perm[j], perm[i]];
-      }
+      shuffleDays(perm, days, r);
       pass(arrowMatrix(days, perm, n));
     }
   };
@@ -390,10 +403,7 @@ export function loopsTested(
     const r = rng(seed);
     const perm = sets.slice();
     for (let t = 0; t < shuffles; t++) {
-      for (let i = perm.length - 1; i > 0; i--) {
-        const j = Math.floor(r() * (i + 1));
-        [perm[i], perm[j]] = [perm[j], perm[i]];
-      }
+      shuffleDays(perm, days, r);
       pass(arrowMatrix(days, perm, n));
     }
   };
