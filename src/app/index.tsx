@@ -3,9 +3,9 @@ import { StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-na
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue, useAnimatedStyle, useAnimatedProps, useAnimatedReaction, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI,
-  cancelAnimation, Easing, type SharedValue,
+  cancelAnimation, withRepeat, withSequence, Easing, type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 
@@ -40,7 +40,7 @@ const VIDEO_SURFACE = 'textureView' as const;
 // 新しい動画を動かし始めた瞬間に表示中の動画が黒くなった（ボタンを押した瞬間に画面が黒く光る）
 // 夜はループの動画を持たない。遷移の最後のコマと同じ静止画で止める
 type Clip = 'river' | 'toCloud' | 'cloud' | 'toRiver' | 'toNight' | 'nightToCloud';
-type Stage = Clip | 'night' | 'nightToRiver';
+type Stage = Clip | 'night' | 'nightToRiver' | 'riverToNight';
 
 // 段階ごとに流す曲と、切り替えにかける時間（遷移の動画と同じ長さ）
 const SCENE_OF: Record<Stage, Scene> = {
@@ -52,6 +52,7 @@ const SCENE_OF: Record<Stage, Scene> = {
   night: 'night',
   nightToCloud: 'cloud',
   nightToRiver: 'river',
+  riverToNight: 'night',
 };
 const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
   river: 1500,
@@ -60,6 +61,7 @@ const MUSIC_FADE_MS: Partial<Record<Stage, number>> = {
   toNight: 3000,
   nightToCloud: 3000,
   nightToRiver: 900,
+  riverToNight: 900,
 };
 type Still = 'river' | 'cloud' | 'night';
 // first: 最初のコマと同じ静止画（差し替えの瞬間に被せる）。last: 遷移の最後のコマと同じ静止画（終わり際に被せる）
@@ -73,6 +75,83 @@ const CLIPS: Record<Clip, { src: number; loop: boolean; first: Still; last?: Sti
 };
 // 差し替えた動画は、再生位置が実際に進んだ合図（timeUpdate）で上の静止画を消して見せる
 const TIME_UPDATE_S = 0.05;
+
+// 右上の「振り返る」の印（三日月と小さな星）
+const MOON_PATH = 'M15 4a9.5 9.5 0 1 0 5.2 14.2A7.6 7.6 0 0 1 15 4z';
+const STAR_PATH = 'M24 4l.9 2.2 2.2.9-2.2.9L24 10.2l-.9-2.2-2.2-.9 2.2-.9z';
+const MOON_HALO = 64;
+const MOON_TWINKLE_EVERY_MS = 4000;
+const GLINT = 26;
+
+// 押せると分かるように、4秒に1回、星が「きらん」と光り、月のうしろの淡い光（月の暈）も一瞬明るくなる。
+// 押した瞬間は少し縮んで明るくなり、軽く振動する
+// （ユーザー「月ボタンが押せる感を出したい」→ 暈が息づく案 →「きらんと光るがいいかも、４秒に一回くらい」2026-10-10）
+function LookBackMoon({ onPress }: { onPress: () => void }) {
+  const kiran = useSharedValue(0);
+  const pressed = useSharedValue(0);
+  useEffect(() => {
+    kiran.set(
+      withRepeat(
+        withSequence(
+          withDelay(MOON_TWINKLE_EVERY_MS - 700, withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })),
+          withTiming(0, { duration: 500, easing: Easing.in(Easing.quad) }),
+        ),
+        -1,
+        false,
+      ),
+    );
+    return () => cancelAnimation(kiran);
+  }, [kiran]);
+  const haloStyle = useAnimatedStyle(() => ({ opacity: 0.3 + 0.7 * Math.max(kiran.value, pressed.value) }));
+  const glintStyle = useAnimatedStyle(() => ({
+    opacity: kiran.value,
+    transform: [{ scale: 0.3 + 0.9 * kiran.value }, { rotate: `${kiran.value * 20}deg` }],
+  }));
+  const moonStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 - 0.12 * pressed.value }] }));
+  return (
+    <Pressable
+      style={styles.archiveBtn}
+      hitSlop={16}
+      onPressIn={() => {
+        pressed.set(withTiming(1, { duration: 80 }));
+        Haptics.selectionAsync();
+      }}
+      onPressOut={() => pressed.set(withTiming(0, { duration: 220 }))}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="振り返る"
+    >
+      <Animated.View style={[styles.moonHalo, haloStyle]} pointerEvents="none">
+        <Svg width={MOON_HALO} height={MOON_HALO}>
+          <Defs>
+            <RadialGradient id="moonHalo" cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor="rgb(255,238,205)" stopOpacity={0.55} />
+              <Stop offset="0.5" stopColor="rgb(255,230,190)" stopOpacity={0.2} />
+              <Stop offset="1" stopColor="rgb(255,230,190)" stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Circle cx={MOON_HALO / 2} cy={MOON_HALO / 2} r={MOON_HALO / 2} fill="url(#moonHalo)" />
+        </Svg>
+      </Animated.View>
+      <Animated.View style={moonStyle}>
+        <Svg width={34} height={30} viewBox="0 0 30 26">
+          <Path d={MOON_PATH} fill="rgba(255,236,200,0.35)" stroke="rgba(255,236,200,0.35)" strokeWidth={3} strokeLinejoin="round" />
+          <Path d={STAR_PATH} fill="rgba(255,236,200,0.35)" stroke="rgba(255,236,200,0.35)" strokeWidth={2.4} strokeLinejoin="round" />
+          <Path d={MOON_PATH} fill="#fff6e4" />
+          <Path d={STAR_PATH} fill="#fff6e4" />
+        </Svg>
+        {/* 星の「きらん」：細い十字の光 */}
+        <Animated.View style={[styles.moonGlint, glintStyle]} pointerEvents="none">
+          <Svg width={GLINT} height={GLINT}>
+            <Path d={`M${GLINT / 2} 0 L${GLINT / 2 + 0.9} ${GLINT / 2} L${GLINT / 2} ${GLINT} L${GLINT / 2 - 0.9} ${GLINT / 2} Z`} fill="#fffaf0" />
+            <Path d={`M0 ${GLINT / 2} L${GLINT / 2} ${GLINT / 2 - 0.9} L${GLINT} ${GLINT / 2} L${GLINT / 2} ${GLINT / 2 + 0.9} Z`} fill="#fffaf0" />
+            <Circle cx={GLINT / 2} cy={GLINT / 2} r={2.2} fill="#ffffff" />
+          </Svg>
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
+  );
+}
 const REVEAL_AT_S = 0.06;
 // 静止画を消すのは「新しい動画の最初のコマが描かれた」合図（onFirstFrameRender）の後。再生位置が進んでも、
 // スマホではまだ絵が描かれておらず黒いことがあった（遷移が終わってループに切り替えた直後に黒く光った）。
@@ -233,7 +312,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   const posStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
     if (!b) return { opacity: 0 };
-    const pl = placeBubble(P, b);
+    const pl = (b.pl ?? placeBubble(P, b));
     const fadeIn = Math.min(1, b.age / SURFACE_SEC);
     // 泡の下の方がヒント文に近づいたら消える（中心で判定すると大きな泡が文字に重なる）
     const fadeOut = Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
@@ -311,7 +390,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   // 泡全体は大きさ s 倍に拡大・縮小されているので、画面上の動き（指の移動・ぷかぷか±3px・拾って昇る）は 1/s で入れる
   const bodyStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
-    const s = b ? placeBubble(P, b).size / base : 1;
+    const s = b ? (b.pl ?? placeBubble(P, b)).size / base : 1;
     return {
       transform: [
         { scale: scale.value },
@@ -329,14 +408,14 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
   const textStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
     if (!b) return {};
-    const size = placeBubble(P, b).size;
+    const size = (b.pl ?? placeBubble(P, b)).size;
     const font = Math.max(10, Math.min(15, (size * 0.8) / word.length));
     return { transform: [{ scale: font / TEXT_BASE / (size / base) }] };
   });
   // 奥の泡ほど夕日のもやがかかる
   const hazeStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
-    return { opacity: b ? 1 - placeBubble(P, b).t : 0 };
+    return { opacity: b ? 1 - (b.pl ?? placeBubble(P, b)).t : 0 };
   });
   // 水面の波紋と映り込みは水に残る（上下しない）。泡が水面を離れたら（遷移で空へ昇る・指で引っぱる・拾われて昇る）すぐ消す。
   // 消さないと、泡のいない場所に波紋の輪だけが痕跡として残る
@@ -442,7 +521,7 @@ const ChargeDots = memo(function ChargeDots({ id, P, sim, charge, visible }: {
   );
   const rowStyle = useAnimatedStyle(() => {
     const b = findBubble(sim.value, id);
-    const size = b ? placeBubble(P, b).size : BASE;
+    const size = b ? (b.pl ?? placeBubble(P, b)).size : BASE;
     const s = size / BASE;
     const above = Math.max(size / 2 + DOTS_ABOVE_RIM, DOTS_ABOVE_MIN);
     return {
@@ -741,9 +820,11 @@ export default function Home() {
   // 川が見えていない段階（拾ったことば・夜空と、その間の動画）。泡の揺れを止める
   const riverHidden = useSharedValue(false);
   useEffect(() => {
-    riverHidden.set(stage === 'cloud' || stage === 'toNight' || stage === 'night' || stage === 'nightToCloud');
+    riverHidden.set(stage === 'cloud' || stage === 'toNight' || stage === 'night' || stage === 'nightToCloud' || stage === 'riverToNight');
   }, [stage, riverHidden]);
   const [nightFocus, setNightFocus] = useState<string | undefined>(undefined);
+  // 「振り返る」を押すと出る、行き先（夕空・星空）の選び
+  const [lookBackOpen, setLookBackOpen] = useState(false);
   // 拾ったことばの画面は、離れるときに消え終わったら外す。外さないと、次の動画が流れている間（2〜3秒）も
   // 見えないキラキラと光のアニメーションが動き続け、動画の読み込みと重なってスマホで重かった（2026-10-05）
   const [cloudUiOn, setCloudUiOn] = useState(true);
@@ -912,6 +993,7 @@ export default function Home() {
 
   const startTransition = () => {
     if (stageRef.current !== 'river') return;
+    setLookBackOpen(false);
     goStage('toCloud');
     paused.set(true);
     rise.set(0);
@@ -977,6 +1059,25 @@ export default function Home() {
     }, NIGHT_FADE_MS);
   };
 
+  // 川 → ふりかえり（夜）。つなぐ動画が無いので、夜の静止画をふわっと重ねる（星空 → 川の逆。SPEC F. の「すぐ飛べる印」2026-10-10）
+  const riverToNight = () => {
+    if (stageRef.current !== 'river') return;
+    setLookBackOpen(false);
+    setNightFocus(undefined);
+    goStage('riverToNight');
+    paused.set(true);
+    rise.set(0);
+    riverUi.set(withTiming(0, { duration: UI_FADE_MS }));
+    appear.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    coverNight.set(withTiming(1, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
+    later(() => {
+      if (stageRef.current !== 'riverToNight') return;
+      goStage('night');
+      player.pause();
+      nightUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
+    }, NIGHT_FADE_MS);
+  };
+
   const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
   const coverCloudStyle = useAnimatedStyle(() => ({ opacity: coverCloud.value }));
   const coverNightStyle = useAnimatedStyle(() => ({ opacity: coverNight.value }));
@@ -1008,10 +1109,21 @@ export default function Home() {
 
       {/* 押させない指定は style で（props の pointerEvents は古い書き方で、効かないことがあった。夜空の右上を押すと、見えない「島（試作）」が押されて、島の画面が上に開き、夜空のボタンが全部押せなくなった 2026-10-09） */}
       <Animated.View style={[styles.uiLayer, uiStyle, { pointerEvents: atRiver ? 'box-none' : 'none' }]}>
-        <Text style={styles.wordmark}>pukapuka</Text>
-        <Pressable style={styles.archiveBtn} hitSlop={16} onPress={startTransition}>
-          <Text style={styles.archiveBtnText}>振り返る</Text>
-        </Pressable>
+        {/* 開いている間は、ほかの所を押すと閉じる */}
+        {lookBackOpen && atRiver && <Pressable style={StyleSheet.absoluteFill} onPress={() => setLookBackOpen(false)} />}
+        {/* 振り返る：右上の小さな月と星（文字のボタンは景色から浮いた。ユーザー「ダサい」→ 印だけ「月と星」2026-10-10） */}
+        <LookBackMoon onPress={() => setLookBackOpen((o) => !o)} />
+        {/* 行き先を選ぶ（決定 2026-10-10。ユーザー「振り返るのボタン、夕空か夜空かを選べるようにしたい」） */}
+        {lookBackOpen && atRiver && (
+          <View style={styles.lookBackMenu}>
+            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={startTransition}>
+              <Text style={styles.lookBackItem}>夕空</Text>
+            </Pressable>
+            <Pressable style={styles.lookBackBtn} hitSlop={6} onPress={riverToNight}>
+              <Text style={styles.lookBackItem}>星空</Text>
+            </Pressable>
+          </View>
+        )}
       </Animated.View>
 
       <Animated.View style={[styles.bubbleClip, riseStyle, { pointerEvents: atRiver ? 'auto' : 'none' }]}>
@@ -1041,7 +1153,7 @@ export default function Home() {
       )}
 
       {/* ふりかえり（夜）。夜の静止画の上に重ねる */}
-      {(stage === 'night' || stage === 'nightToRiver' || stage === 'nightToCloud') && (
+      {(stage === 'night' || stage === 'nightToRiver' || stage === 'nightToCloud' || stage === 'riverToNight') && (
         <Animated.View style={[StyleSheet.absoluteFill, nightUiStyle, { pointerEvents: stage === 'night' ? 'box-none' : 'none' }]}>
           <NightOverlay width={width} height={height} focus={nightFocus} onBack={nightToCloud} onRiver={nightToRiver} />
         </Animated.View>
@@ -1109,13 +1221,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.3,
   },
-  wordmark: { position: 'absolute', top: 56, left: 20, fontSize: 20, fontStyle: 'italic', color: 'rgba(255,246,232,0.85)', textShadowColor: 'rgba(120,60,40,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4, zIndex: 10 },
-  archiveBtn: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
+  archiveBtn: { position: 'absolute', top: 52, right: 16, zIndex: 10, alignItems: 'center', justifyContent: 'center' },
+  // 星の真ん中（viewBox 30×26 の (24, 7.1) を 34×30 に広げた位置）
+  moonGlint: { position: 'absolute', left: 27.2 - GLINT / 2, top: 8.2 - GLINT / 2, width: GLINT, height: GLINT },
+  moonHalo: { position: 'absolute', left: 17 - MOON_HALO / 2, top: 15 - MOON_HALO / 2, width: MOON_HALO, height: MOON_HALO },
+  lookBackMenu: { position: 'absolute', top: 86, right: 12, alignItems: 'flex-end', gap: 4, zIndex: 10 },
+  lookBackBtn: { paddingVertical: 8, paddingHorizontal: 10 },
+  lookBackItem: { fontSize: 16, color: '#fff8ee', textShadowColor: 'rgba(70,25,45,0.65)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
   soundBtn: { position: 'absolute', bottom: 34, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
   soundIconOff: { color: 'rgba(255,246,232,0.35)' },
   soundSlash: { position: 'absolute', width: 20, height: 1, backgroundColor: 'rgba(255,246,232,0.5)', transform: [{ rotate: '-45deg' }] },
-  archiveBtnText: { fontSize: 14, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(120,60,40,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   hint: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'rgba(235,242,248,0.6)', zIndex: 10 },
   capturedMsg: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 16, color: 'rgba(255,248,235,0.95)', zIndex: 10, fontWeight: '500' },
   ripple: {

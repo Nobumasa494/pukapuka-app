@@ -1,4 +1,4 @@
-import { MIN_CO, cooccurrence, labelGroups, significantLinks, type Line, type Link } from './communities';
+import { MIN_CO, cooccurrence, labelGroups, significantLinks, tentativeLinks, type Line, type Link } from './communities';
 import { aggregate, type WordStat } from './wordCloud';
 
 // ふりかえり（共起ネットワーク）の計算。RN に依存しないので node で検証できる。
@@ -35,6 +35,12 @@ export function magnitudes(stats: WordStat[]): Map<string, Mag> {
 export { MIN_CO, cooccurrence, type Line, type Link };
 // cross: 別のまとまりをつなぐ線。画面にはうすい点線で出し、星は引き寄せない
 export type StarLink = Link & { cross: boolean };
+// まだ確かめている途中の線（とてもうすい点線）。p＝偶然でこうなる確率
+export type TentativeLink = Link & { p: number };
+// 途中の線は、多くても5本（記録が少ない間は、ほとんどが偶然なので、空を点線だらけにしない）
+export const TENTATIVE_MAX = 5;
+// 星座の星が少ない間に、線がなくても出す星の数（回数の多い順。決定 2026-10-10 案A「星だけ先に出る」）
+export const EARLY_STARS = 12;
 // 上限は、星の数だけ（名前が読める星の数）。描く線は骨組み（星の数−星座の数）なので、線の数・1つの星からの線の数の上限は持たない
 // （2026-10-10 ユーザー「はい」。前は線38・150本、1つの星から5・3本）
 export type Caps = { stars: number };
@@ -73,7 +79,7 @@ export function selectConstellation(
   captures: { word: string; strength: number; capturedAt: number }[],
   focus?: string,
   caps: Caps = NORMAL_CAPS,
-): { stats: WordStat[]; lines: StarLink[]; truncated: boolean } {
+): { stats: WordStat[]; lines: StarLink[]; tentative: TentativeLink[]; truncated: boolean } {
   const all = aggregate(captures);
   const statOf = new Map(all.map((s) => [s.word, s]));
   // まとまりは、上限で切る前の、偶然ではない線の全部で決める。回数の多い言葉から順に見る
@@ -106,7 +112,33 @@ export function selectConstellation(
   const inConstellation = new Set(lines.filter((l) => !l.cross).flatMap((l) => [l.a, l.b]));
   if (focus && statOf.has(focus)) inConstellation.add(focus);
   const kept = lines.filter((l) => inConstellation.has(l.a) && inConstellation.has(l.b));
-  return { stats: [...inConstellation].map((w) => statOf.get(w)!), lines: kept, truncated };
+  // 星座の星が少ない間（使い始め）は、よく拾った言葉を、線がなくても星として出して EARLY_STARS まで足す。
+  // 星座ができたとたんに空の星が減らないように（線がまだないときだけ足すと、10日目に星が12→6に減った 2026-10-10）
+  const shown = new Set(inConstellation);
+  for (const s of [...all].sort((p, q) => q.count - p.count || p.word.localeCompare(q.word))) {
+    if (shown.size >= EARLY_STARS) break;
+    shown.add(s.word);
+  }
+  // 途中の線（うすい点線）。両はしの星も出す（星の上限の中で）
+  const tentative: TentativeLink[] = [];
+  // 選ぶ順は、偶然の確率 p の小さい順（本物らしい順）。同じ p の組の中だけ、まだ線の少ない言葉の組を先にする
+  // （記録が少ないと全部同じ p で、1つの言葉に集まった。1つの言葉から何本までという上限は、本当につながりの多い言葉を隠すのでつけない 2026-10-10）
+  const per = new Map<string, number>();
+  const used = (l: Link) => (per.get(l.a) ?? 0) + (per.get(l.b) ?? 0);
+  const pool = tentativeLinks(captures).filter((l) => statOf.has(l.a) && statOf.has(l.b));
+  while (tentative.length < TENTATIVE_MAX && pool.length > 0) {
+    const tied = pool.filter((l) => Math.abs(l.p - pool[0].p) < 1e-9);
+    const l = tied.reduce((best, x) => (used(x) < used(best) ? x : best), tied[0]);
+    pool.splice(pool.indexOf(l), 1);
+    const added = (shown.has(l.a) ? 0 : 1) + (shown.has(l.b) ? 0 : 1);
+    if (shown.size + added > caps.stars) continue;
+    shown.add(l.a);
+    shown.add(l.b);
+    per.set(l.a, (per.get(l.a) ?? 0) + 1);
+    per.set(l.b, (per.get(l.b) ?? 0) + 1);
+    tentative.push(l);
+  }
+  return { stats: [...shown].map((w) => statOf.get(w)!), lines: kept, tentative, truncated };
 }
 
 // 夜空の配置。星が1画面に収まるときは、いつもの配置。収まらないとき（星が MAX_STARS より多い）は、
@@ -119,6 +151,7 @@ export function layoutSky(
   lines: StarLink[],
   area: Area,
   focus?: string,
+  weak: Link[] = [],
 ): { stars: Star[]; extentW: number; extentH: number; home?: { x: number; y: number } } {
   const mags = magnitudes(stats); // 等級は、夜空全体の中の順位で決める
   const solid = lines.filter((l) => !l.cross);
@@ -129,7 +162,7 @@ export function layoutSky(
   for (const s of stats) comps.set(find(s.word), [...(comps.get(find(s.word)) ?? []), s]);
   const list = [...comps.values()];
   if (stats.length <= MAX_STARS || list.length <= 3) {
-    return { stars: layoutConstellation(stats, lines, area, focus, mags), extentW: area.x + area.w + area.x, extentH: area.y + area.h };
+    return { stars: layoutConstellation(stats, lines, area, focus, mags, weak), extentW: area.x + area.w + area.x, extentH: area.y + area.h };
   }
   // 拾ったことばから来た言葉の星座を最初に、あとは星の多い順（大きいものから置くと、すき間に小さいものが入る）
   const hasFocus = (g: WordStat[]) => (focus && g.some((s) => s.word === focus) ? 1 : 0);
@@ -283,7 +316,8 @@ const CROSS_PULL = 0.25;
 // 力指向の配置: 線でつながる星は引き合い、どの星も押し合う。共起が強い組ほど近くに寄る。
 // 壁の中で動かすと星が画面の端に貼りつくので、まず広さを気にせず動かし、入りきらないときだけ全体を縮めて真ん中に置く。
 // 毎回同じ結果になるよう、最初の位置は言葉の hash で決める。focus は動かさず、ほかの星がそのまわりに並ぶ
-export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: Area, focus?: string, mags: Map<string, Mag> = magnitudes(stats)): Star[] {
+// weak：まだ確かめている途中の線。星座の線より弱く引き合う（両はしの星が画面の端と端に離れて、長い点線にならないように 2026-10-10）
+export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: Area, focus?: string, mags: Map<string, Mag> = magnitudes(stats), weak: Link[] = []): Star[] {
   const cx = area.x + area.w / 2;
   const cy = area.y + area.h / 2;
   const k = Math.min(IDEAL_LEN, 0.8 * Math.sqrt((area.w * area.h) / Math.max(1, stats.length)));
@@ -331,6 +365,7 @@ export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: 
     if (!strongest.has(key) || l.strength > strongest.get(key)!.s) strongest.set(key, { i, j, s: l.strength });
   }
   const bridges = [...strongest.values()];
+  for (const l of weak) if (index.has(l.a) && index.has(l.b)) edges.push({ i: index.get(l.a)!, j: index.get(l.b)!, w: 0.3 });
   // 縦長の画面に合わせ、縦方向は押し合いを強め、中心へ引く力を弱める
   const aspect = Math.min(1.8, Math.max(1, area.h / area.w));
 

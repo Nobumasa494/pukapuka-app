@@ -112,6 +112,39 @@ export function significantLinks(captures: { word: string; capturedAt: number }[
   return links;
 }
 
+// まだ確かめている途中の線（決定 2026-10-10。ユーザー「偽物でも表現して、検定で精度を時間経過で高めていく」「うすいせんでもほんとうかもしれない」）。
+// 検定の1%には届かないが、偶然の確率が TENTATIVE_P より小さい組。本物も偶然もまざっている。日がたつと、本物は1%を超えて星座の線になり、偶然は消えていく。
+// 記録4日だと、ぴったり重なっても偶然の確率は 1/6（約17%）より小さくならないので、TENTATIVE_P はそれより上にする。
+// 星座分け・点線・骨組みには使わない（仮の線で星座が毎日変わらないように）
+export const TENTATIVE_P = 0.2;
+export function tentativeLinks(captures: { word: string; capturedAt: number }[], alpha = ALPHA, maxP = TENTATIVE_P): (Link & { p: number })[] {
+  const days = new Map<string, Set<string>>();
+  const active = new Set<string>();
+  for (const c of captures) {
+    const k = dayKey(c.capturedAt);
+    active.add(k);
+    if (!days.has(c.word)) days.set(c.word, new Set());
+    days.get(c.word)!.add(k);
+  }
+  const lf = logFactorials(active.size);
+  const times = new Map<string, number>();
+  for (const c of captures) times.set(c.word, (times.get(c.word) ?? 0) + 1);
+  const t = (w: string) => times.get(w) ?? 0;
+  const out: (Link & { p: number })[] = [];
+  for (const { a, b, count } of cooccurrence(captures)) {
+    if (count < MIN_CO) continue;
+    const da = days.get(a)!.size;
+    const db = days.get(b)!.size;
+    const p = chanceOfAtLeast(lf, active.size, da, db, count);
+    if (p < alpha || p >= maxP) continue;
+    out.push({ a, b, count, strength: count / Math.sqrt(da * db), p });
+  }
+  // 記録が少ない間は、同じ p の組がたくさん並ぶ。同じなら、よく拾った言葉（大きい星）どうしの組を先にする
+  // （名前の順で選んでいて、「お金」の組ばかり5本になった 2026-10-10。ユーザー「はい」）
+  const big = (l: Link) => Math.min(t(l.a), t(l.b));
+  return out.sort((x, y) => x.p - y.p || big(y) - big(x) || t(y.a) + t(y.b) - t(x.a) - t(x.b) || y.count - x.count || `${x.a}${x.b}`.localeCompare(`${y.a}${y.b}`));
+}
+
 // FDR（偽発見率）で線を選ぶ方法。試しの道具（scripts/night/fdr-test.ts・crosscheck）で使う。アプリの夜空は1%（significantLinks）のまま
 // （2026-10-10：FDR 20%に一度変えたが、正しく計算すると6週間の記録では1%より線が少なく、点線も出にくかったので、1%に戻した）。
 // 「出した線のうち、たまたまの線（偽物）は、多くても FDR_Q まで」になるように選ぶ。ダミーで測ると、実際の偽物は約1割（10本に1本くらい）。
