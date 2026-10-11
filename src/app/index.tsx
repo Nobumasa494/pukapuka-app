@@ -13,8 +13,8 @@ import { useFocusEffect } from 'expo-router';
 import { useAddCapture, useDeviceId } from '../useCaptures';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { countFlow, useFlowFlush } from '../useFlows';
-import { frameOf, pickRiverWord, setRiverWeights } from '../riverWords';
+import { countFlow, useDailyGather, useFlowFlush } from '../useFlows';
+import { chooseFrame, floated, frameOf, pickRiverWord, setRiverWeights, startGather } from '../riverWords';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
@@ -223,10 +223,11 @@ function findBubble(bs: SimBubble[], id: number): SimBubble | null {
 
 // 同じ言葉が続けて・同時に流れないように選ぶ
 function pickWordFrom(current: ListItem[], recent: string[], setRecent: (r: string[]) => void) {
-  let word = pickRiverWord().word;
+  let { word, frame } = pickRiverWord();
   for (let tries = 0; tries < 10 && (recent.includes(word) || current.some((w) => w.word === word)); tries++) {
-    word = pickRiverWord().word;
+    ({ word, frame } = pickRiverWord());
   }
+  chooseFrame(word, frame);
   setRecent([...recent.slice(-4), word]);
   return word;
 }
@@ -662,10 +663,14 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
 
   // 開いたときに最初から浮かんでいる泡も、流れた記録に数える
   useEffect(() => {
-    for (const it of initialItems) countFlow(it.word, frameOf(it.word));
+    for (const it of initialItems) {
+      floated(it.word);
+      countFlow(it.word, frameOf(it.word));
+    }
   }, [initialItems]);
 
   const onSpawned = useCallback((id: number, word: string, bob: number) => {
+    floated(word);
     countFlow(word, frameOf(word));
     setList((prev) => [...prev, { id, word, bob }]);
   }, []);
@@ -794,6 +799,7 @@ export default function Home() {
   const deviceId = useDeviceId();
   const riverWeights = useQuery(api.river.weights, deviceId ? { deviceId } : 'skip');
   useEffect(() => setRiverWeights(riverWeights), [riverWeights]);
+  useDailyGather(startGather);
 
   const P = useMemo(() => buildPathData(width, height), [width, height]);
 

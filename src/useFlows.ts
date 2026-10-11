@@ -1,6 +1,7 @@
 // 流れた記録（SPEC 第2部 G.）：川に浮かんだ泡を端末で数え、1分ごとと、アプリが裏に回ったときにまとめて Convex に送る
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { dayKey } from './period';
@@ -59,4 +60,26 @@ export function useFlowFlush() {
       flush();
     };
   }, [deviceId, add]);
+}
+
+// その日はじめて川を開いたら、拾いやすくする時間を始める（src/riverWords.ts）。日は端末に覚える
+const GATHER_KEY = 'pukapuka.gatherDay';
+export function useDailyGather(start: () => void) {
+  useEffect(() => {
+    const check = async () => {
+      const today = dayKey(Date.now());
+      try {
+        if ((await AsyncStorage.getItem(GATHER_KEY)) === today) return;
+        await AsyncStorage.setItem(GATHER_KEY, today);
+      } catch {
+        // 覚えられない環境では、開くたびに始める
+      }
+      start();
+    };
+    check();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') check(); // 日をまたいで開き直したとき
+    });
+    return () => sub.remove();
+  }, [start]);
 }
