@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
-import { setAiRegistry, tagOf } from './aiRegistry';
+import { setAiRegistry, tagCaptures } from './aiRegistry';
 import { setRiverAiWords } from './riverWords';
 
 // アプリを開いたら AI の言葉を読み込む。読み込めたら、版が変わって記録の見え方が更新される
@@ -19,14 +19,8 @@ export function useAiWords(): number {
 }
 
 // 分析（星空・夜明け）用：記録を名札にそろえる
-export function useTagged<T extends { word: string }>(captures: T[] | undefined, version: number): T[] | undefined {
-  return useMemo(() => {
-    if (!captures) return captures;
-    const out: T[] = [];
-    for (const c of captures) {
-      const tag = tagOf(c.word);
-      if (tag) out.push(tag === c.word ? c : { ...c, word: tag });
-    }
-    return out;
-  }, [captures, version]);
+export function useTagged<T extends { word: string; capturedAt: number }>(captures: T[] | undefined, version: number): T[] | undefined {
+  // version：AI の言葉を読み込めたら、そろえ直す
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => (captures ? tagCaptures(captures) : captures), [captures, version]);
 }

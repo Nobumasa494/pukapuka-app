@@ -8,8 +8,25 @@ export const HALF_LIFE_DAYS = 21; // 古い回数は3週間で半分の重さに
 
 type Add = { wordId: Id<"words">; text: string; shown: number; picked: number };
 
-export async function addToPrefs(ctx: MutationCtx, deviceId: string, adds: Add[]) {
-  if (!adds.length) return;
+// 近い言葉（夜の散歩）は、元の言葉（散歩）にも、流れた回数・拾った回数の両方を足す（2026-10-11。数えるのは名札）。離れた言葉は足さない
+async function withParents(ctx: MutationCtx, adds: Add[]): Promise<Add[]> {
+  const out = [...adds];
+  const parents = new Map<Id<"words">, { id: Id<"words">; text: string } | null>();
+  for (const a of adds) {
+    if (!parents.has(a.wordId)) {
+      const w = await ctx.db.get(a.wordId);
+      const p = w?.source === "ai" && w.kind === "near" && w.parent ? await ctx.db.get(w.parent) : null;
+      parents.set(a.wordId, p ? { id: p._id, text: p.text } : null);
+    }
+    const p = parents.get(a.wordId);
+    if (p) out.push({ wordId: p.id, text: p.text, shown: a.shown, picked: a.picked });
+  }
+  return out;
+}
+
+export async function addToPrefs(ctx: MutationCtx, deviceId: string, given: Add[]) {
+  if (!given.length) return;
+  const adds = await withParents(ctx, given);
   const now = Date.now();
   const row = await ctx.db.query("prefs").withIndex("by_deviceId", (q) => q.eq("deviceId", deviceId)).unique();
   const k = row ? Math.pow(0.5, (now - row.decayedAt) / (HALF_LIFE_DAYS * DAY)) : 1;

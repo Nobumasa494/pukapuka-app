@@ -1,4 +1,4 @@
-import { WORD_CATEGORY } from './words';
+import { categoryOf } from './aiRegistry';
 
 // わたしのこと（C3.）の計算：日をまたいだ流れ（矢印）と、育っていること。RN に依存しないので node で検証できる。
 // 同じ回・同じ日の中の順番は使わない（川が順番を決めてしまうため。設計書 D.）
@@ -12,7 +12,7 @@ export const ARROW_WEIGHTS = [1, 0.5, 0.25];
 export const GENKI_WORDS = new Set([
   'わくわく', 'ときめき', '喜び', 'うれしい', '高揚感', '満足', '穏やか', 'ほっとした', '解放感', 'スッキリ', '軽い',
 ]);
-export const isGenki = (w: string) => GENKI_WORDS.has(w) || WORD_CATEGORY[w] === 'curiosity';
+export const isGenki = (w: string) => GENKI_WORDS.has(w) || categoryOf(w) === 'curiosity';
 
 type Cap = { word: string; capturedAt: number };
 
@@ -257,7 +257,7 @@ function sourcesScored(captures: Cap[], shuffles = SHUFFLES, seed = 2, onlyDoing
   const cand: number[] = []; // 試す矢印（行き先が元気・好奇心の言葉）
   // 源の候補は「していること」の言葉だけ（設計書 C3.「していることを中心に見る」）。試す組を減らすと、本物が偶然に埋もれにくい
   for (let a = 0; a < n; a++)
-    if (!onlyDoing || WORD_CATEGORY[words[a]] === 'doing')
+    if (!onlyDoing || categoryOf(words[a]) === 'doing')
       for (let b = 0; b < n; b++) if (a !== b && isGenki(words[b])) cand.push(a * n + b);
   const real = arrowMatrix(days, sets, n);
   const shuffled = (pass: (m: Float64Array) => void) => {
@@ -527,7 +527,7 @@ export function snapshot(captures: Cap[], t: number, shuffles = SNAP_SHUFFLES, s
   const id = new Map(words.map((w, i) => [w, i]));
   const n = words.length;
   const sets = days.map((d) => [...byDay.get(d)!].map((w) => id.get(w)!));
-  const doing = words.map((w) => WORD_CATEGORY[w] === 'doing');
+  const doing = words.map((w) => categoryOf(w) === 'doing');
   const genki = words.map(isGenki);
   const cand: number[] = [];
   for (let a = 0; a < n; a++) if (doing[a]) for (let b = 0; b < n; b++) if (a !== b && genki[b]) cand.push(a * n + b);
