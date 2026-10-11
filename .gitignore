@@ -41,3 +41,9 @@ yarn-error.*
 /android
 .venv/
 __pycache__/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example

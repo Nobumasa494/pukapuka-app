@@ -1,4 +1,4 @@
-import { AppState, type NativeEventSubscription } from 'react-native';
+import { AppState, Platform, type NativeEventSubscription } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
 // 背景の曲と、泡を拾ったときの音。曲は画面ごとに別で、調だけ（Aメジャー／F#マイナー）そろえる。
@@ -29,6 +29,7 @@ const SCENE_VOLUME: Record<Scene, number> = { river: 1, cloud: 1, night: 1, me: 
 const STEP_MS = 40;
 // 拾った音は1つの高さにつき2つずつ持つ。続けて同じ高さを拾っても、前の音の余韻を切らずに次の音を鳴らせる
 const CHIME_VOICES = 2;
+const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
 
 type Voice = { player: AudioPlayer; ready: boolean; startedAt: number };
 
@@ -104,6 +105,11 @@ export function createAmbient(): Ambient {
       if (goal > 0 && !p.playing) p.play();
       const next = v < goal ? Math.min(goal, v + rate[s] * STEP_MS) : Math.max(goal, v - rate[s] * STEP_MS);
       p.volume = next;
+      // iPhone のブラウザは音量を変えさせない（いつまでも目標に届かず、消すボタンも効かなかった。2026-10-12）。そのときは、すぐ止める・すぐ鳴らす
+      if (Math.abs(p.volume - next) > 0.01) {
+        if (goal === 0 && p.playing) p.pause();
+        continue;
+      }
       moving = true;
     }
     if (!moving && timer) {
@@ -121,6 +127,20 @@ export function createAmbient(): Ambient {
     for (const k of Object.keys(players) as Scene[]) rate[k] = BGM_VOLUME / 600;
     run();
   });
+
+  // Web：ブラウザは、画面を触る前に音を鳴らさせない。開いた直後の曲は止められるので、触ったときに鳴らし直す。
+  // 止められても「鳴っている」ことになっているので、playing を見ずに鳴らす（鳴っている曲に play しても何も起きない）
+  const unlock = () => {
+    for (const s of Object.keys(players) as Scene[]) {
+      if (target[s] > 0 && !muted && active) players[s]!.play();
+    }
+    run();
+  };
+  const web = Platform.OS === 'web' && typeof window !== 'undefined';
+  if (web) {
+    // 指で触るときは、離したとき（pointerup・touchend）でないと、ブラウザは「触った」と認めない
+    for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlock);
+  }
 
   return {
     setScene(next, fadeMs) {
@@ -162,6 +182,9 @@ export function createAmbient(): Ambient {
     dispose() {
       if (timer) clearInterval(timer);
       appState.remove();
+      if (web) {
+        for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, unlock);
+      }
       for (const p of [...Object.values(players), ...chimes.flat().map((v) => v.player)]) p.remove();
     },
   };
