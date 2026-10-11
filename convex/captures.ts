@@ -2,6 +2,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { findWordId, wordTexts } from "./words";
 import { addToPrefs } from "./prefs";
+import { maybeGrow } from "./aiWords";
 
 // 第1段：ログインなし。端末ごとの仮の ID（アプリが最初に作って端末に覚える、推測しにくい長い文字列）で記録を分ける
 const DAY = 24 * 60 * 60 * 1000;
@@ -27,6 +28,7 @@ export const add = mutation({
       capturedAt: Date.now(),
     });
     await addToPrefs(ctx, args.deviceId, [{ wordId, text: args.word, shown: 0, picked: 1 }]);
+    await maybeGrow(ctx, args.deviceId, wordId);
     return null;
   },
 });

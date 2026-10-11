@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { WORD_LIST } from '../words';
 import { useAiWords } from '../aiWords';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
@@ -11,8 +12,8 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import { CATEGORY_COLOR, LEGEND, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, type Placed } from '../wordCloud';
-import { useCaptures } from '../useCaptures';
+import { CATEGORY_COLOR, LEGEND, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, withRates, type Placed } from '../wordCloud';
+import { useCaptures, useShownCounts } from '../useCaptures';
 import type { Category } from '../words';
 
 // 拾ったことば（ワードクラウド）。川の画面の上に重ねて出す。背景（空のループ動画）は川の画面の1本のプレーヤーが流す
@@ -109,6 +110,8 @@ type Props = {
   onOpenArchive: (word?: string) => void;
 };
 
+const FIXED_WORDS: ReadonlySet<string> = new Set(WORD_LIST);
+
 export default function WordCloudOverlay({ width, height, onBack, onOpenArchive }: Props) {
   const clock = useSharedValue(0);
   useEffect(() => {
@@ -119,13 +122,19 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   // 最近（今日〜今週）の本物の記録。読み込み中は何も置かない
   useAiWords(); // 読み込めたら再描画（AI の言葉の種類が分かる）
   const captures = useCaptures(7);
+  const shown = useShownCounts(7);
 
-  // 空（画面の上62%。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝回数・キラキラと周りの光＝強さ・色＝カテゴリ。
+  // 空（画面の上62%。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝割合（流れた回数のうち何回拾ったか）・キラキラと周りの光＝強さ・色＝カテゴリ。
   // 2026-10-10：70%に広げたら、下の段の言葉が木に重なって読みにくかったので、木のてっぺん（約63%）の手前まで。
   // 小さい画面（高さ750未満）は、言葉を20語までにする（それでも文字が10pxを下回るため）
   const { placed } = useMemo(
-    () => layoutWords(selectWords(aggregate(captures ?? []), height < 750 ? 20 : MAX_WORDS), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 }),
-    [captures, width, height],
+    () => {
+      // 流れた記録をとりはじめる前の分は除く（何回流れたか分からないため）。流れた記録がない人（見本・使いはじめ）は回数のまま
+      const caps = shown ? (captures ?? []).filter((c) => shown.since === null || c.capturedAt >= shown.since) : [];
+      const stats = aggregate(caps);
+      return layoutWords(selectWords(shown?.since != null ? withRates(stats, shown.shown, FIXED_WORDS) : stats, height < 750 ? 20 : MAX_WORDS), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 });
+    },
+    [captures, shown, width, height],
   );
 
   return (
@@ -172,7 +181,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       )}
 
       <Text style={styles.hint} pointerEvents="none">
-        文字の大きさ＝拾った回数　キラキラ・光＝気持ちの強さ
+        文字の大きさ＝流れてきたとき拾う割合　キラキラ・光＝気持ちの強さ
       </Text>
 
       <Pressable style={styles.back} hitSlop={16} onPress={onBack}>

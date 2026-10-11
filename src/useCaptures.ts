@@ -1,9 +1,10 @@
 // 拾った記録（本物）。第1段はログインなしで、端末ごとの仮の ID で Convex に保存する（SPEC 8. の決定）
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import type { Capture } from './sampleCaptures';
+import { dayKey } from './period';
 
 const KEY = 'pukapuka.deviceId';
 let cached: string | null = null;
@@ -57,4 +58,25 @@ export function useAddCapture() {
   const deviceId = useDeviceId();
   const add = useMutation(api.captures.add);
   return (word: string, strength: number, frame?: string) => (deviceId && !isDemo ? add({ deviceId, word, strength, frame }) : Promise.resolve(null));
+}
+
+// 直近 days 日に、言葉ごとに何回流れたか（夕空の割合。流れた記録 SPEC 第2部 G.）。読み込み中は undefined。
+// since：流れた記録がある、いちばん古い日の0時。それより前に拾った言葉は何回流れたか分からないので、割合には使わない（流れた記録がなければ null）
+export function useShownCounts(days: number): { shown: Map<string, number>; since: number | null } | undefined {
+  const deviceId = useDeviceId();
+  const [keys] = useState(() => Array.from({ length: days }, (_, i) => dayKey(Date.now() - i * 86400000)));
+  const rows = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys } : 'skip');
+  return useMemo(() => {
+    if (isDemo) return { shown: new Map(), since: null };
+    if (!rows) return undefined;
+    const m = new Map<string, number>();
+    let since: number | null = null;
+    for (const r of rows) {
+      for (const c of r.counts) m.set(c.word, (m.get(c.word) ?? 0) + c.n);
+      const [y, mo, d] = r.day.split('-').map(Number);
+      const t = new Date(y, mo - 1, d).getTime();
+      if (since === null || t < since) since = t;
+    }
+    return { shown: m, since };
+  }, [rows]);
 }
