@@ -10,9 +10,11 @@ import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 
 import { useFocusEffect } from 'expo-router';
-import { useAddCapture } from '../useCaptures';
+import { useAddCapture, useDeviceId } from '../useCaptures';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { countFlow, useFlowFlush } from '../useFlows';
-import { getRandomWords } from '../words';
+import { frameOf, pickRiverWord, setRiverWeights } from '../riverWords';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
@@ -221,9 +223,9 @@ function findBubble(bs: SimBubble[], id: number): SimBubble | null {
 
 // 同じ言葉が続けて・同時に流れないように選ぶ
 function pickWordFrom(current: ListItem[], recent: string[], setRecent: (r: string[]) => void) {
-  let word = getRandomWords(1)[0];
+  let word = pickRiverWord().word;
   for (let tries = 0; tries < 10 && (recent.includes(word) || current.some((w) => w.word === word)); tries++) {
-    word = getRandomWords(1)[0];
+    word = pickRiverWord().word;
   }
   setRecent([...recent.slice(-4), word]);
   return word;
@@ -660,11 +662,11 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
 
   // 開いたときに最初から浮かんでいる泡も、流れた記録に数える
   useEffect(() => {
-    for (const it of initialItems) countFlow(it.word);
+    for (const it of initialItems) countFlow(it.word, frameOf(it.word));
   }, [initialItems]);
 
   const onSpawned = useCallback((id: number, word: string, bob: number) => {
-    countFlow(word);
+    countFlow(word, frameOf(word));
     setList((prev) => [...prev, { id, word, bob }]);
   }, []);
 
@@ -788,6 +790,10 @@ export default function Home() {
   const toastRef = useRef<ToastHandle>(null);
   const addCapture = useAddCapture();
   useFlowFlush();
+  // その人向けの川：好みの量（Convex が記録から計算。拾うたびに更新される）
+  const deviceId = useDeviceId();
+  const riverWeights = useQuery(api.river.weights, deviceId ? { deviceId } : 'skip');
+  useEffect(() => setRiverWeights(riverWeights), [riverWeights]);
 
   const P = useMemo(() => buildPathData(width, height), [width, height]);
 
@@ -821,7 +827,7 @@ export default function Home() {
       ambientRef.current?.chime(strength);
       toastRef.current?.show(word);
       try {
-        await addCapture(word, strength);
+        await addCapture(word, strength, frameOf(word));
       } catch {
         // エラー時は継続
       }
