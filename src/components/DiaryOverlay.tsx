@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
@@ -73,6 +73,22 @@ export default function DiaryOverlay({ width, height, onBack }: { width: number;
   const [askErase, setAskErase] = useState(false); // 「けす」は、もう一度たずねてから（書いた日記は戻せない）
   const [text, setText] = useState('');
   const scroll = useRef<ScrollView>(null);
+  // キーボードが出たら、その高さだけ下を空けて、書く欄をキーボードのすぐ上まで送る
+  const [kb, setKb] = useState(0);
+  const pageY = useRef(0);
+  const pageH = useRef(0);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
+      const h = e.endCoordinates.height;
+      setKb(h);
+      setTimeout(() => scroll.current?.scrollTo({ y: Math.max(0, pageY.current + pageH.current - (height - h) + 24), animated: true }), 50);
+    });
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKb(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [height]);
 
   const cells = useMemo(() => monthCells(month.y, month.m), [month]);
   const nowDate = new Date(now);
@@ -145,7 +161,7 @@ export default function DiaryOverlay({ width, height, onBack }: { width: number;
     <View style={[StyleSheet.absoluteFill, { width, height }]}>
       <LinearGradient colors={SKY} locations={SKY_AT} style={StyleSheet.absoluteFill} />
       <Clouds width={width} />
-      <ScrollView ref={scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scroll} contentContainerStyle={[styles.content, kb > 0 && { paddingBottom: kb + 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* 月：年は小さく、月は大きく */}
         <View style={styles.monthRow}>
           <Pressable hitSlop={16} onPress={() => shiftMonth(-1)} accessibilityLabel="前の月" style={styles.arrowBox}>
@@ -189,7 +205,13 @@ export default function DiaryOverlay({ width, height, onBack }: { width: number;
         </View>
 
         {/* 選んだ日の1枚 */}
-        <View style={styles.page}>
+        <View
+          style={styles.page}
+          onLayout={(e) => {
+            pageY.current = e.nativeEvent.layout.y;
+            pageH.current = e.nativeEvent.layout.height;
+          }}
+        >
           <View style={styles.pageHead}>
             <Text style={styles.pageDate}>
               {sel.getMonth() + 1}.{sel.getDate()}
