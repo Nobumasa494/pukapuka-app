@@ -50,7 +50,7 @@ Convex の表と保存する項目を決めるためのスキル。**Convex の�
 ## 次に直すこと（2026-10-11 の効率の見直し。SPEC 第2部 A.）
 
 - `river.weights` は6週間分の flows を毎回読み（1回約300KB）、flows を書くたび（1分ごと）に再計算される。しかも `take(400)` のあと JS で日を絞っているので**古い日まで読む**（1年で1回約2.5MB）。1人あたり月80〜360MB → 無料の1GBで3〜12人
-- 直し方（案）：1人1行の「好みの表」（言葉ごとの流れた回数・拾った回数。古い日は少しずつ軽く）を、captures.add・flows.add のときに書き足す。weights はその1行だけ読む（月約5MB/人）
+- **直した（2026-10-11）**：表 `prefs`（1人1行：`deviceId`・`words`［wordId・text・shown・picked］・`decayedAt`）。`convex/prefs.ts` の `addToPrefs` を captures.add・flows.add から呼ぶ。古い回数は3週間で半分（`HALF_LIFE_DAYS`）、とても軽い言葉は消す。weights はこの1行だけ読み、1倍より多い言葉だけ返す（ほかは `src/riverWords.ts` が1倍で足す）。作り直しは `npx convex run prefs:rebuild`（1回だけ使った）。text は words の text の写し（読む量を減らすため。言葉の文字は変わらない）
 - 言葉の辞書（先に作る約4000語）はアプリに入れる。DB から毎回読まない。使う中で増えた言葉だけ差分で取る
 - flows の counts は wordId（32文字）が大きい。短い鍵にすると約半分になる（あとで）
 

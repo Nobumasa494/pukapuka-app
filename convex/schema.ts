@@ -35,6 +35,13 @@ export default defineSchema({
     counts: v.array(v.object({ wordId: v.id("words"), frame: v.string(), n: v.number() })), // frame：どの枠から流れたか（今は "even"＝均等だけ）
     updatedAt: v.number(),
   }).index("by_deviceId_and_day", ["deviceId", "day"]),
+  // 好みのメモ（SPEC 第2部 A.「効率の見直し」。2026-10-11）。1人1行。言葉ごとの流れた回数・拾った回数を、拾ったとき・流れた記録を送るときに足す。
+  // 好みの量（convex/river.ts）はこの1行だけを読む（流れた記録を毎回読み返さない）。古い回数は少しずつ軽くする（HALF_LIFE_DAYS で半分）
+  prefs: defineTable({
+    deviceId: v.string(),
+    words: v.array(v.object({ wordId: v.id("words"), text: v.string(), shown: v.number(), picked: v.number() })),
+    decayedAt: v.number(), // 最後に軽くした時刻
+  }).index("by_deviceId", ["deviceId"]),
   // 日記（SPEC 第1部「日記」・第2部 G.）。自分で書くだけの場所。1日1つ。拾った記録とはつなげない
   diaries: defineTable({
     deviceId: v.string(),

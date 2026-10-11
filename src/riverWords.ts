@@ -17,9 +17,16 @@ export const startGather = (now = Date.now()) => (gatherUntil = now + GATHER_SEC
 
 let weights: { word: string; weight: number }[] | null = null;
 let total = 0;
-export function setRiverWeights(list: { word: string; weight: number }[] | undefined) {
-  weights = list && list.length ? list : null;
-  total = weights ? weights.reduce((a, w) => a + w.weight, 0) : 0;
+// Convex から来るのは、1倍より多く流す言葉だけ。ほかの言葉は1倍で足す。null・undefined はまだ好みがない（均等）
+export function setRiverWeights(list: { word: string; weight: number }[] | null | undefined) {
+  if (!list) {
+    weights = null;
+    total = 0;
+    return;
+  }
+  const more = new Map(list.map((w) => [w.word, w.weight]));
+  weights = WORD_LIST.map((word) => ({ word, weight: more.get(word) ?? 1 }));
+  total = weights.reduce((a, w) => a + w.weight, 0);
 }
 
 // 今、川に浮かんでいる言葉が、どの枠から来たか（同じ言葉は同時に流れないので、言葉で引ける）。

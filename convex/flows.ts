@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { findWordId, wordTexts } from "./words";
+import { addToPrefs } from "./prefs";
 
 // 流れた記録（SPEC 第2部 G.）。端末で数えた回数を、まとめて足す。1日1行
 const count = v.object({ word: v.string(), frame: v.string(), n: v.number() });
@@ -27,12 +28,16 @@ export const add = mutation({
       else merged.set(key, { wordId, frame, n });
     };
     for (const c of row?.counts ?? []) put(c.wordId, c.frame, c.n);
+    const toPrefs = [];
     for (const c of add) {
       const wordId = await findWordId(ctx, c.word, args.deviceId);
-      if (wordId) put(wordId, c.frame, c.n);
+      if (!wordId) continue;
+      put(wordId, c.frame, c.n);
+      toPrefs.push({ wordId, text: c.word, shown: c.n, picked: 0 });
     }
     if (!merged.size) return null;
     const counts = [...merged.values()].slice(0, 2000);
+    await addToPrefs(ctx, args.deviceId, toPrefs);
     if (row) await ctx.db.patch(row._id, { counts, updatedAt: Date.now() });
     else await ctx.db.insert("flows", { deviceId: args.deviceId, day: args.day, counts, updatedAt: Date.now() });
     return null;
