@@ -4,7 +4,7 @@
 // - 1. 川：見つける枠（全部の言葉から均等）＋その人向けの枠（よく拾う家族を多めに。家族の中は均等にいろいろ）。週に1回だけ入れかえる。
 //        していることを拾うと、すぐその家族の細かい言葉が1つ流れる（応える泡）
 // - 2. 記録：拾った言葉（細かい言葉のまま）
-// - 3. そろえる：細かい言葉はいつも元の言葉にも数える。期間の中で GRAD_DAYS 日以上拾われた細かい言葉は、自分としても数える（独り立ち）
+// - 3. そろえる：細かい言葉はいつも元の言葉にも数える。期間の中で GRAD_DAYS 日以上拾われた細かい言葉は、自分としても数える（自分の言葉で出る）
 // - 4. 分析：夜明けの源（genkiSourcesTested）・星空の線（significantLinks。元の言葉と細かい言葉どうしの線は引かない）
 import { GENKI_WORDS, genkiSourcesTested, isGenki } from '../../src/flow';
 import { significantLinks } from '../../src/communities';
@@ -29,7 +29,7 @@ const BASE = [...WORD_LIST];
 const familyOf = (w: string) => PARENT.get(w) ?? w;
 const members = (p: string) => [p, ...(FAMILY[p] ?? [])];
 
-export const GRAD_DAYS = Number(process.env.GRAD ?? 6); // 独り立ち：期間の中で何日拾われたら（案）
+export const GRAD_DAYS = Number(process.env.GRAD ?? 6); // 自分の言葉で出る：期間の中で何日拾われたら（案）
 const GATHER = !!process.env.GATHER, GATHER_DOING = process.env.GATHER === 'doing';
 const BUBBLES = Number(process.env.BUBBLES ?? 60), DISCOVER = 0.2, MAX_TILT = 4;
 
@@ -123,7 +123,7 @@ for (let w = 4; w <= WEEKS; w += 2) {
   const sure = genkiSourcesTested(dawn.caps).map((s) => s.word);
   const maybe = genkiSourcesTested(dawn.caps, 0.3, 2).map((s) => s.word).filter((x) => !sure.includes(x));
   const stars = new Set(skyLinks(sky.caps).flatMap((l) => [l.a, l.b]));
-  console.log(`${String(w).padStart(2)}週 | 源 よく:${sure.join('・') || '-'} かも:${maybe.join('・') || '-'} | 独り立ち:${[...dawn.grad].join('・') || '-'} | 星空の細かい星:${[...stars].filter((s) => PARENT.has(s)).join('・') || '-'}`);
+  console.log(`${String(w).padStart(2)}週 | 源 よく:${sure.join('・') || '-'} かも:${maybe.join('・') || '-'} | 自分の言葉で出る:${[...dawn.grad].join('・') || '-'} | 星空の細かい星:${[...stars].filter((s) => PARENT.has(s)).join('・') || '-'}`);
 }
 
 // (b)(c) たくさんの人
@@ -137,7 +137,7 @@ function many(name: string, fine: boolean, personal: boolean, weeks: number) {
     if (s.length) any++; if (s.includes('散歩')) walk++; if (s.includes('夜の散歩')) night++;
     lines += skyLinks(align(window(caps, weeks * 7, 42)).caps).length; grads += dawn.grad.size;
   }
-  console.log(`${name.padEnd(26)} | 源が出た ${pct(any).padStart(4)}（散歩 ${pct(walk)}・夜の散歩 ${pct(night)}）| 星空の線 ${(lines / N).toFixed(1)}本 | 独り立ち ${(grads / N).toFixed(1)}語`);
+  console.log(`${name.padEnd(26)} | 源が出た ${pct(any).padStart(4)}（散歩 ${pct(walk)}・夜の散歩 ${pct(night)}）| 星空の線 ${(lines / N).toFixed(1)}本 | 自分の言葉で出る ${(grads / N).toFixed(1)}語`);
 }
 console.log(`--- たくさんの人 N=${N}（源のない人は、出たら偽物）`);
 many('源のない人・今の川・12週', false, false, 12);
