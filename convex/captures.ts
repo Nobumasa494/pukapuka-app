@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { findWordId, wordTexts } from "./words";
 
@@ -49,5 +49,17 @@ export const listRecent = query({
       if (word) out.push({ word, strength: r.strength, capturedAt: r.capturedAt });
     }
     return out;
+  },
+});
+
+// 開発用：まちがって入った1件を消す（アプリからは呼べない。`npx convex run captures:removeOne '{"id":"…"}'`）
+export const removeOne = internalMutation({
+  args: { id: v.id("captures") },
+  returns: v.union(v.null(), v.object({ deviceId: v.optional(v.string()), capturedAt: v.number() })),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.id);
+    if (!row) return null;
+    await ctx.db.delete(args.id);
+    return { deviceId: row.deviceId, capturedAt: row.capturedAt };
   },
 });

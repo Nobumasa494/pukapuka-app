@@ -19,6 +19,7 @@ import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
 import DiaryOverlay from '../components/DiaryOverlay';
+import SpeedControl from '../components/SpeedControl';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
@@ -636,7 +637,7 @@ const BubbleFace = memo(function BubbleFace({ size }: { size: number }) {
 // 川を流れる泡の一覧。泡が出る・消えるたびに描き直すのはこの層だけにする。
 // 以前は一覧を画面全体（Home）が持っていて、泡が出る・消える・「拾った」の表示が変わるたびに、背景・ボタン・重ねる画面まで
 // 描き直していた。拾うとすぐ泡を補うようにしてから、続けて拾うと描き直しが集中してスマホでカクついた（2026-10-05）
-const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise, paused, hidden, holds, flowRate, onCapture }: {
+const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise, paused, hidden, holds, flowRate, speed, onCapture }: {
   P: PathData;
   initialItems: ListItem[];
   sim: SharedValue<SimBubble[]>;
@@ -647,6 +648,8 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
   hidden: SharedValue<boolean>;
   holds: SharedValue<number>;
   flowRate: SharedValue<number>;
+  // 流れの速さのバー（1〜2倍。SpeedControl）
+  speed: SharedValue<number>;
   onCapture: (word: string, strength: number) => void;
 }) {
   const [list, setList] = useState<ListItem[]>(initialItems);
@@ -689,7 +692,7 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
     const target = holds.get() > 0 ? HOLD_FLOW_RATE : 1;
     const rate = flowRate.get() + (target - flowRate.get()) * Math.min(1, dt / FLOW_EASE_SEC);
     flowRate.set(rate);
-    const r = stepBubbles(P, sim.get(), dt * rate);
+    const r = stepBubbles(P, sim.get(), dt * rate * speed.get());
     sim.set(r.bs);
     if (r.exited.length) runOnJS(onExited)(r.exited);
   });
@@ -699,20 +702,24 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
     const timer = setInterval(() => {
       if (paused.get()) return;
       // 流れがゆっくりの間は出す数も減らす（減らさないと奥に泡が溜まり、戻ったとき詰まって流れる）
-      if (Math.random() > flowRate.get()) return;
-      const word = pickWord(listRef.current);
-      const id = nextId++;
-      const bob = Math.random() * Math.PI * 2;
-      runOnUI((pathData: PathData, bid: number, w: string, bb: number) => {
-        'worklet';
-        const c = spawnFlowing(pathData, sim.get(), bid, w.length);
-        if (!c) return;
-        sim.set([...sim.get(), c]);
-        runOnJS(onSpawned)(bid, w, bb);
-      })(P, id, word, bob);
+      // 速くしたぶん、出す回数も増やす（増やさないと川がすかすかになる）
+      const tries = Math.random() < speed.get() - 1 ? 2 : 1;
+      for (let k = 0; k < tries; k++) {
+        if (Math.random() > flowRate.get()) continue;
+        const word = pickWord(listRef.current);
+        const id = nextId++;
+        const bob = Math.random() * Math.PI * 2;
+        runOnUI((pathData: PathData, bid: number, w: string, bb: number) => {
+          'worklet';
+          const c = spawnFlowing(pathData, sim.get(), bid, w.length);
+          if (!c) return;
+          sim.set([...sim.get(), c]);
+          runOnJS(onSpawned)(bid, w, bb);
+        })(P, id, word, bob);
+      }
     }, SPAWN_EVERY_MS);
     return () => clearInterval(timer);
-  }, [P, sim, paused, flowRate, pickWord, onSpawned]);
+  }, [P, sim, paused, flowRate, speed, pickWord, onSpawned]);
 
   const onPressStart = useCallback((id: number) => {
     runOnUI((bid: number) => {
@@ -813,6 +820,7 @@ export default function Home() {
   // 指で押さえている泡の数と、いまの流れの速さの倍率（1=ふだん）
   const holds = useSharedValue(0);
   const flowRate = useSharedValue(1);
+  const speed = useSharedValue(1);
   // 背景の曲と拾ったときの音
   const ambientRef = useRef<Ambient | null>(null);
   const [muted, setMuted] = useState(false);
@@ -1228,6 +1236,7 @@ export default function Home() {
           hidden={riverHidden}
           holds={holds}
           flowRate={flowRate}
+          speed={speed}
           onCapture={handleCapture}
         />
       </Animated.View>
@@ -1263,6 +1272,9 @@ export default function Home() {
           <DiaryOverlay width={width} height={height} onBack={closeDiary} />
         </Animated.View>
       )}
+
+      {/* 流れの速さ。水辺だけ */}
+      <SpeedControl speed={speed} visible={atRiver && !diaryOpen} />
 
       {/* 音のオン・オフ。どの画面でも右下の同じ場所 */}
       <Pressable
