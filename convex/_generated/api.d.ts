@@ -12,6 +12,10 @@ import type * as auth from "../auth.js";
 import type * as captures from "../captures.js";
 import type * as demo from "../demo.js";
 import type * as diary from "../diary.js";
+import type * as flows from "../flows.js";
+import type * as prefs from "../prefs.js";
+import type * as river from "../river.js";
+import type * as words from "../words.js";
 
 import type {
   ApiFromModules,
@@ -24,6 +28,10 @@ declare const fullApi: ApiFromModules<{
   captures: typeof captures;
   demo: typeof demo;
   diary: typeof diary;
+  flows: typeof flows;
+  prefs: typeof prefs;
+  river: typeof river;
+  words: typeof words;
 }>;
 
 /**

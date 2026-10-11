@@ -56,5 +56,5 @@ export function useCaptures(days: number): Capture[] | undefined {
 export function useAddCapture() {
   const deviceId = useDeviceId();
   const add = useMutation(api.captures.add);
-  return (word: string, strength: number) => (deviceId && !isDemo ? add({ deviceId, word, strength }) : Promise.resolve(null));
+  return (word: string, strength: number, frame?: string) => (deviceId && !isDemo ? add({ deviceId, word, strength, frame }) : Promise.resolve(null));
 }

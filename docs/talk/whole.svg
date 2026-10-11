@@ -12,7 +12,7 @@
 <rect x="60" y="340" width="880" height="120" rx="18" fill="#eaf5ec"/>
 <text x="90" y="378" font-size="23" fill="#246">3. 数える前にそろえる</text>
 <text x="90" y="412">記録の少ない細かい言葉 → 元の言葉にまとめる（夜の散歩 → 散歩）</text>
-<text x="90" y="442">記録がたまった細かい言葉 → 独り立ち（夜の散歩のまま）</text>
+<text x="90" y="442">記録がたまった細かい言葉 → 自分の言葉で出る（夜の散歩のまま）</text>
 <rect x="60" y="480" width="880" height="120" rx="18" fill="#f0eaf7"/>
 <text x="90" y="518" font-size="23" fill="#246">4. いつもの分析（今まで決めたまま）</text>
 <text x="90" y="552">夕空（割合で大きさ）／ 星空（同じ日に一緒）／ 夜明け（次の日に元気）</text>
@@ -21,5 +21,5 @@
 <g stroke="#556" stroke-width="3" marker-end="url(#a)"><defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#556"/></marker></defs>
 <line x1="500" y1="200" x2="500" y2="218"/><line x1="500" y1="320" x2="500" y2="338"/><line x1="500" y1="460" x2="500" y2="478"/></g>
 <text x="60" y="650" font-size="20" fill="#2a7">新しく増えるのは 1〜3 だけ。4（分析）は、そろえた言葉を受け取るだけで、中身は同じ。</text>
-<text x="60" y="684" font-size="20" fill="#2a7">確かめ済み：1 のきまりなら 4 はだまされない。まだ：3 の「独り立ち」の数字。</text>
+<text x="60" y="684" font-size="20" fill="#2a7">確かめ済み：1 のきまりなら 4 はだまされない。まだ：3 の「自分の言葉で出る」の数字。</text>
 </svg>
