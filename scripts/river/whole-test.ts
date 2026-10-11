@@ -30,6 +30,7 @@ const familyOf = (w: string) => PARENT.get(w) ?? w;
 const members = (p: string) => [p, ...(FAMILY[p] ?? [])];
 
 export const GRAD_DAYS = Number(process.env.GRAD ?? 6); // 独り立ち：期間の中で何日拾われたら（案）
+const GATHER = !!process.env.GATHER, GATHER_DOING = process.env.GATHER === 'doing';
 const BUBBLES = Number(process.env.BUBBLES ?? 60), DISCOVER = 0.2, MAX_TILT = 4;
 
 type Person = { fine: boolean; seed: number };
@@ -72,7 +73,8 @@ function live(p: Person, weeks: number, personal: boolean): Cap[] {
         if (personal && FAMILY[f] && WORD_CATEGORY[f] === 'doing') { const c = FAMILY[f][Math.floor(r() * FAMILY[f].length)]; if (c !== w) meet(c); } // 応える泡（同じ日）
       }
     };
-    if (r() < 0.85)
+    const open = r() < 0.85;
+    if (open)
       for (let b = 0; b < BUBBLES; b++) {
         let f: string;
         if (!personal || r() < DISCOVER) f = BASE[Math.floor(r() * BASE.length)];
@@ -80,6 +82,8 @@ function live(p: Person, weeks: number, personal: boolean): Cap[] {
         const m = personal ? members(f) : [f]; // 家族の中はいろいろ（均等）
         meet(m[Math.floor(r() * m.length)]);
       }
+    // 気持ちを拾いやすくする（案）：1日に1回、元気・好奇心の言葉がまとめて流れてくる
+    if (GATHER && personal && open) for (const w of BASE) if (isGenki(w) || (GATHER_DOING && WORD_CATEGORY[w] === 'doing')) { const m = members(w); meet(m[Math.floor(r() * m.length)]); }
     for (const w of day1) out.push({ word: w, capturedAt: t });
     nightWalk = did.has('夜の散歩');
   }
