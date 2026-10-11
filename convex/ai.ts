@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { WORD_LIST } from "../src/words";
+import { isHardFeeling } from "../src/flow";
 
 // Gemini で、決まった言葉1つから細かい言葉を作ってしまう（SPEC 第2部 A.。2026-10-11 仮決定：Gemini 3.1 Flash-Lite）
 // 送るのは決まった言葉1つだけ。記録・日記・名前は送らない。鍵は Convex の環境変数 GEMINI_API_KEY（コードや git には書かない）
@@ -32,8 +33,8 @@ export const generateFor = internalAction({
   handler: async (ctx, args) => {
     const key = env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY が Convex の環境変数にありません");
-    const parent: { _id: Id<"words">; category: string; hasChildren: boolean } | null = await ctx.runQuery(internal.aiWords.getFixed, { text: args.word });
-    if (!parent) throw new Error(`決まった言葉に「${args.word}」はありません`);
+    const parent: { _id: Id<"words">; category: string; hasChildren: boolean; hasBehind: boolean } | null = await ctx.runQuery(internal.aiWords.getWord, { text: args.word });
+    if (!parent) throw new Error(`言葉の表に「${args.word}」はありません`);
     if (parent.hasChildren && !args.force) return { added: 0, words: [] };
 
     const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
@@ -79,7 +80,7 @@ export const generateMissing = internalAction({
     const failed: string[] = [];
     let left = 0;
     for (const word of WORD_LIST) {
-      const row: { hasChildren: boolean } | null = await ctx.runQuery(internal.aiWords.getFixed, { text: word });
+      const row: { hasChildren: boolean } | null = await ctx.runQuery(internal.aiWords.getWord, { text: word });
       if (!row || row.hasChildren) continue;
       if (done.length + failed.length >= args.limit) {
         left++;
@@ -93,5 +94,52 @@ export const generateMissing = internalAction({
       }
     }
     return { done, failed, left };
+  },
+});
+
+// 裏側の言葉（2026-10-11、ユーザー「ネガティブな言葉ってヒントになるときあるから、それを生かしたい」）：
+// つらい気持ちの裏にあるかもしれない気持ちを言葉にする（嫉妬 → あの人みたいになりたい）。アプリは「あなたは本当は〜」とは言わない。拾うかどうかは本人
+const behindPrompt = (word: string) => `気持ちを記録するアプリの、川に流れる言葉を作ります。
+「${word}」という気持ちの裏に、ときどき隠れていることがある気持ちや願いを、短い言葉で5つ作ってください。
+例：嫉妬 → あの人みたいになりたい／悔しい → 本当はもっとできた／退屈 → 何か新しいことがしたい
+・本人が自分の気持ちとして言う言葉にする（「〜したい」「〜ほしい」「本当は〜」など）
+・助言（〜してもいい、〜してみよう）、なぐさめ、説明（〜なんだね、〜の証拠）は書かない
+・句点（。）は付けない。1つ20文字まで
+返事は次の形のJSONだけにしてください（前置き・説明・コードブロックの印は要りません）。
+{"behind":["…"]}`;
+
+// 使い方: npx convex run ai:generateBehindAll（つらい気持ちの言葉のうち、まだ作っていないものだけ）
+export const generateBehindAll = internalAction({
+  args: {},
+  returns: v.object({ done: v.array(v.string()), failed: v.array(v.string()) }),
+  handler: async (ctx) => {
+    const key = env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY が Convex の環境変数にありません");
+    const done: string[] = [];
+    const failed: string[] = [];
+    for (const word of WORD_LIST.filter(isHardFeeling)) {
+      const parent: { _id: Id<"words">; category: string; hasBehind: boolean } | null = await ctx.runQuery(internal.aiWords.getWord, { text: word });
+      if (!parent || parent.hasBehind) continue;
+      try {
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+          method: "POST",
+          headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: MODEL, input: behindPrompt(word) }),
+        });
+        const raw = res.ok ? textOf(await res.json()) : null;
+        if (!raw) throw new Error();
+        const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+        const items = (Array.isArray(parsed.behind) ? parsed.behind : [])
+          .map((t: unknown) => (typeof t === "string" ? t.trim().replace(/[。.]+$/, "") : ""))
+          .filter((t: string) => t && t.length <= 20)
+          .map((text: string) => ({ text, kind: "behind" as const }));
+        if (!items.length) throw new Error();
+        await ctx.runMutation(internal.aiWords.saveGenerated, { parent: parent._id, category: parent.category, items });
+        done.push(word);
+      } catch {
+        failed.push(word);
+      }
+    }
+    return { done, failed };
   },
 });

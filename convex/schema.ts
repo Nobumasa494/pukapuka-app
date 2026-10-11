@@ -22,12 +22,14 @@ export default defineSchema({
     source: v.union(v.literal("fixed"), v.literal("ai"), v.literal("own"), v.literal("season"), v.literal("old")), // old：今の一覧から外れた言葉（川には流さない）
     owner: v.optional(v.string()), // その人だけの言葉なら deviceId。決まった言葉はなし（みんな）
     parent: v.optional(v.id("words")), // 生まれ（名札）。変えない
-    kind: v.optional(v.union(v.literal("near"), v.literal("abstract"))), // 近い言葉／抽象的に近い言葉
-    theme: v.optional(v.string()), // 共通点（AI の解釈。分析の土台には使わない）
+    kind: v.optional(v.union(v.literal("near"), v.literal("abstract"), v.literal("behind"))), // 近い言葉／抽象的に近い言葉／裏側の言葉（つらい気持ちの裏にあるかもしれない気持ち）
+    theme: v.optional(v.string()), // 共通点（AI の解釈。画面にも分析にも使わない）
+    askedAt: v.optional(v.number()), // そのつど作る：この言葉から作るよう AI に頼んだ時刻（1つの言葉につき1回だけ・1日の上限を数える）
   })
     .index("by_text_and_owner", ["text", "owner"])
     .index("by_owner", ["owner"])
-    .index("by_parent", ["parent"]),
+    .index("by_parent", ["parent"])
+    .index("by_askedAt", ["askedAt"]),
   // 流れた記録（SPEC 第2部 G.「その人向けの川のための記録」。決定 2026-10-11）。1日1行。拾わなかった泡も数える
   // 「流れた回数のうち何回拾ったか」の分母
   flows: defineTable({

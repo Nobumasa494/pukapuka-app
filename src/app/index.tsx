@@ -15,7 +15,7 @@ import { useAddCapture, useDeviceId } from '../useCaptures';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { countFlow, useDailyGather, useFlowFlush } from '../useFlows';
-import { chooseFrame, floated, frameOf, pickRiverWord, setRiverWeights, startGather } from '../riverWords';
+import { answerTo, chooseFrame, floated, frameOf, pickRiverWord, setRiverWeights, startGather } from '../riverWords';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
@@ -842,6 +842,7 @@ export default function Home() {
     async (word: string, strength: number) => {
       ambientRef.current?.chime(strength);
       toastRef.current?.show(word);
+      answerTo(word);
       try {
         await addCapture(word, strength, frameOf(word));
       } catch {

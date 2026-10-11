@@ -14,8 +14,13 @@ async function withParents(ctx: MutationCtx, adds: Add[]): Promise<Add[]> {
   const parents = new Map<Id<"words">, { id: Id<"words">; text: string } | null>();
   for (const a of adds) {
     if (!parents.has(a.wordId)) {
-      const w = await ctx.db.get(a.wordId);
-      const p = w?.source === "ai" && w.kind === "near" && w.parent ? await ctx.db.get(w.parent) : null;
+      // 近い言葉の近い言葉（そのつど作った言葉）は、いちばん元までさかのぼる
+      let w = await ctx.db.get(a.wordId);
+      let p = null;
+      for (let i = 0; i < 5 && w?.source === "ai" && w.kind === "near" && w.parent; i++) {
+        p = await ctx.db.get(w.parent);
+        w = p;
+      }
       parents.set(a.wordId, p ? { id: p._id, text: p.text } : null);
     }
     const p = parents.get(a.wordId);

@@ -13,6 +13,9 @@ export const GENKI_WORDS = new Set([
   'わくわく', 'ときめき', '喜び', 'うれしい', '高揚感', '満足', '穏やか', 'ほっとした', '解放感', 'スッキリ', '軽い',
 ]);
 export const isGenki = (w: string) => GENKI_WORDS.has(w) || categoryOf(w) === 'curiosity';
+// つらい気持ち（元気でも、おだやかな気持ちでもない気持ちの言葉）。川で少なめに流す・裏側の言葉を作る（2026-10-11）
+const CALM_WORDS = new Set(['安心', '感謝']);
+export const isHardFeeling = (w: string) => categoryOf(w) === 'emotion' && !isGenki(w) && !CALM_WORDS.has(w);
 
 type Cap = { word: string; capturedAt: number };
 
