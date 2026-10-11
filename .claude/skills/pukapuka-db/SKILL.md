@@ -32,6 +32,7 @@ Convex の表と保存する項目を決めるためのスキル。**Convex の�
 
 - 表 `captures`：`deviceId?`・`userId?`・`capturedAt`・`word`・`strength`。関数は `captures.add`（保存）と `captures.listRecent`（直近 N 日、新しい順）
 - 表 `diaries`（日記、2026-10-11）：`deviceId`・`day`（dayKey の文字）・`text`（4000字まで）・`savedAt`。index `by_deviceId_and_day`。関数は `diary.save`（1日1つ、同じ日はおきかえ、空なら消す）・`diary.remove`・`diary.list`。拾った記録とはつなげない（作り方は `/pukapuka-diary`）
+- 表 `flows`（流れた記録、2026-10-11）：`deviceId`・`day`・`counts`（言葉・枠・回数の並び。Convex の record は日本語のキーを持てないので並びにした）・`updatedAt`。index `by_deviceId_and_day`。関数は `flows.add`（同じ日に足し算）・`flows.listDays`。数えるのは `src/useFlows.ts` の `countFlow`（`src/app/index.tsx` の泡が浮かんだとき）。開発用に `test-flow-…` の1行が入っている
 - 端末の ID は `src/useCaptures.ts` が作って AsyncStorage（ブラウザは localStorage）に覚える。**ブラウザは開くアドレスごとに別 ID になる**（`localhost` と `127.0.0.1` は別。127.0.0.1 で開く）
 - 日付は保存しない（決定 2026-10-09）。時刻だけ残し、「同じ日」は端末の時計で0時切り。海外の人が使う公開のときに決め直す
 - 保存の確認は済み（ブラウザ・スマホ。2026-10-08）

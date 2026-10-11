@@ -11,6 +11,7 @@ import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 
 import { useFocusEffect } from 'expo-router';
 import { useAddCapture } from '../useCaptures';
+import { countFlow, useFlowFlush } from '../useFlows';
 import { getRandomWords } from '../words';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
@@ -657,7 +658,13 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
     recentRef.current = r;
   }), []);
 
+  // 開いたときに最初から浮かんでいる泡も、流れた記録に数える
+  useEffect(() => {
+    for (const it of initialItems) countFlow(it.word);
+  }, [initialItems]);
+
   const onSpawned = useCallback((id: number, word: string, bob: number) => {
+    countFlow(word);
     setList((prev) => [...prev, { id, word, bob }]);
   }, []);
 
@@ -780,6 +787,7 @@ export default function Home() {
   const { width, height } = useWindowDimensions();
   const toastRef = useRef<ToastHandle>(null);
   const addCapture = useAddCapture();
+  useFlowFlush();
 
   const P = useMemo(() => buildPathData(width, height), [width, height]);
 
