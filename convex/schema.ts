@@ -26,7 +26,8 @@ export default defineSchema({
     theme: v.optional(v.string()), // 共通点（AI の解釈。分析の土台には使わない）
   })
     .index("by_text_and_owner", ["text", "owner"])
-    .index("by_owner", ["owner"]),
+    .index("by_owner", ["owner"])
+    .index("by_parent", ["parent"]),
   // 流れた記録（SPEC 第2部 G.「その人向けの川のための記録」。決定 2026-10-11）。1日1行。拾わなかった泡も数える
   // 「流れた回数のうち何回拾ったか」の分母
   flows: defineTable({

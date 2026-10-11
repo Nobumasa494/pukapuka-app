@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useAiWords } from '../aiWords';
 import { Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -804,6 +805,7 @@ export default function Home() {
   useFlowFlush();
   // その人向けの川：好みの量（Convex が記録から計算。拾うたびに更新される）
   const deviceId = useDeviceId();
+  useAiWords();
   const riverWeights = useQuery(api.river.weights, deviceId ? { deviceId } : 'skip');
   useEffect(() => setRiverWeights(riverWeights), [riverWeights]);
   useDailyGather(startGather);

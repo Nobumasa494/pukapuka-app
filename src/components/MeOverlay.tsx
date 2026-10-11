@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAiWords, useTagged } from '../aiWords';
 import { Platform, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -79,7 +80,8 @@ function useMe(key: string | null, make: () => Input) {
 }
 
 export default function MeOverlay({ width, height, onBack }: { width: number; height: number; onBack: () => void }) {
-  const captures = useCaptures(READ_DAYS);
+  const aiVersion = useAiWords();
+  const captures = useTagged(useCaptures(READ_DAYS), aiVersion);
   const deviceId = useDeviceId();
   const [showSample, setShowSample] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
