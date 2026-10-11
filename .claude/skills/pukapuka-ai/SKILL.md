@@ -57,7 +57,7 @@ AI を「どう使うか」の担当。**何を保存するか**は `/pukapuka-d
 - 応える泡（2026-10-11）：していることを拾ったら生まれた言葉を2つ・10秒以内（answerTo。枠 answer）。気持ちには応えない
 - 裏側の言葉（2026-10-11）：つらい気持ち19語から `ai:generateBehindAll`（words.kind = "behind"）。ふつうの量で流し、元の言葉には数えない。頼み方は「自分の気持ちとして言う・助言/なぐさめ/説明はしない・句点なし」（最初の頼み方では「今はただ、休んでもいい」などが混ざった）。作り直すときは `aiWords:retireKind`（消さずに source を old に。記録から引けるように）
 - そのつど作る（2026-10-11）：captures.add → maybeGrow（AI の言葉・3日拾った・先に言葉がない・1日200回まで）→ words.askedAt を付けて ai:generateFor を予約。数え方は rootOf でいちばん元までさかのぼる（prefs も tagCaptures も）。試し方：過去の日の captures を `npx convex import --table captures --append` で入れ、captures:add を3回 → 試したあと removeOne で消す
-- まだ：夕空の割合
+- 夕空の割合（2026-10-12）：`withRates`。見えない泡は「決まった言葉が流れた回数の真ん中×その人の拾いやすさ」（10回1回だと AI の言葉ばかり上に来た）
 
 ## 試算で分かった注意（設計書 K. に書いた）
 

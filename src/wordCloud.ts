@@ -1,7 +1,9 @@
 import { CATEGORY_LABEL, type Category } from './words';
 import { categoryOf } from './aiRegistry';
 
-export type WordStat = { word: string; category: Category; count: number; avgStrength: number };
+// rate：流れた回数のうち何回拾ったか（見えない泡を足した割合。夕空だけ）。ないときは回数で並べる
+export type WordStat = { word: string; category: Category; count: number; avgStrength: number; rate?: number };
+const score = (s: WordStat) => s.rate ?? s.count;
 
 export type Placed = WordStat & {
   x: number;
@@ -65,14 +67,28 @@ export function aggregate(captures: { word: string; strength: number }[]): WordS
   return out;
 }
 
+// 夕空の大きさは割合で（決定 2026-10-11。SPEC 第2部 B.）：よく流れた言葉ほどよく拾われるので、回数だと「好きだから」か「よく流れたから」か分からない。
+// 見えない泡を足す（2026-10-12、ユーザー「はい」）：1回流れて1回拾っただけの言葉が、いきなりいちばん大きくならないように。記録には残さない。
+// 数は「ふつうの言葉1つ分」：決まった言葉が流れた回数の真ん中の数だけ流れて、その人のふだんの拾いやすさで拾ったことにする。
+// はじめ「10回流れて1回」にしたら、決まった言葉が2日で約300回ずつ流れていて、1回だけ流れて拾われた AI の言葉ばかりが上に来た（2026-10-12）
+export function withRates(stats: WordStat[], shown: Map<string, number>, fixedWords: ReadonlySet<string>): WordStat[] {
+  const n = (s: WordStat) => Math.max(shown.get(s.word) ?? 0, s.count); // 流れた記録を送る前に拾うことがあるので、拾った数より少なくしない
+  const fixedShown = [...shown].filter(([w]) => fixedWords.has(w)).map(([, v]) => v).sort((a, b) => a - b);
+  const k = fixedShown.length ? fixedShown[Math.floor(fixedShown.length / 2)] : 10;
+  const totalShown = [...shown.values()].reduce((a, v) => a + v, 0);
+  const totalPicked = stats.reduce((a, s) => a + s.count, 0);
+  const base = totalShown > 0 ? Math.min(1, totalPicked / totalShown) : 0.1;
+  return stats.map((s) => ({ ...s, rate: (s.count + k * base) / (n(s) + k) }));
+}
+
 // 画面に出す言葉の上限（言葉が多いと、文字が小さくなったり、入りきらずに消えたりするため。仮の値）
 export const MAX_WORDS = 30;
-// 上限を超えるときの選び方：回数の多い言葉（口ぐせ）を2/3、残りから強く押した言葉（本音かも）を1/3
+// 上限を超えるときの選び方：割合（なければ回数）の高い言葉を2/3、残りから強く押した言葉（本音かも）を1/3
 export function selectWords(stats: WordStat[], max = MAX_WORDS): WordStat[] {
   if (stats.length <= max) return stats;
-  const byCount = [...stats].sort((a, b) => b.count - a.count || b.avgStrength - a.avgStrength || a.word.localeCompare(b.word));
+  const byCount = [...stats].sort((a, b) => score(b) - score(a) || b.avgStrength - a.avgStrength || a.word.localeCompare(b.word));
   const habit = byCount.slice(0, Math.ceil((max * 2) / 3));
-  const rest = byCount.slice(habit.length).sort((a, b) => b.avgStrength - a.avgStrength || b.count - a.count || a.word.localeCompare(b.word));
+  const rest = byCount.slice(habit.length).sort((a, b) => b.avgStrength - a.avgStrength || score(b) - score(a) || a.word.localeCompare(b.word));
   return [...habit, ...rest.slice(0, max - habit.length)];
 }
 
@@ -83,14 +99,14 @@ export function fontSizeFor(count: number): number {
   return Math.min(MAX_SIZE, MIN_SIZE + count * 2);
 }
 
-// 文字の大きさの段階：その夕空の中で、拾った回数の順位で5段階（上位10%＝特大、次の15%＝大、次の25%＝中、次の25%＝小、残り＝最小）。
+// 文字の大きさの段階：その夕空の中で、割合（なければ拾った回数）の順位で5段階（上位10%＝特大、次の15%＝大、次の25%＝中、次の25%＝小、残り＝最小）。
 // 少しずつ大きくすると、場所に合わせて縮んだとき差が見えなかった（ユーザー「ワードクラウドだと、かなり大きいことばも出る」「それでいこうか」2026-10-10）。
 // はじめ3段階（28/19/15）にしたが、スマホで見て「５段階ぐらいあるといいかも」→ 5段階に（2026-10-10）。
 // 星空の星の等級と同じ考え方。Galaxy S20 で一番小さい文字が12px以上になるように測って決めた
 export const SIZE_TIER = [34, 27, 21, 17, 13] as const;
 const SIZE_TIER_UPTO = [0.1, 0.25, 0.5, 0.75, 1];
 export function sizeTiers(stats: WordStat[]): (s: WordStat) => number {
-  const ranked = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
+  const ranked = [...stats].sort((a, b) => score(b) - score(a) || a.word.localeCompare(b.word));
   const size = new Map(
     ranked.map((s, i) => [s.word, SIZE_TIER[SIZE_TIER_UPTO.findIndex((f) => i < Math.ceil(ranked.length * f))]]),
   );
@@ -182,7 +198,7 @@ function regionsFor(boxes: Map<Category, { w: number; h: number }[]>, area: Area
 // look：文字の大きさ（size）と光（glow 0〜1）の決め方を外から変える（見比べるため。ないときは今の決め方）
 export type CloudLook = { size: (s: WordStat) => number; glow: (s: WordStat) => number };
 export function layoutWords(stats: WordStat[], area: Area, look: CloudLook = { size: sizeTiers(stats), glow: (s) => glowTier(s.avgStrength) }): { placed: Placed[]; scale: number; dropped: string[] } {
-  const order = [...stats].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
+  const order = [...stats].sort((a, b) => score(b) - score(a) || a.word.localeCompare(b.word));
 
   let scale = 1;
   for (let attempt = 0; attempt < 30; attempt++) {
