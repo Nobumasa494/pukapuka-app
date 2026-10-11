@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as ai from "../ai.js";
+import type * as aiWords from "../aiWords.js";
 import type * as auth from "../auth.js";
 import type * as captures from "../captures.js";
 import type * as demo from "../demo.js";
@@ -24,6 +26,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ai: typeof ai;
+  aiWords: typeof aiWords;
   auth: typeof auth;
   captures: typeof captures;
   demo: typeof demo;

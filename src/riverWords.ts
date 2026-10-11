@@ -3,6 +3,8 @@
 import { WORD_CATEGORY, WORD_LIST } from './words';
 import { isGenki } from './flow';
 
+type AiWord = { text: string; category: string; parent: string; kind: 'near' | 'abstract' };
+
 export const FIND_SHARE = 0.2; // 10個に2個（案）
 export type Frame = 'even' | 'like' | 'find' | 'gather';
 
@@ -14,6 +16,23 @@ export const GATHER_SHARE = 0.6; // この間、泡の6割（案）
 export const GATHER_WORDS: readonly string[] = WORD_LIST.filter((w) => WORD_CATEGORY[w] === 'doing' || isGenki(w));
 let gatherUntil = 0;
 export const startGather = (now = Date.now()) => (gatherUntil = now + GATHER_SEC * 1000);
+
+// AI の細かい言葉（決定 2026-10-11）：好みの枠（like）で元の言葉を選んだあと、一部をその細かい言葉に置きかえる。
+// どの細かい言葉かは均等。つらい気持ちはあまり置きかえない（案）。見つける枠・拾いやすくする時間は決まった言葉のまま
+export const AI_SHARE = 0.5; // 案
+export const AI_SHARE_HARD_FEELING = 0.15; // 案
+const children = new Map<string, string[]>();
+export function setRiverAiWords(list: AiWord[]) {
+  children.clear();
+  for (const w of list) children.set(w.parent, [...(children.get(w.parent) ?? []), w.text]);
+}
+const isHardFeeling = (w: string) => WORD_CATEGORY[w] === 'emotion' && !isGenki(w);
+function withAiWord(word: string): string {
+  const kids = children.get(word);
+  if (!kids?.length) return word;
+  if (Math.random() >= (isHardFeeling(word) ? AI_SHARE_HARD_FEELING : AI_SHARE)) return word;
+  return kids[Math.floor(Math.random() * kids.length)];
+}
 
 let weights: { word: string; weight: number }[] | null = null;
 let total = 0;
@@ -51,7 +70,7 @@ export function pickRiverWord(): { word: string; frame: Frame } {
   } else {
     let x = Math.random() * total, i = 0;
     while (i < weights.length - 1 && (x -= weights[i].weight) > 0) i++;
-    word = weights[i].word;
+    word = withAiWord(weights[i].word);
     frame = 'like';
   }
   return { word, frame };

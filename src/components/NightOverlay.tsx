@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAiWords, useTagged } from '../aiWords';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
   Easing,
@@ -553,7 +554,8 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
   const closeIntro = () => setIntroOpen(false);
 
   // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
-  const real = useCaptures(NIGHT_DAYS);
+  const aiVersion = useAiWords();
+  const real = useTagged(useCaptures(NIGHT_DAYS), aiVersion);
   const sample = useMemo(() => (showSample ? sampleCaptures() : null), [showSample]);
   const captures = showSample ? sample : real;
   const { stars, lines, tentative, canvasW, canvasH, home } = useMemo(() => {

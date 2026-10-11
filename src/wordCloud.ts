@@ -1,4 +1,5 @@
-import { CATEGORY_LABEL, WORD_CATEGORY, type Category } from './words';
+import { CATEGORY_LABEL, type Category } from './words';
+import { categoryOf } from './aiRegistry';
 
 export type WordStat = { word: string; category: Category; count: number; avgStrength: number };
 
@@ -57,7 +58,7 @@ export function aggregate(captures: { word: string; strength: number }[]): WordS
   }
   const out: WordStat[] = [];
   for (const [word, { sum, count }] of map) {
-    const category = WORD_CATEGORY[word];
+    const category = categoryOf(word);
     if (!category) continue;
     out.push({ word, category, count, avgStrength: sum / count });
   }

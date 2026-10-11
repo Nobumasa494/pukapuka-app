@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useAiWords } from '../aiWords';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
   Easing,
@@ -116,6 +117,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   }, [clock]);
 
   // 最近（今日〜今週）の本物の記録。読み込み中は何も置かない
+  useAiWords(); // 読み込めたら再描画（AI の言葉の種類が分かる）
   const captures = useCaptures(7);
 
   // 空（画面の上62%。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝回数・キラキラと周りの光＝強さ・色＝カテゴリ。
