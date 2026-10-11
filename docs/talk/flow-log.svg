@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" font-family="Noto Sans CJK JP, sans-serif">
+<rect width="1000" height="620" fill="#fbf8f2"/>
+<text x="500" y="44" text-anchor="middle" font-size="26" fill="#223">「流れた」記録の残し方（ある1日：散歩が3回、夜の散歩が1回流れた）</text>
+<g transform="translate(40,80)">
+<rect width="440" height="480" rx="18" fill="#fff" stroke="#9ab"/>
+<text x="220" y="42" text-anchor="middle" font-size="24" fill="#246">A 泡1つごとに1行</text>
+<g font-size="19" fill="#334">
+<text x="30" y="95">10:02　散歩　　　　決まった言葉</text>
+<text x="30" y="130">10:05　散歩　　　　決まった言葉</text>
+<text x="30" y="165">10:09　夜の散歩　　AIの言葉</text>
+<text x="30" y="200">21:40　散歩　　　　決まった言葉</text>
+<text x="30" y="235" fill="#99a">…1日に数百行</text>
+</g>
+<text x="30" y="300" font-size="19" fill="#2a7">◯ 何時に流れたかまで分かる</text>
+<text x="30" y="340" font-size="19" fill="#c55">✕ 1年で何万行。読むのが重い</text>
+<text x="30" y="380" font-size="19" fill="#c55">✕ 時刻を使う分析は、今は無い</text>
+</g>
+<g transform="translate(520,80)">
+<rect width="440" height="480" rx="18" fill="#fff" stroke="#2a7" stroke-width="3"/>
+<text x="220" y="42" text-anchor="middle" font-size="24" fill="#246">B 1日ごとの合計（おすすめ）</text>
+<g font-size="19" fill="#334">
+<text x="30" y="95">10/11　散歩　　　　決まった言葉　3回</text>
+<text x="30" y="130">10/11　夜の散歩　　AIの言葉　　　1回</text>
+<text x="30" y="165" fill="#99a">…1日に言葉の数だけ</text>
+</g>
+<text x="30" y="300" font-size="19" fill="#2a7">◯ 軽い。1年でも読める量</text>
+<text x="30" y="340" font-size="19" fill="#2a7">◯ 「3回流れて2回拾った」が出せる</text>
+<text x="30" y="380" font-size="19" fill="#2a7">◯ 星空・夜明けは日ごとで計算している</text>
+<text x="30" y="420" font-size="19" fill="#c55">✕ 何時に流れたかは残らない</text>
+</g>
+</svg>

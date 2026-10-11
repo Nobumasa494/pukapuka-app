@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="640" fill="#fbf8f2"/>
+<text x="500" y="42" text-anchor="middle" font-size="25" fill="#223">川に同時に流れる10個の中身が、日がたつとどう変わるか</text>
+<circle cx="250" cy="80" r="13" fill="#e9a23b"/><text x="270" y="87" font-size="19" fill="#334">その人向けの言葉</text>
+<circle cx="470" cy="80" r="13" fill="#8fb3d9"/><text x="490" y="87" font-size="19" fill="#334">決まった言葉（ランダム）</text>
+<circle cx="730" cy="80" r="13" fill="#fff" stroke="#3a8" stroke-width="4"/><text x="750" y="87" font-size="19" fill="#334">見つける枠</text>
+<text x="40" y="150" font-size="23" fill="#246">A ゆっくり（おすすめ）</text>
+<text x="60" y="202" font-size="19" fill="#334">1週目</text>
+<circle cx="200" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="242" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="284" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="326" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="368" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="410" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="452" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="494" cy="195" r="15" fill="#8fb3d9"/>
+<circle cx="536" cy="195" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="195" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="60" y="250" font-size="19" fill="#334">2週目</text>
+<circle cx="200" cy="243" r="15" fill="#e9a23b"/>
+<circle cx="242" cy="243" r="15" fill="#e9a23b"/>
+<circle cx="284" cy="243" r="15" fill="#8fb3d9"/>
+<circle cx="326" cy="243" r="15" fill="#8fb3d9"/>
+<circle cx="368" cy="243" r="15" fill="#8fb3d9"/>
+<circle cx="410" cy="243" r="15" fill="#8fb3d9"/>
+<circle cx="452" cy="243" r="15" fill="#8fb3d9"/>
+<circle cx="494" cy="243" r="15" fill="#8fb3d9"/>
+<circle cx="536" cy="243" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="243" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="60" y="298" font-size="19" fill="#334">1か月</text>
+<circle cx="200" cy="291" r="15" fill="#e9a23b"/>
+<circle cx="242" cy="291" r="15" fill="#e9a23b"/>
+<circle cx="284" cy="291" r="15" fill="#e9a23b"/>
+<circle cx="326" cy="291" r="15" fill="#e9a23b"/>
+<circle cx="368" cy="291" r="15" fill="#8fb3d9"/>
+<circle cx="410" cy="291" r="15" fill="#8fb3d9"/>
+<circle cx="452" cy="291" r="15" fill="#8fb3d9"/>
+<circle cx="494" cy="291" r="15" fill="#8fb3d9"/>
+<circle cx="536" cy="291" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="291" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="60" y="346" font-size="19" fill="#334">2か月〜</text>
+<circle cx="200" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="242" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="284" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="326" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="368" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="410" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="452" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="494" cy="339" r="15" fill="#e9a23b"/>
+<circle cx="536" cy="339" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="339" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="40" y="402" font-size="23" fill="#246">B はやい</text>
+<text x="60" y="454" font-size="19" fill="#334">1週目</text>
+<circle cx="200" cy="447" r="15" fill="#e9a23b"/>
+<circle cx="242" cy="447" r="15" fill="#e9a23b"/>
+<circle cx="284" cy="447" r="15" fill="#8fb3d9"/>
+<circle cx="326" cy="447" r="15" fill="#8fb3d9"/>
+<circle cx="368" cy="447" r="15" fill="#8fb3d9"/>
+<circle cx="410" cy="447" r="15" fill="#8fb3d9"/>
+<circle cx="452" cy="447" r="15" fill="#8fb3d9"/>
+<circle cx="494" cy="447" r="15" fill="#8fb3d9"/>
+<circle cx="536" cy="447" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="447" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="60" y="502" font-size="19" fill="#334">2週目</text>
+<circle cx="200" cy="495" r="15" fill="#e9a23b"/>
+<circle cx="242" cy="495" r="15" fill="#e9a23b"/>
+<circle cx="284" cy="495" r="15" fill="#e9a23b"/>
+<circle cx="326" cy="495" r="15" fill="#e9a23b"/>
+<circle cx="368" cy="495" r="15" fill="#e9a23b"/>
+<circle cx="410" cy="495" r="15" fill="#8fb3d9"/>
+<circle cx="452" cy="495" r="15" fill="#8fb3d9"/>
+<circle cx="494" cy="495" r="15" fill="#8fb3d9"/>
+<circle cx="536" cy="495" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="495" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="60" y="550" font-size="19" fill="#334">1か月</text>
+<circle cx="200" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="242" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="284" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="326" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="368" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="410" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="452" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="494" cy="543" r="15" fill="#e9a23b"/>
+<circle cx="536" cy="543" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="543" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="60" y="598" font-size="19" fill="#334">2か月〜</text>
+<circle cx="200" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="242" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="284" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="326" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="368" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="410" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="452" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="494" cy="591" r="15" fill="#e9a23b"/>
+<circle cx="536" cy="591" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<circle cx="578" cy="591" r="15" fill="#8fb3d9" stroke="#3a8" stroke-width="4"/>
+<text x="40" y="600" font-size="19" fill="#334">見つける枠（緑のふち）は、いつも2個。最後は「その人向け8＋見つける2」になる</text>
+<text x="660" y="230" font-size="18" fill="#2a7">◯ 最初の数週は今と同じ</text><text x="660" y="260" font-size="18" fill="#2a7">◯ 星空・夜明けが育つ時間がある</text><text x="660" y="290" font-size="18" fill="#c55">✕ 変わったと感じるのが遅い</text>
+<text x="660" y="440" font-size="18" fill="#2a7">◯ すぐ「自分の川」になる</text><text x="660" y="470" font-size="18" fill="#c55">✕ 記録が少ないうちに寄るので</text><text x="680" y="496" font-size="18" fill="#c55">たまたまの好みで決まりやすい</text>
+</svg>

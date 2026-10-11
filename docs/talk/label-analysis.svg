@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="660" font-family="Noto Sans CJK JP, sans-serif">
+<rect width="1000" height="660" fill="#fbf8f2"/>
+<text x="500" y="44" text-anchor="middle" font-size="26" fill="#223">言葉はいろいろ → ラベルで元に戻す → いつもの分析</text>
+<text x="40" y="100" font-size="22" fill="#246">① 川で拾った言葉（いろいろ）</text>
+<g font-size="20">
+<rect x="40" y="120" width="140" height="44" rx="22" fill="#e9a23b"/><text x="110" y="149" text-anchor="middle" fill="#fff">夜の散歩</text>
+<rect x="195" y="120" width="190" height="44" rx="22" fill="#e9a23b"/><text x="290" y="149" text-anchor="middle" fill="#fff">知らない道を歩く</text>
+<rect x="400" y="120" width="160" height="44" rx="22" fill="#e9a23b"/><text x="480" y="149" text-anchor="middle" fill="#fff">古本屋をのぞく</text>
+<rect x="575" y="120" width="160" height="44" rx="22" fill="#8fb3d9"/><text x="655" y="149" text-anchor="middle" fill="#fff">待ちきれない</text>
+<rect x="750" y="120" width="150" height="44" rx="22" fill="#8fb3d9"/><text x="825" y="149" text-anchor="middle" fill="#fff">胸が高鳴る</text>
+</g>
+<g stroke="#556" stroke-width="2" fill="none" marker-end="url(#a)">
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#556"/></marker></defs>
+<path d="M110,166 L200,270"/><path d="M290,166 L220,270"/><path d="M480,166 L250,270"/>
+<path d="M655,166 L720,270"/><path d="M825,166 L750,270"/>
+</g>
+<text x="40" y="232" font-size="18" fill="#556">ラベル「生まれ」をたどる</text>
+<text x="40" y="320" font-size="22" fill="#246">② 元の言葉に戻すと（いつもの言葉）</text>
+<rect x="140" y="275" width="160" height="56" rx="28" fill="#fff" stroke="#e9a23b" stroke-width="4"/><text x="220" y="311" text-anchor="middle" font-size="24" fill="#a60">散歩 ×3</text>
+<rect x="650" y="275" width="200" height="56" rx="28" fill="#fff" stroke="#8fb3d9" stroke-width="4"/><text x="750" y="311" text-anchor="middle" font-size="24" fill="#357">わくわく ×2</text>
+<text x="40" y="410" font-size="22" fill="#246">③ いつもの分析にそのまま入れる</text>
+<g font-size="20" fill="#334">
+<text x="60" y="455">・星空：散歩とわくわくを同じ日に拾った → 星と線</text>
+<text x="60" y="490">・夜明け：散歩の次の日に、わくわく → 源</text>
+<text x="60" y="525">・夕空：見せるときだけ、細かい言葉のまま光らせる</text>
+</g>
+<text x="40" y="595" font-size="20" fill="#2a7">川の言葉はいくら増えても、分析が数えるのは②の「いつもの言葉」だけ。</text>
+<text x="40" y="628" font-size="20" fill="#2a7">だから今まで決めた計算は、何も変えずに使える。</text>
+</svg>
