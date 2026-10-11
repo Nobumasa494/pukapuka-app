@@ -1,11 +1,12 @@
 // 流れの速さのバー（2026-10-11 ユーザー「今の川の流れが基準として、もう少し早めることができるバーがほしい」）。
-// 右下の ♪ の上の波の印を押すと、その左に出て、しばらくさわらないと消える。今の速さ（1倍）〜2倍。選んだ速さは端末に覚える
+// 右下の ♪ の上の川の印（3本の波線）を押すと、その左に出て、しばらくさわらないと消える。今の速さ（1倍）〜2倍。選んだ速さは端末に覚える
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, type SharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import Svg, { Path } from 'react-native-svg';
 
 export const SPEED_MAX = 2;
 const KEY = 'pukapuka.flowSpeed';
@@ -68,7 +69,7 @@ export default function SpeedControl({ speed, visible }: { speed: SharedValue<nu
         accessibilityRole="button"
         accessibilityLabel="流れの速さ"
       >
-        <Text style={[styles.icon, value > 1 && styles.iconOn]}>〜</Text>
+        <Waves on={value > 1} />
       </Pressable>
       {open && (
         <View style={styles.panel}>
@@ -87,10 +88,21 @@ export default function SpeedControl({ speed, visible }: { speed: SharedValue<nu
   );
 }
 
+// 川の印：3本の波線（2026-10-11 ユーザー「川は３つの波線まーくがいいかも」）。1倍より速いときは明るく
+const WAVE = 'c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0';
+function Waves({ on }: { on: boolean }) {
+  const color = on ? 'rgba(255,236,200,0.95)' : 'rgba(255,246,232,0.6)';
+  return (
+    <Svg width={22} height={16} viewBox="0 0 22 16">
+      {[3, 8, 13].map((y) => (
+        <Path key={y} d={`M2 ${y}${WAVE}`} stroke={color} strokeWidth={1.4} strokeLinecap="round" fill="none" />
+      ))}
+    </Svg>
+  );
+}
+
 const styles = StyleSheet.create({
   btn: { position: 'absolute', bottom: 70, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
-  icon: { fontSize: 18, color: 'rgba(255,246,232,0.55)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
-  iconOn: { color: 'rgba(255,236,200,0.9)' },
   panel: {
     position: 'absolute', bottom: 66, right: 52, zIndex: 21, flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(20,40,60,0.45)',
