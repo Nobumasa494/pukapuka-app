@@ -13,6 +13,7 @@ import type * as captures from "../captures.js";
 import type * as demo from "../demo.js";
 import type * as diary from "../diary.js";
 import type * as flows from "../flows.js";
+import type * as words from "../words.js";
 
 import type {
   ApiFromModules,
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   demo: typeof demo;
   diary: typeof diary;
   flows: typeof flows;
+  words: typeof words;
 }>;
 
 /**

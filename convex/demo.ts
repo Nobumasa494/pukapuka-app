@@ -1,5 +1,6 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { ensureFixed, findWordId } from "./words";
 import { makeDemoCaptures, type DemoDay } from "../src/demoPersona";
 
 // 開発用：ダミーの人の記録を入れる（アプリからは呼べない。`npx convex run demo:seedDemo` で実行）。
@@ -14,6 +15,7 @@ export const seedDemo = internalMutation({
   args: { days: v.optional(v.number()), seed: v.optional(v.number()), heavy: v.optional(v.boolean()) },
   returns: v.object({ deleted: v.number(), inserted: v.number() }),
   handler: async (ctx, args) => {
+    await ensureFixed(ctx);
     const days = Math.min(120, Math.max(7, args.days ?? 60));
     const old = await ctx.db
       .query("captures")
@@ -33,7 +35,9 @@ export const seedDemo = internalMutation({
     const seed = args.seed ?? 5;
     const made = args.heavy ? [...makeDemoCaptures(list, seed, now), ...makeDemoCaptures(list, seed + 6, now)] : makeDemoCaptures(list, seed, now);
     for (const c of made) {
-      await ctx.db.insert("captures", { deviceId: DEMO_DEVICE_ID, word: c.word, strength: c.strength, capturedAt: c.capturedAt });
+      const wordId = await findWordId(ctx, c.word);
+      if (!wordId) continue;
+      await ctx.db.insert("captures", { deviceId: DEMO_DEVICE_ID, wordId, frame: "even", strength: c.strength, capturedAt: c.capturedAt });
       inserted++;
     }
     return { deleted: old.length, inserted };

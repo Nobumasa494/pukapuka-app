@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { findWordId, wordTexts } from "./words";
 
 // 第1段：ログインなし。端末ごとの仮の ID（アプリが最初に作って端末に覚える、推測しにくい長い文字列）で記録を分ける
 const DAY = 24 * 60 * 60 * 1000;
@@ -9,13 +10,18 @@ export const add = mutation({
     deviceId: v.string(),
     word: v.string(),
     strength: v.number(),
+    frame: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     if (args.deviceId.length < 16 || args.word.length > 40) return null;
+    // 言葉は文字で受け取り、言葉の表の番号で残す（SPEC 第2部 G.）。表にない言葉は残さない
+    const wordId = await findWordId(ctx, args.word, args.deviceId);
+    if (!wordId) return null;
     await ctx.db.insert("captures", {
       deviceId: args.deviceId,
-      word: args.word,
+      wordId,
+      frame: args.frame ?? "even",
       strength: Math.max(0, Math.min(1, args.strength)),
       capturedAt: Date.now(),
     });
@@ -35,6 +41,13 @@ export const listRecent = query({
       .withIndex("by_deviceId_and_capturedAt", (q) => q.eq("deviceId", args.deviceId).gt("capturedAt", since))
       .order("desc")
       .take(5000);
-    return rows.map((r) => ({ word: r.word, strength: r.strength, capturedAt: r.capturedAt }));
+    // 番号を文字に戻して返す（分析はこれまで通り言葉の文字で数える）
+    const text = wordTexts(ctx);
+    const out = [];
+    for (const r of rows) {
+      const word = await text(r.wordId);
+      if (word) out.push({ word, strength: r.strength, capturedAt: r.capturedAt });
+    }
+    return out;
   },
 });
