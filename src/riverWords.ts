@@ -115,9 +115,9 @@ const LEN_SAMPLES: Record<string, string[]> = {
 };
 const lenSample = typeof window !== 'undefined' && typeof window.location?.search === 'string' ? /[?&]len=(\d+)/.exec(window.location.search)?.[1] : undefined;
 
-// 川の配合（決定 2026-10-14。設計書 A.「倉庫と箱」）：泡10個のうち、自分の箱（よく拾う行動の箱）4・知らない箱（まだ拾ったことのない行動の箱）3・
-// 気持ちとそのほかの箱3。自分の箱は「流れた回数のうち何回拾ったか」で重みを付ける。使いはじめ（自分の箱がない）は、4の分も知らない箱から
-export const MIX_OWN = 0.4;
+// 川の配合（決定 2026-10-14。設計書 A.「倉庫と箱」）：泡10個のうち、自分の箱（よく拾う行動の箱）3・知らない箱（まだ拾ったことのない行動の箱）3・
+// 気持ちとそのほかの箱4（ユーザー「流れる言葉が行動多すぎない？」→ 案A。前は 4・3・3）。自分の箱は「流れた回数のうち何回拾ったか」で重みを付ける。使いはじめ（自分の箱がない）は、3の分も知らない箱から
+export const MIX_OWN = 0.3;
 export const MIX_UNKNOWN = 0.3;
 const ACTION_BOXES = BOXES.filter((b) => isActionBox(b.id)).map((b) => b.id);
 const FEEL_BOXES = BOXES.filter((b) => !isActionBox(b.id)).map((b) => b.id);

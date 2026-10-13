@@ -11,12 +11,15 @@ const MODEL = "gemini-3.1-flash-lite";
 const modelNow = () => (env as Record<string, string | undefined>).WAREHOUSE_MODEL ?? MODEL;
 const EMBED_MODEL = "models/gemini-embedding-001";
 const DIM = 768;
-export const FIRST_COUNT = 100; // 最初に箱ごとに作る数
+export const FIRST_COUNT = 60; // 最初に箱ごとに作る数（決定 2026-10-14：100 → 60。長さを7〜10文字に絞ったので、足りない箱だけ作り足す。庭師が200語まで育てる）
 const MAX_TRIES = 12; // 1つの箱で AI に頼む回数の上限（100語に届かなくても、ほかの箱に進む）
 const ASK = 40; // 1回に頼む数（無料プランは1分に1回なので、多めに頼む）
 const MIN_BOX = 0.8; // どの箱とも、これより遠い言葉は入れない（目安。2026-10-14 の試しで、詩のような言葉が 0.805）
 const SAME = 0.92; // 箱の中に、これより近い言葉があれば、ほぼ同じとして入れない（目安）
 const STEP_MS = 65_000; // 30秒だと無料プランの1分あたりの上限に当たり続けた（2026-10-14）。1回に埋め込み40語＋書く1回なので、65秒おきで通る
+
+// 長さの決まり（決定 2026-10-14、ユーザー「7〜10文字のみにしたい」）：行動の箱は7〜10文字、気持ち・そのほかの箱は2〜10文字
+export const lengthOk = (t: string, box: number) => (box <= 34 ? t.length >= 7 && t.length <= 10 : t.length >= 2 && t.length <= 10);
 
 const CATEGORY_OF = (box: number) => (box <= 34 ? "doing" : box <= 40 ? "emotion" : box === 45 ? "value" : "situation");
 
@@ -55,20 +58,20 @@ const prompt = (box: number, existing: string[]) => {
     box <= 34
       ? `${what}に関わる、具体的な短い言葉を${ASK}個作ってください。
 ・「気になる」（まだしていないけれど気になる）・「したい」（してみたい）・「した」（した・している）の3つの形を混ぜる
-・「何を・どうする」を残す（例：野原でフルートを吹く、古本屋をのぞく）。場面は短く。1つ7〜10文字（12文字まで）
+・「何を・どうする」を残す（例：野原でフルートを吹く、古本屋をのぞく）。場面は短く。**1つ7〜10文字。11文字以上は書かない**
 ・${what}の中で、いろいろな種類を混ぜる（同じ種類ばかりにしない）
 ・好奇心やわくわくにつながるものにする（面倒な作業や汚れのような、楽しくないことは書かない）
 ・${what}そのものの言葉にする（買い物や移動など、別のことにしない）`
       : box === 45
         ? `「こうなりたい・こうしたい」という願いの短い言葉を${ASK}個作ってください（${b.note}）。
-・本人が自分の気持ちとして言う言葉（〜したい・〜になりたい・本当は〜）。1つ4〜10文字（12文字まで）
+・本人が自分の気持ちとして言う言葉（〜したい・〜になりたい・本当は〜）。1つ4〜10文字（11文字以上は書かない）
 ・いろいろな願いを混ぜる`
         : box <= 40
           ? `${what}という気持ちを表す、短い言葉を${ASK}個作ってください。
-・本人が自分の気持ちとして言う言葉。ひとこと（わくわく）から、少し場面のある言葉（胸が高鳴る朝）まで混ぜる。1つ2〜8文字（10文字まで）
+・本人が自分の気持ちとして言う言葉。ひとこと（わくわく）から、少し場面のある言葉（胸が高鳴る朝）まで混ぜる。1つ2〜8文字（10文字以内）
 ・いろいろな言い方を混ぜる。つらい気持ちは、やわらかく、追いつめない言い方にする`
           : `${what}に関わる、短い言葉を${ASK}個作ってください。
-・本人が自分のこととして言う言葉。ひとこと（会議）から、少し場面のある言葉まで混ぜる。1つ2〜8文字（10文字まで）
+・本人が自分のこととして言う言葉。ひとこと（会議）から、少し場面のある言葉まで混ぜる。1つ2〜8文字（10文字以内）
 ・いろいろな種類を混ぜる。追いつめる言い方はしない`;
   return `${rules}
 ・助言・命令・説明は書かない。句点（。）は付けない
@@ -203,7 +206,7 @@ export const step = internalAction({
       let words: string[] = [];
       try {
         const p = JSON.parse(raw!.slice(raw!.indexOf("{"), raw!.lastIndexOf("}") + 1));
-        words = (Array.isArray(p.words) ? p.words : []).map((t: unknown) => (typeof t === "string" ? t.trim().replace(/[。.]+$/, "") : "")).filter((t: string) => t.length >= 2 && t.length <= 12);
+        words = (Array.isArray(p.words) ? p.words : []).map((t: unknown) => (typeof t === "string" ? t.trim().replace(/[。.]+$/, "") : "")).filter((t: string) => lengthOk(t, target.box));
       } catch {}
       words = [...new Set(words)].filter((w) => !existing.includes(w));
       const already: string[] = words.length ? await ctx.runQuery(internal.warehouse.textExists, { texts: words }) : [];
@@ -323,6 +326,28 @@ export const reset = internalMutation({
     }
     for (const t of await ctx.db.query("boxBuild").collect()) await ctx.db.delete(t._id);
     return { words, vecs };
+  },
+});
+
+// 長さの決まりに合わない言葉を休ませる（source を old に。消さない）。頼んだ回数も0に戻して、足りない箱を作り足せるようにする
+// 使い方: npx convex run warehouse:retireLong
+export const retireLong = internalMutation({
+  args: {},
+  returns: v.object({ retired: v.number(), kept: v.number() }),
+  handler: async (ctx) => {
+    let retired = 0, kept = 0;
+    for (const w of await ctx.db.query("words").withIndex("by_owner", (q) => q.eq("owner", undefined)).collect()) {
+      if (w.source !== "box" || w.box === undefined) continue;
+      if (lengthOk(w.text, w.box)) kept++;
+      else {
+        await ctx.db.patch(w._id, { source: "old" });
+        const vs = await ctx.db.query("wordVecs").withIndex("by_wordId", (q) => q.eq("wordId", w._id)).collect();
+        for (const x of vs) await ctx.db.delete(x._id);
+        retired++;
+      }
+    }
+    for (const t of await ctx.db.query("boxBuild").collect()) await ctx.db.patch(t._id, { tries: 0 });
+    return { retired, kept };
   },
 });
 

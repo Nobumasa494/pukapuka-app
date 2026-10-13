@@ -28,6 +28,8 @@ const SOURCE = '歩く', TARGET = 'わくわく・気になる';
 const BUBBLES = Number(process.env.BUBBLES ?? 60);
 const WEEKS = Number(process.env.WEEKS ?? 12);
 // 気持ちの枠（3個）のうち、元気の3箱を流す割合（既定は11箱で均等＝3/11）。毎日同じ割合なので「何のあとに何」にはならない
+// 川の配合（環境変数 OWN・UNK。既定は 0.4・0.3＝自分の箱4・知らない箱3・気持ち3）
+const OWN = Number(process.env.OWN ?? 0.4), UNK = Number(process.env.UNK ?? 0.3);
 const GENKI_SHARE = Number(process.env.GENKI ?? 3 / 11);
 const start = new Date(2026, 6, 13).getTime();
 
@@ -54,12 +56,12 @@ function live(seed: number, withSource: boolean): Cap[] {
       for (let b = 0; b < BUBBLES; b++) {
         const x = r();
         let box: string;
-        if (x < 0.4 && known.length) {
+        if (x < OWN && known.length) {
           const tot = known.reduce((a, w) => a + rate(w), 0);
           let y = r() * tot, i = 0;
           while ((y -= rate(known[i])) > 0 && i < known.length - 1) i++;
           box = known[i];
-        } else if (x < 0.7) box = (unknown.length ? unknown : ACT)[Math.floor(r() * (unknown.length || ACT.length))];
+        } else if (x < OWN + UNK) box = (unknown.length ? unknown : ACT)[Math.floor(r() * (unknown.length || ACT.length))];
         else if (r() < GENKI_SHARE) box = GENKI[Math.floor(r() * GENKI.length)];
         else { const fo = [...FEEL, ...OTHER].filter((w) => !GENKI.includes(w)); box = fo[Math.floor(r() * fo.length)]; }
         shown.set(box, (shown.get(box) ?? 0) + 1);
