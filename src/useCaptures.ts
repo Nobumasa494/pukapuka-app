@@ -10,8 +10,18 @@ const KEY = 'pukapuka.deviceId';
 let cached: string | null = null;
 
 // 開発用：web で ?demo=1 をつけて開くと、ダミーの人の記録（convex/demo.ts）で動く。この間は、拾っても保存しない
-const DEMO_DEVICE_ID = 'demo-persona-0000000000000001';
-export const isDemo = typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]demo=1\b/.test(window.location.search);
+// ?demo=day1 は、使いはじめ1日目のダミーの人。?until=13 で、今日の13時までに拾った分だけを見せる（1日の変わり方を撮るため。2026-10-13）
+const search = typeof window !== 'undefined' && typeof window.location?.search === 'string' ? window.location.search : '';
+const demoKind = /[?&]demo=day1\b/.test(search) ? 'day1' : /[?&]demo=1\b/.test(search) ? '1' : null;
+const DEMO_DEVICE_ID = demoKind === 'day1' ? 'demo-day1-00000000000000000001' : 'demo-persona-0000000000000001';
+export const isDemo = demoKind !== null;
+const untilHour = isDemo ? Number(/[?&]until=(\d+)/.exec(search)?.[1] ?? NaN) : NaN;
+export function demoUntil(): number | null {
+  if (!Number.isFinite(untilHour)) return null;
+  const d = new Date();
+  d.setHours(untilHour, 0, 0, 0);
+  return d.getTime();
+}
 
 function newId(): string {
   const a = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -50,7 +60,11 @@ export function useDeviceId(): string | null {
 // 直近 days 日の記録。読み込み中は undefined
 export function useCaptures(days: number): Capture[] | undefined {
   const deviceId = useDeviceId();
-  return useQuery(api.captures.listRecent, deviceId ? { deviceId, days } : 'skip');
+  const rows = useQuery(api.captures.listRecent, deviceId ? { deviceId, days } : 'skip');
+  return useMemo(() => {
+    const until = demoUntil();
+    return rows && until !== null ? rows.filter((c) => c.capturedAt <= until) : rows;
+  }, [rows]);
 }
 
 // 拾った言葉を保存する

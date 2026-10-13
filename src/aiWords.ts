@@ -4,10 +4,12 @@ import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { setAiRegistry, tagCaptures } from './aiRegistry';
 import { setRiverAiWords } from './riverWords';
+import { boxCaptures, setWarehouse, warehouseReady } from './warehouse';
 
 // アプリを開いたら AI の言葉を読み込む。読み込めたら、版が変わって記録の見え方が更新される
 export function useAiWords(): number {
   const list = useQuery(api.aiWords.forRiver);
+  const box = useQuery(api.warehouse.forRiver); // 倉庫の言葉（決定 2026-10-14）。そろうまでは前の言葉のまま
   const [version, setVersion] = useState(0);
   useEffect(() => {
     if (!list) return;
@@ -15,6 +17,11 @@ export function useAiWords(): number {
     setRiverAiWords(list);
     setVersion((v) => v + 1);
   }, [list]);
+  useEffect(() => {
+    if (!box) return;
+    setWarehouse(box);
+    setVersion((v) => v + 1);
+  }, [box]);
   return version;
 }
 
@@ -22,5 +29,6 @@ export function useAiWords(): number {
 export function useTagged<T extends { word: string; capturedAt: number }>(captures: T[] | undefined, version: number): T[] | undefined {
   // version：AI の言葉を読み込めたら、そろえ直す
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => (captures ? tagCaptures(captures) : captures), [captures, version]);
+  // 倉庫で動くときは箱で数える（箱の名前＝その箱でいちばん多く拾った言葉）。そうでなければ前の名札のまま
+  return useMemo(() => (captures ? (warehouseReady() ? boxCaptures(captures) : tagCaptures(captures)) : captures), [captures, version]);
 }

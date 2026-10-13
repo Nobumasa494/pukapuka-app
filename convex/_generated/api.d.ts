@@ -11,12 +11,14 @@
 import type * as ai from "../ai.js";
 import type * as aiWords from "../aiWords.js";
 import type * as auth from "../auth.js";
+import type * as boxes from "../boxes.js";
 import type * as captures from "../captures.js";
 import type * as demo from "../demo.js";
 import type * as diary from "../diary.js";
 import type * as flows from "../flows.js";
 import type * as prefs from "../prefs.js";
 import type * as river from "../river.js";
+import type * as warehouse from "../warehouse.js";
 import type * as words from "../words.js";
 
 import type {
@@ -29,12 +31,14 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   aiWords: typeof aiWords;
   auth: typeof auth;
+  boxes: typeof boxes;
   captures: typeof captures;
   demo: typeof demo;
   diary: typeof diary;
   flows: typeof flows;
   prefs: typeof prefs;
   river: typeof river;
+  warehouse: typeof warehouse;
   words: typeof words;
 }>;
 

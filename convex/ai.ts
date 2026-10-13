@@ -2,7 +2,8 @@ import { internalAction, env } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { WORD_LIST } from "../src/words";
+import { WORD_LIST, WORD_CATEGORY } from "../src/words";
+import { BOXES } from "./boxes";
 import { isHardFeeling } from "../src/flow";
 
 // Gemini で、決まった言葉1つから細かい言葉を作ってしまう（SPEC 第2部 A.。2026-10-11 仮決定：Gemini 3.1 Flash-Lite）
@@ -141,5 +142,169 @@ export const generateBehindAll = internalAction({
       }
     }
     return { done, failed };
+  },
+});
+
+// したいことの言葉（2026-10-13。ユーザー「流れてくる言葉が単調・具体的でない」「したいことを中心に」）：
+// していること・好奇心の言葉から、場面まで入った「してみたい」言葉を作る。元の言葉の仲間なので、星空・夜明けでは元の言葉として数える
+const wishPrompt = (word: string) => `「${word}」が好きな人が、これからしてみたいと思う具体的なことを、5つ作ってください。
+・場面まで入れる（いつ・どこで・何を）。12〜16文字
+・必ず「〜したい」か「〜てみたい」で終わる
+・本人が自分で言う言葉にする。助言・命令・説明・なぐさめは書かない。句点（。）は付けない
+・並べる順：1つ目は「${word}」にとても近く、あとになるほど少し広がる（ただし「${word}」の仲間のまま）
+返事は次の形のJSONだけにしてください（前置き・説明・コードブロックの印は要りません）。
+{"wish":["…"]}`;
+
+// 見るだけ（保存しない）。使い方: npx convex run ai:previewWishes '{"words":["散歩","料理"]}'
+export const previewWishes = internalAction({
+  args: { words: v.array(v.string()) },
+  returns: v.array(v.object({ word: v.string(), wish: v.array(v.string()) })),
+  handler: async (_ctx, args) => {
+    const key = env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY が Convex の環境変数にありません");
+    const out: { word: string; wish: string[] }[] = [];
+    for (const word of args.words) {
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: MODEL, input: wishPrompt(word) }),
+      });
+      const raw = res.ok ? textOf(await res.json()) : null;
+      let wish: string[] = [];
+      try {
+        const parsed = JSON.parse(raw!.slice(raw!.indexOf("{"), raw!.lastIndexOf("}") + 1));
+        wish = (Array.isArray(parsed.wish) ? parsed.wish : []).map((t: unknown) => (typeof t === "string" ? t.trim().replace(/[。.]+$/, "") : "")).filter((t: string) => t && t.length <= 20);
+      } catch {}
+      out.push({ word, wish });
+    }
+    return out;
+  },
+});
+
+// したいことの言葉を作って、みんなの言葉としてしまう（近い言葉として。元の言葉の仲間なので、星空・夜明けでは元の言葉として数える）。
+// 使い方: npx convex run ai:generateWishes '{"limit":30}'（まだ作っていない「していること」の言葉だけ。action は10分までなので区切る）
+export const generateWishes = internalAction({
+  args: { limit: v.number() },
+  returns: v.object({ done: v.array(v.string()), failed: v.array(v.string()), left: v.number() }),
+  handler: async (ctx, args) => {
+    const key = env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY が Convex の環境変数にありません");
+    const done: string[] = [];
+    const failed: string[] = [];
+    let left = 0;
+    for (const word of WORD_LIST.filter((w) => WORD_CATEGORY[w] === "doing")) {
+      const parent: { _id: Id<"words">; category: string; hasWish: boolean } | null = await ctx.runQuery(internal.aiWords.getWord, { text: word });
+      if (!parent || parent.hasWish) continue;
+      if (done.length + failed.length >= args.limit) {
+        left++;
+        continue;
+      }
+      try {
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+          method: "POST",
+          headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: MODEL, input: wishPrompt(word) }),
+        });
+        const raw = res.ok ? textOf(await res.json()) : null;
+        if (!raw) throw new Error();
+        const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+        const items = (Array.isArray(parsed.wish) ? parsed.wish : [])
+          .map((t: unknown) => (typeof t === "string" ? t.trim().replace(/[。.]+$/, "") : ""))
+          .filter((t: string) => t && t.length <= 20 && /(したい|てみたい|たい)$/.test(t))
+          .map((text: string) => ({ text, kind: "near" as const }));
+        if (!items.length) throw new Error();
+        await ctx.runMutation(internal.aiWords.saveGenerated, { parent: parent._id, category: parent.category, items });
+        done.push(word);
+      } catch {
+        failed.push(word);
+      }
+    }
+    return { done, failed, left };
+  },
+});
+
+// 言葉に箱（ラベル）を付ける（試し。2026-10-13）。保存しない。使い方: npx convex run ai:previewBoxes '{"words":["散歩","不安"]}'
+const boxPrompt = (words: string[]) => `次の言葉それぞれが、下の箱のどれにいちばん近いかを、箱の番号で答えてください。
+どの箱にも合わない言葉は 0 にしてください（無理に入れない）。
+箱：
+${BOXES.map((b) => `${b.id} ${b.name}${b.note ? `（${b.note}）` : ""}`).join("\n")}
+
+言葉：
+${words.map((w, i) => `${i + 1}. ${w}`).join("\n")}
+
+返事は次の形のJSONだけにしてください（前置き・説明・コードブロックの印は要りません）。
+{"result":[{"word":"…","box":番号}]}`;
+
+export const previewBoxes = internalAction({
+  args: { words: v.array(v.string()) },
+  returns: v.array(v.object({ word: v.string(), box: v.number() })),
+  handler: async (_ctx, args) => {
+    const key = env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY が Convex の環境変数にありません");
+    const out: { word: string; box: number }[] = [];
+    for (let i = 0; i < args.words.length; i += 25) {
+      const chunk = args.words.slice(i, i + 25);
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: MODEL, input: boxPrompt(chunk) }),
+      });
+      const raw = res.ok ? textOf(await res.json()) : null;
+      try {
+        const parsed = JSON.parse(raw!.slice(raw!.indexOf("{"), raw!.lastIndexOf("}") + 1));
+        const got = new Map<string, number>((Array.isArray(parsed.result) ? parsed.result : []).map((r: any) => [String(r.word), Number(r.box)]));
+        for (const w of chunk) out.push({ word: w, box: got.get(w) ?? -1 });
+      } catch {
+        for (const w of chunk) out.push({ word: w, box: -1 });
+      }
+    }
+    return out;
+  },
+});
+
+// 箱ごとに、段階（気になる・したい・した）の言葉を作る（試し。保存しない。2026-10-13）
+// 使い方: npx convex run ai:previewBoxWords '{"ids":[2,3]}'
+const boxWordsPrompt = (name: string, note: string) => `「${name}」${note ? `（${note}）` : ""}に関わる、具体的な短い言葉を作ってください。
+次の3つの形で、5つずつ、合わせて15。
+・kininaru：まだしていないけれど気になっている（〜が気になる、〜ってどうなんだろう）
+・shitai：してみたい（〜してみたい、〜したい）
+・shita：した・している（〜した、〜している）
+決まり：
+・場面まで入れる（いつ・どこで・何を）。1つ10〜16文字
+・本人が自分で言う言葉にする。助言・命令・説明は書かない。句点（。）は付けない
+・ふつうの人の毎日にありそうなこと（大げさにしない）
+・「${name}」の中で、いろいろな種類を混ぜる（同じ種類ばかりにしない。例：楽器ならギター・ピアノ・ウクレレ・太鼓など）
+・好奇心やわくわくにつながるものにする（掃除の汚れや面倒な作業のような、楽しくないことは書かない）
+・「${name}」そのものの言葉にする（買い物や移動など、別のことにしない）
+返事は次の形のJSONだけにしてください（前置き・説明・コードブロックの印は要りません）。
+{"kininaru":["…"],"shitai":["…"],"shita":["…"]}`;
+
+export const previewBoxWords = internalAction({
+  args: { ids: v.array(v.number()) },
+  returns: v.array(v.object({ id: v.number(), name: v.string(), kininaru: v.array(v.string()), shitai: v.array(v.string()), shita: v.array(v.string()) })),
+  handler: async (_ctx, args) => {
+    const key = env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY が Convex の環境変数にありません");
+    const out = [];
+    for (const id of args.ids) {
+      const box = BOXES.find((b) => b.id === id);
+      if (!box) continue;
+      const clean = (a: unknown) => (Array.isArray(a) ? a : []).map((t) => (typeof t === "string" ? t.trim().replace(/[。.]+$/, "") : "")).filter((t) => t && t.length <= 16);
+      let got = { kininaru: [] as string[], shitai: [] as string[], shita: [] as string[] };
+      for (let tryNo = 0; tryNo < 2 && !got.shita.length; tryNo++) {
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+          method: "POST",
+          headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: MODEL, input: boxWordsPrompt(box.name, box.note) }),
+        });
+        const raw = res.ok ? textOf(await res.json()) : null;
+        try {
+          const p = JSON.parse(raw!.slice(raw!.indexOf("{"), raw!.lastIndexOf("}") + 1));
+          got = { kininaru: clean(p.kininaru), shitai: clean(p.shitai), shita: clean(p.shita) };
+        } catch {}
+      }
+      out.push({ id, name: box.name, ...got });
+    }
+    return out;
   },
 });

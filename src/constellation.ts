@@ -1,5 +1,6 @@
 import { MIN_CO, cooccurrence, labelGroups, significantLinks, tentativeLinks, type Line, type Link } from './communities';
 import { aggregate, type WordStat } from './wordCloud';
+import { splitBubble } from './bubbleText';
 
 // ふりかえり（共起ネットワーク）の計算。RN に依存しないので node で検証できる。
 // 言葉＝星、偶然では起きにくい「同じ日に一緒に拾った」関係＝細い金色の線。星の大きさ＝拾った回数、線の太さ・星どうしの引き合う力＝つながりの強さ
@@ -333,8 +334,9 @@ export function layoutConstellation(stats: WordStat[], lines: StarLink[], area: 
       y: Math.sin(a) * rr,
       r: MAG_SIZE[mag].r,
       labelSize,
-      labelW: textWidth(s.word, labelSize) + 2,
-      labelH: Math.ceil(labelSize * 1.35),
+      // 長い言葉は2行にする（水辺の泡と同じ決まり。決定 2026-10-14）。幅は長いほうの行、高さは行数ぶん
+      labelW: Math.max(...splitBubble(s.word).split('\n').map((l) => textWidth(l, labelSize))) + 2,
+      labelH: Math.ceil(labelSize * 1.35) * splitBubble(s.word).split('\n').length,
     };
   });
   const n = stars.length;

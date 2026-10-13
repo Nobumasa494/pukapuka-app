@@ -19,17 +19,27 @@ export default defineSchema({
   words: defineTable({
     text: v.string(),
     category: v.string(), // 6つの種類（src/words.ts の Category）
-    source: v.union(v.literal("fixed"), v.literal("ai"), v.literal("own"), v.literal("season"), v.literal("old")), // old：今の一覧から外れた言葉（川には流さない）
+    source: v.union(v.literal("fixed"), v.literal("ai"), v.literal("own"), v.literal("season"), v.literal("old"), v.literal("box")), // old：今の一覧から外れた言葉（川には流さない）。box：倉庫の言葉（2026-10-14〜。設計書 A.「倉庫と箱」）
     owner: v.optional(v.string()), // その人だけの言葉なら deviceId。決まった言葉はなし（みんな）
     parent: v.optional(v.id("words")), // 生まれ（名札）。変えない
     kind: v.optional(v.union(v.literal("near"), v.literal("abstract"), v.literal("behind"))), // 近い言葉／抽象的に近い言葉／裏側の言葉（つらい気持ちの裏にあるかもしれない気持ち）
     theme: v.optional(v.string()), // 共通点（AI の解釈。画面にも分析にも使わない）
     askedAt: v.optional(v.number()), // そのつど作る：この言葉から作るよう AI に頼んだ時刻（1つの言葉につき1回だけ・1日の上限を数える）
+    box: v.optional(v.number()), // 箱の番号（1〜45。convex/boxes.ts）。倉庫の言葉だけ
   })
     .index("by_text_and_owner", ["text", "owner"])
     .index("by_owner", ["owner"])
     .index("by_parent", ["parent"])
-    .index("by_askedAt", ["askedAt"]),
+    .index("by_askedAt", ["askedAt"])
+    .index("by_box", ["box"]),
+  // 倉庫の言葉の意味の位置（Gemini の埋め込み・768）。言葉の表に入れると、言葉を読むたびに重くなるので分けた。1回だけ付ける
+  wordVecs: defineTable({ wordId: v.id("words"), box: v.number(), embedding: v.array(v.float64()) })
+    .index("by_wordId", ["wordId"])
+    .vectorIndex("by_embedding", { vectorField: "embedding", dimensions: 768, filterFields: ["box"] }),
+  // 箱の意味の位置（箱の名前と説明から1回だけ作る。言葉がどの箱にいちばん近いかを測る）
+  boxVecs: defineTable({ box: v.number(), embedding: v.array(v.float64()) }).index("by_box", ["box"]),
+  // 倉庫づくりで、箱ごとに AI に頼んだ回数（同じ箱で頼み続けないため）
+  boxBuild: defineTable({ box: v.number(), tries: v.number() }).index("by_box", ["box"]),
   // 流れた記録（SPEC 第2部 G.「その人向けの川のための記録」。決定 2026-10-11）。1日1行。拾わなかった泡も数える
   // 「流れた回数のうち何回拾ったか」の分母
   flows: defineTable({

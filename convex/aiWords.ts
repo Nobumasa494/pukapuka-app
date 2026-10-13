@@ -8,18 +8,18 @@ import { v } from "convex/values";
 // 言葉を作る元になる言葉（決まった言葉、または AI の言葉）
 export const getWord = internalQuery({
   args: { text: v.string() },
-  returns: v.union(v.null(), v.object({ _id: v.id("words"), category: v.string(), hasChildren: v.boolean(), hasBehind: v.boolean() })),
+  returns: v.union(v.null(), v.object({ _id: v.id("words"), category: v.string(), hasChildren: v.boolean(), hasBehind: v.boolean(), hasWish: v.boolean() })),
   handler: async (ctx, args) => {
     const row = await ctx.db.query("words").withIndex("by_text_and_owner", (q) => q.eq("text", args.text).eq("owner", undefined)).first();
     if (!row || (row.source !== "fixed" && row.source !== "ai")) return null;
     const children = await ctx.db.query("words").withIndex("by_parent", (q) => q.eq("parent", row._id)).collect();
-    return { _id: row._id, category: row.category, hasChildren: children.some((c) => c.source === "ai" && c.kind !== "behind"), hasBehind: children.some((c) => c.source === "ai" && c.kind === "behind") };
+    return { _id: row._id, category: row.category, hasChildren: children.some((c) => c.source === "ai" && c.kind !== "behind"), hasBehind: children.some((c) => c.source === "ai" && c.kind === "behind"), hasWish: children.some((c) => c.source === "ai" && c.kind === "near" && /たい$/.test(c.text)) };
   },
 });
 
 // そのつど作る（SPEC 第2部 A.。2026-10-11、ユーザー「そのつどつくるしたいの」）：AI の言葉を、ある人が GROW_DAYS 日拾ったら、
 // その言葉の先にまだ言葉がなければ、AI に作ってもらう。作った言葉はみんなで使い回す。AI に送るのはその言葉1つだけ（誰が拾ったかは送らない）
-export const GROW_DAYS = 3; // 案
+export const GROW_DAYS = 2; // 決定 2026-10-13（ユーザー「はい、2日で」。前は案の3日）
 export const GROW_PER_DAY = 200; // 全員の合計で1日に頼む回数の上限（案。1回 約0.03円）
 const DAY = 24 * 60 * 60 * 1000;
 export async function maybeGrow(ctx: MutationCtx, deviceId: string, wordId: Id<"words">) {

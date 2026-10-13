@@ -1,8 +1,14 @@
 import { CATEGORY_LABEL, type Category } from './words';
 import { categoryOf } from './aiRegistry';
+import { GROUP_LABEL, type Group } from '../convex/boxes';
+import { groupOf, warehouseReady } from './warehouse';
+import { splitBubble } from './bubbleText';
+
+// 夕空の色分けの単位。前の6種類（Category）か、倉庫で動くときの7グループ（Group。決定 2026-10-14）
+export type Cat = Category | Group;
 
 // rate：流れた回数のうち何回拾ったか（見えない泡を足した割合。夕空だけ）。ないときは回数で並べる
-export type WordStat = { word: string; category: Category; count: number; avgStrength: number; rate?: number };
+export type WordStat = { word: string; category: Cat; count: number; avgStrength: number; rate?: number };
 const score = (s: WordStat) => s.rate ?? s.count;
 
 export type Placed = WordStat & {
@@ -31,13 +37,26 @@ export const CATEGORY_COLOR: Record<Category, [number, number, number]> = {
   value: [242, 222, 150],
   curiosity: [178, 232, 208],
   doing: [201, 182, 239],
+  // 7グループの色（決定 2026-10-14。夕空だけ色分け）。body・scene は前の6種類と同じ名前なので、グループのときの色は下で上書きする
 };
+const GROUP_COLOR: Record<Group, [number, number, number]> = {
+  body: [178, 232, 208], // 体を動かす・自然（若葉）
+  make: [201, 182, 239], // 作る・表す（菫）
+  see: [170, 204, 238], // 見る・味わう（空）
+  think: [242, 222, 150], // 考える・遊ぶ（黄）
+  people: [248, 200, 150], // 人と・出かける（橙）
+  feel: [246, 178, 194], // 気持ち・願い（桃）
+  scene: [205, 214, 222], // 場面・休む（霧）
+};
+export const colorOf = (c: Cat): [number, number, number] => (isGrouped() ? GROUP_COLOR[c as Group] : CATEGORY_COLOR[c as Category]);
+// いまの夕空が7グループか＝倉庫で動いているか（記録がなくても、凡例は7グループにする）
+export const isGrouped = () => warehouseReady();
 
-export const LEGEND = (Object.keys(CATEGORY_LABEL) as Category[]).map((c) => ({
-  category: c,
-  label: CATEGORY_LABEL[c],
-  color: CATEGORY_COLOR[c],
-}));
+export const legend = (g: boolean): { category: Cat; label: string; color: [number, number, number] }[] =>
+  g
+    ? (Object.keys(GROUP_LABEL) as Group[]).map((c) => ({ category: c, label: GROUP_LABEL[c], color: GROUP_COLOR[c] }))
+    : (Object.keys(CATEGORY_LABEL) as Category[]).map((c) => ({ category: c, label: CATEGORY_LABEL[c], color: CATEGORY_COLOR[c] }));
+export const LEGEND = legend(false);
 
 const MIN_SIZE = 16;
 const MAX_SIZE = 40;
@@ -46,7 +65,7 @@ const MAX_SIZE = 40;
 const HALO_MIN_R = 16;
 const HALO_EXTRA_R = 56;
 // 青は空と同系色で強く光って見えやすい（NG「強い青発光」）ので控えめにする
-const HALO_TINT: Record<Category, number> = { emotion: 1, body: 1, situation: 0.75, value: 1, curiosity: 1, doing: 1 };
+const HALO_TINT: Record<Cat, number> = { emotion: 1, body: 1, situation: 0.75, value: 1, curiosity: 1, doing: 1, make: 1, see: 0.85, think: 1, people: 1, feel: 1, scene: 1 };
 // 光の4分の3ほどは隣と重なってよい（全部避けると間が空きすぎる）
 const HALO_KEEP = 0.25;
 
@@ -59,8 +78,9 @@ export function aggregate(captures: { word: string; strength: number }[]): WordS
     map.set(c.word, cur);
   }
   const out: WordStat[] = [];
+  const grouped = isGrouped();
   for (const [word, { sum, count }] of map) {
-    const category = categoryOf(word);
+    const category: Cat | undefined = grouped ? groupOf(word) : categoryOf(word);
     if (!category) continue;
     out.push({ word, category, count, avgStrength: sum / count });
   }
@@ -136,11 +156,16 @@ export function sparkleLevel(avgStrength: number): number {
   return clamp01((avgStrength - 0.25) / 0.75);
 }
 
-function textWidth(word: string, size: number): number {
+function lineWidth(line: string, size: number): number {
   let em = 0;
-  for (const ch of word) em += ch.charCodeAt(0) < 0x300 ? 0.58 : 1;
+  for (const ch of line) em += ch.charCodeAt(0) < 0x300 ? 0.58 : 1;
   return em * size;
 }
+// 長い言葉は2行にする（水辺の泡と同じ決まり。決定 2026-10-14）。幅は長いほうの行
+function textWidth(word: string, size: number): number {
+  return Math.max(...splitBubble(word).split('\n').map((l) => lineWidth(l, size)));
+}
+const linesOf = (word: string) => splitBubble(word).split('\n').length;
 
 function hash(word: string): number {
   let h = 2166136261;
@@ -162,25 +187,34 @@ function overlaps(a: Rect, b: Rect, k: number) {
 
 // 種類（色）ごとの区画。3段×2列（左上から、感情・身体感覚／状況・場面・価値観・欲求／好奇心・していること）。決定 2026-10-09
 // 言葉の量に合わせて、段の高さと列の幅を決める。言葉は、自分の種類の区画の中だけに置く
-const CATEGORY_ROWS: [Category, Category][] = [
+const ROWS_6: Cat[][] = [
   ['emotion', 'body'],
   ['situation', 'value'],
   ['curiosity', 'doing'],
 ];
+// 7グループ（決定 2026-10-14）：体・作る／見る・考える／人と・気持ち／場面
+const ROWS_7: Cat[][] = [['body', 'make'], ['see', 'think'], ['people', 'feel'], ['scene']];
+const rowsNow = () => (isGrouped() ? ROWS_7 : ROWS_6);
 const REGION_GAP = 8;
 
 type Region = { x: number; y: number; w: number; h: number };
 
 // 言葉の量（文字の大きさに合わせた、必要な広さ）で、6つの区画の大きさを決める
-function regionsFor(boxes: Map<Category, { w: number; h: number }[]>, area: Area): Map<Category, Region> {
-  const need = (c: Category) => (boxes.get(c) ?? []).reduce((n, b) => n + (b.w + 14) * (b.h + 8) * 1.5, 0) + 1500;
-  const widest = (c: Category) => Math.max(0, ...(boxes.get(c) ?? []).map((b) => b.w + 4));
-  const rowNeed = CATEGORY_ROWS.map(([a, b]) => need(a) + need(b));
+function regionsFor(boxes: Map<Cat, { w: number; h: number }[]>, area: Area): Map<Cat, Region> {
+  const CATEGORY_ROWS = rowsNow();
+  const need = (c: Cat) => (boxes.get(c) ?? []).reduce((n, b) => n + (b.w + 14) * (b.h + 8) * 1.5, 0) + 1500;
+  const widest = (c: Cat) => Math.max(0, ...(boxes.get(c) ?? []).map((b) => b.w + 4));
+  const rowNeed = CATEGORY_ROWS.map((r) => r.reduce((n, c) => n + need(c), 0));
   const total = rowNeed.reduce((n, v) => n + v, 0);
-  const out = new Map<Category, Region>();
+  const out = new Map<Cat, Region>();
   let y = area.y;
   CATEGORY_ROWS.forEach(([a, b], i) => {
     const h = (area.h - REGION_GAP * (CATEGORY_ROWS.length - 1)) * (rowNeed[i] / total);
+    if (!b) {
+      out.set(a, { x: area.x, y, w: area.w, h });
+      y += h + REGION_GAP;
+      return;
+    }
     // 幅は量の割合で分けるが、いちばん長い言葉が入る幅は必ず残す（細い区画に長い言葉が入らず、全体を縮めていた 2026-10-10）
     const free = area.w - REGION_GAP;
     const minA = Math.min(widest(a), free / 2);
@@ -203,22 +237,23 @@ export function layoutWords(stats: WordStat[], area: Area, look: CloudLook = { s
   let scale = 1;
   for (let attempt = 0; attempt < 30; attempt++) {
     const placed: Placed[] = [];
-    const boxesByCategory = new Map<Category, Rect[]>();
+    const CATEGORY_ROWS = rowsNow();
+    const boxesByCategory = new Map<Cat, Rect[]>();
     const dropped: string[] = [];
-    const sizes = new Map<Category, { w: number; h: number }[]>();
+    const sizes = new Map<Cat, { w: number; h: number }[]>();
     for (const s of order) {
       const size = look.size(s) * scale;
       const list = sizes.get(s.category) ?? [];
-      list.push({ w: textWidth(s.word, size) + 4, h: size * 1.4 });
+      list.push({ w: textWidth(s.word, size) + 4, h: size * 1.4 * linesOf(s.word) });
       sizes.set(s.category, list);
     }
     const regions = regionsFor(sizes, area);
-    const boxesOf = (c: Category) => boxesByCategory.get(c) ?? boxesByCategory.set(c, []).get(c)!;
+    const boxesOf = (c: Cat) => boxesByCategory.get(c) ?? boxesByCategory.set(c, []).get(c)!;
     // bounds の中で、区画の真ん中から渦を巻くように、others と重ならない場所を探す
     const place = (s: WordStat, bounds: Region, others: Rect[]) => {
       const size = look.size(s) * scale;
       const w = textWidth(s.word, size) + 4;
-      const h = size * 1.4;
+      const h = size * 1.4 * linesOf(s.word);
       const k = look.glow(s);
       const haloR = k > 0 ? (HALO_MIN_R + HALO_EXTRA_R * k) * scale : 0;
       const haloOpacity = 0.85 * k * HALO_TINT[s.category];
@@ -261,8 +296,9 @@ export function layoutWords(stats: WordStat[], area: Area, look: CloudLook = { s
     for (const s of later) {
       const row = CATEGORY_ROWS.find((r) => r.includes(s.category))!;
       const [ra, rb] = row.map((c) => regions.get(c)!);
-      const bounds = { x: ra.x, y: ra.y, w: rb.x + rb.w - ra.x, h: ra.h };
-      if (!place(s, bounds, [...boxesOf(row[0]), ...boxesOf(row[1])])) dropped.push(s.word);
+      const last = rb ?? ra;
+      const bounds = { x: ra.x, y: ra.y, w: last.x + last.w - ra.x, h: ra.h };
+      if (!place(s, bounds, row.flatMap((c) => boxesOf(c)))) dropped.push(s.word);
     }
     if (dropped.length === 0 || attempt === 29) return { placed, scale, dropped };
     // 少しずつ縮める（大きく縮めると、入るはずの大きさより小さくなる）

@@ -12,17 +12,19 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import { CATEGORY_COLOR, LEGEND, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, withRates, type Placed } from '../wordCloud';
+import { colorOf, isGrouped, legend, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, withRates, type Placed } from '../wordCloud';
 import { useCaptures, useShownCounts } from '../useCaptures';
-import type { Category } from '../words';
+import { splitBubble } from '../bubbleText';
+import { boxCaptures, boxShown, warehouseReady } from '../warehouse';
+import type { Cat } from '../wordCloud';
 
 // 拾ったことば（ワードクラウド）。川の画面の上に重ねて出す。背景（空のループ動画）は川の画面の1本のプレーヤーが流す
 
 const TWINKLE_MS = 2400;
 
 // カテゴリの色を白へ寄せる（光っている瞬間の文字の色）
-function lighten(c: Category, mix: number) {
-  const [r, g, b] = CATEGORY_COLOR[c];
+function lighten(c: Cat, mix: number) {
+  const [r, g, b] = colorOf(c);
   const m = (v: number) => Math.round(v + (255 - v) * mix);
   return `rgb(${m(r)},${m(g)},${m(b)})`;
 }
@@ -48,7 +50,7 @@ function HaloLayer({ group, clock, placed, width, height }: {
       <Svg width={width} height={height}>
         <Defs>
           {mine.map((p) => {
-            const [r, g, b] = CATEGORY_COLOR[p.category];
+            const [r, g, b] = colorOf(p.category);
             return (
               <RadialGradient key={p.word} id={`halo-${group}-${p.word}`} cx="50%" cy="50%" r="50%">
                 <Stop offset="0" stopColor={`rgb(${r},${g},${b})`} stopOpacity={p.haloOpacity} />
@@ -76,7 +78,7 @@ function GlowLayer({ group, clock, placed }: { group: number; clock: SharedValue
       {placed
         .filter((p) => p.group === group && p.sparkle > 0)
         .map((p) => {
-          const [r, g, b] = CATEGORY_COLOR[p.category];
+          const [r, g, b] = colorOf(p.category);
           return (
             <Text
               key={p.word}
@@ -87,7 +89,7 @@ function GlowLayer({ group, clock, placed }: { group: number; clock: SharedValue
                   left: p.x,
                   top: p.y,
                   fontSize: p.size,
-                  lineHeight: p.h,
+                  lineHeight: p.size * 1.4,
                   color: lighten(p.category, 0.6),
                   opacity: 0.35 + 0.65 * p.sparkle,
                   textShadowColor: `rgba(${r},${g},${b},0.95)`,
@@ -95,7 +97,7 @@ function GlowLayer({ group, clock, placed }: { group: number; clock: SharedValue
                 },
               ]}
             >
-              {p.word}
+              {splitBubble(p.word)}
             </Text>
           );
         })}
@@ -120,7 +122,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   }, [clock]);
 
   // 最近（今日〜今週）の本物の記録。読み込み中は何も置かない
-  useAiWords(); // 読み込めたら再描画（AI の言葉の種類が分かる）
+  const aiVersion = useAiWords(); // 読み込めたら再描画（AI の言葉の種類が分かる）
   const captures = useCaptures(7);
   const shown = useShownCounts(7);
 
@@ -130,11 +132,15 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   const { placed } = useMemo(
     () => {
       // 流れた記録をとりはじめる前の分は除く（何回流れたか分からないため）。流れた記録がない人（見本・使いはじめ）は回数のまま
-      const caps = shown ? (captures ?? []).filter((c) => shown.since === null || c.capturedAt >= shown.since) : [];
+      const raw = shown ? (captures ?? []).filter((c) => shown.since === null || c.capturedAt >= shown.since) : [];
+      // 倉庫で動くときは箱で数える（箱の名前＝その箱でいちばん多く拾った言葉）。流れた回数も箱ごとに足す（決定 2026-10-14）
+      const boxed = warehouseReady();
+      const caps = boxed ? boxCaptures(raw) : raw;
       const stats = aggregate(caps);
-      return layoutWords(selectWords(shown?.since != null ? withRates(stats, shown.shown, FIXED_WORDS) : stats, height < 750 ? 20 : MAX_WORDS), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 });
+      const shownMap = shown && boxed ? boxShown(shown.shown, stats.map((s) => s.word)) : shown?.shown;
+      return layoutWords(selectWords(shown?.since != null && shownMap ? withRates(stats, shownMap, boxed ? new Set(stats.map((s) => s.word)) : FIXED_WORDS) : stats, height < 750 ? 20 : MAX_WORDS), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 });
     },
-    [captures, shown, width, height],
+    [captures, shown, width, height, aiVersion],
   );
 
   return (
@@ -150,11 +156,11 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       ))}
 
       {placed.map((p) => {
-        const [r, g, b] = CATEGORY_COLOR[p.category];
+        const [r, g, b] = colorOf(p.category);
         return (
           <Pressable key={p.word} style={{ position: 'absolute', left: p.x, top: p.y }} hitSlop={4} onPress={() => onOpenArchive(p.word)}>
-            <Text style={[styles.word, { fontSize: p.size, lineHeight: p.h, color: `rgba(${r},${g},${b},${p.textOpacity})` }]}>
-              {p.word}
+            <Text style={[styles.word, { fontSize: p.size, lineHeight: p.size * 1.4, color: `rgba(${r},${g},${b},${p.textOpacity})` }]}>
+              {splitBubble(p.word)}
             </Text>
           </Pressable>
         );
@@ -166,7 +172,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       ))}
 
       <View style={styles.legend} pointerEvents="none">
-        {LEGEND.map(({ category, label, color: [r, g, b] }) => (
+        {legend(isGrouped()).map(({ category, label, color: [r, g, b] }) => (
           <View key={category} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: `rgb(${r},${g},${b})` }]} />
             <Text style={styles.legendText}>{label}</Text>
@@ -201,6 +207,7 @@ const styles = StyleSheet.create({
   titleRow: { position: 'absolute', top: 54, left: 0, right: 0, alignItems: 'center' },
   title: { fontSize: 16, color: 'rgba(255,246,232,0.9)', letterSpacing: 2 },
   word: {
+    textAlign: 'center',
     fontWeight: '300',
     textShadowColor: 'rgba(10,14,40,0.5)',
     textShadowRadius: 4,

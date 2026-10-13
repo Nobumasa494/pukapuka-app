@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { WIDE_CAPS, layoutSky, lineTiers, skeleton, selectConstellation, starBox, type Mag, type StarLink, type Star, type TentativeLink } from '../constellation';
 import { useCaptures } from '../useCaptures';
+import { splitBubble } from '../bubbleText';
 import HelpStar from './HelpStar';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
@@ -503,12 +504,12 @@ function Constellation({ stars, lines, tentative, selected, onSelect, onClear, w
                   {
                     marginTop: 4 + s.r * 2 + 3,
                     fontSize: s.labelSize,
-                    lineHeight: s.labelH,
+                    lineHeight: Math.ceil(s.labelSize * 1.35),
                     color: s.word === selected ? 'rgba(255,232,170,1)' : `rgba(255,246,232,${on ? MAG_LOOK[s.mag].label : 0.3})`,
                   },
                 ]}
               >
-                {s.word}
+                {splitBubble(s.word)}
               </Text>
             </Pressable>
           );

@@ -15,7 +15,9 @@ import { useAddCapture, useDeviceId } from '../useCaptures';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { countFlow, useDailyGather, useFlowFlush } from '../useFlows';
-import { answerTo, chooseFrame, floated, frameOf, pickRiverWord, setRiverWeights, startGather } from '../riverWords';
+import { answerTo, chooseFrame, floated, frameOf, pickRiverWord, setMyBoxes, setRiverWeights, startGather } from '../riverWords';
+import { boxOf } from '../warehouse';
+import { useCaptures, useShownCounts } from '../useCaptures';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
@@ -806,9 +808,26 @@ export default function Home() {
   useFlowFlush();
   // その人向けの川：好みの量（Convex が記録から計算。拾うたびに更新される）
   const deviceId = useDeviceId();
-  useAiWords();
+  const aiVersion = useAiWords();
   const riverWeights = useQuery(api.river.weights, deviceId ? { deviceId } : 'skip');
   useEffect(() => setRiverWeights(riverWeights), [riverWeights]);
+  // 自分の箱：直近4週間に拾った・流れた回数を箱ごとに数える（川の配合の「自分の箱」。決定 2026-10-14）
+  const myCaps = useCaptures(28);
+  const myShown = useShownCounts(28);
+  useEffect(() => {
+    if (!myCaps) return;
+    const m = new Map<number, { picked: number; shown: number }>();
+    const get = (b: number) => m.get(b) ?? m.set(b, { picked: 0, shown: 0 }).get(b)!;
+    for (const c of myCaps) {
+      const b = boxOf(c.word);
+      if (b !== undefined) get(b).picked++;
+    }
+    if (myShown) for (const [w, n] of myShown.shown) {
+      const b = boxOf(w);
+      if (b !== undefined) get(b).shown += n;
+    }
+    setMyBoxes(m);
+  }, [myCaps, myShown, aiVersion]);
   useDailyGather(startGather);
 
   const P = useMemo(() => buildPathData(width, height), [width, height]);
