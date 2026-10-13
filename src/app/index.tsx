@@ -22,6 +22,7 @@ import MeOverlay from '../components/MeOverlay';
 import DiaryOverlay from '../components/DiaryOverlay';
 import SpeedControl from '../components/SpeedControl';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
+import { bubbleLen, splitBubble } from '../bubbleText';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
 import type { VideoRect } from '../riverPath';
 
@@ -243,7 +244,7 @@ function prewarm(P: PathData) {
     const word = pickWordFrom(items, recent, (r) => {
       recent = r;
     });
-    const c = spawnFlowing(P, bs, nextId++, word.length);
+    const c = spawnFlowing(P, bs, nextId++, bubbleLen(word));
     if (c) {
       bs = [...bs, c];
       items = [...items, { id: c.id, word, bob: Math.random() * Math.PI * 2 }];
@@ -426,7 +427,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     const b = findBubble(sim.value, id);
     if (!b) return {};
     const size = (b.pl ?? placeBubble(P, b)).size;
-    const font = Math.max(10, Math.min(15, (size * 0.8) / word.length));
+    const font = Math.max(10, Math.min(15, (size * 0.8) / bubbleLen(word)));
     return { transform: [{ scale: font / TEXT_BASE / (size / base) }] };
   });
   // 奥の泡ほど夕日のもやがかかる
@@ -498,7 +499,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
         <BubbleFace size={base} />
         <Animated.View pointerEvents="none" style={[styles.haze, { borderRadius: base / 2 }, hazeStyle]} />
         <View pointerEvents="none" style={styles.textBox}>
-          <Animated.Text style={[styles.bubbleText, { fontSize: TEXT_BASE }, textStyle]}>{word}</Animated.Text>
+          <Animated.Text style={[styles.bubbleText, { fontSize: TEXT_BASE }, textStyle]}>{splitBubble(word)}</Animated.Text>
         </View>
       </Animated.View>
     </Animated.View>
@@ -712,7 +713,7 @@ const BubbleLayer = memo(function BubbleLayer({ P, initialItems, sim, time, rise
         const bob = Math.random() * Math.PI * 2;
         runOnUI((pathData: PathData, bid: number, w: string, bb: number) => {
           'worklet';
-          const c = spawnFlowing(pathData, sim.get(), bid, w.length);
+          const c = spawnFlowing(pathData, sim.get(), bid, bubbleLen(w));
           if (!c) return;
           sim.set([...sim.get(), c]);
           runOnJS(onSpawned)(bid, w, bb);

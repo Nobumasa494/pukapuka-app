@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1080" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1080" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">棚から取ってくる時・AI を呼ぶ時</text>
+<text x="500" y="80" text-anchor="middle" font-size="18" fill="#556">AI を呼ぶのは ③ の「足りないとき」だけ</text>
+<rect x="40" y="110" width="920" height="230" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="3"/>
+<text x="70" y="158" font-size="25" font-weight="bold" fill="#4a8fd0">① アプリを開いたとき</text>
+<rect x="620" y="130" width="320" height="40" rx="20" fill="#4a8fd0"/><text x="780" y="157" text-anchor="middle" font-size="18" fill="#fff">棚から取ってくる</text>
+<text x="70" y="210" font-size="19" fill="#223">・よく拾う箱の言葉を多め＋ランダムに少し</text>
+<text x="70" y="250" font-size="19" fill="#223">・数百語だけ、スマホに持ってくる</text>
+<text x="70" y="310" font-size="17" font-weight="bold" fill="#4a8fd0">AI は呼ばない</text>
+<rect x="40" y="365" width="920" height="230" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="3"/>
+<text x="70" y="413" font-size="25" font-weight="bold" fill="#4a8fd0">② 泡を拾ったとき</text>
+<rect x="620" y="385" width="320" height="40" rx="20" fill="#4a8fd0"/><text x="780" y="412" text-anchor="middle" font-size="18" fill="#fff">手元の言葉から流す</text>
+<text x="70" y="465" font-size="19" fill="#223">・拾った言葉と同じ箱の言葉を、すぐ流す（応える泡）</text>
+<text x="70" y="505" font-size="19" fill="#223">・スマホにもう持っている言葉を使う</text>
+<text x="70" y="565" font-size="17" font-weight="bold" fill="#4a8fd0">AI は呼ばない</text>
+<rect x="40" y="620" width="920" height="230" rx="16" fill="#fff" stroke="#c0392b" stroke-width="3"/>
+<text x="70" y="668" font-size="25" font-weight="bold" fill="#c0392b">③ 同じ言葉を2日拾ったとき</text>
+<rect x="620" y="640" width="320" height="40" rx="20" fill="#c0392b"/><text x="780" y="667" text-anchor="middle" font-size="18" fill="#fff">棚を見る → 足りなければ AI</text>
+<text x="70" y="720" font-size="19" fill="#223">・棚の同じ箱に、まだ見ていない言葉が5つ以上 → 取ってくる</text>
+<text x="70" y="760" font-size="19" fill="#223">・4つ以下 → AI で5つ作って棚に足す（数秒）</text>
+<text x="70" y="820" font-size="17" font-weight="bold" fill="#c0392b">上限：箱ごと200語・1日200回</text>
+<rect x="40" y="880" width="920" height="160" rx="16" fill="#f1efe9"/>
+<text x="70" y="920" font-size="21" font-weight="bold" fill="#223">人が増えると</text>
+<text x="70" y="960" font-size="18" fill="#223">棚の言葉がそろっていくので、③で AI を呼ぶことが減っていく。</text>
+<text x="70" y="995" font-size="18" fill="#223">全部の箱が200語になったら、AI を呼ぶのは終わり（棚から取ってくるだけ）。</text>
+</svg>

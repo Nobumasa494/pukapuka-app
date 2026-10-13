@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1010" font-family="Noto Sans CJK JP, sans-serif">
+<rect width="1000" height="1010" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" fill="#223" font-weight="bold">星空の線は、こうして決まる</text>
+<text x="500" y="80" text-anchor="middle" font-size="19" fill="#556">「同じ日に、一緒に拾われた」ことが、偶然かどうかを調べる</text>
+<text x="40" y="132" font-size="23" fill="#246" font-weight="bold">① 5日間に拾った名札</text>
+<text x="225" y="170" text-anchor="middle" font-size="19" fill="#556">月</text>
+<text x="295" y="170" text-anchor="middle" font-size="19" fill="#556">火</text>
+<text x="365" y="170" text-anchor="middle" font-size="19" fill="#556">水</text>
+<text x="435" y="170" text-anchor="middle" font-size="19" fill="#556">木</text>
+<text x="505" y="170" text-anchor="middle" font-size="19" fill="#556">金</text>
+<text x="150" y="215" text-anchor="end" font-size="21" fill="#223">散歩</text>
+<rect x="200" y="185" width="50" height="40" rx="8" fill="#e9a23b" stroke="#ccc"/>
+<rect x="270" y="185" width="50" height="40" rx="8" fill="#e9a23b" stroke="#ccc"/>
+<rect x="340" y="185" width="50" height="40" rx="8" fill="#fff" stroke="#ccc"/>
+<rect x="410" y="185" width="50" height="40" rx="8" fill="#e9a23b" stroke="#ccc"/>
+<rect x="480" y="185" width="50" height="40" rx="8" fill="#fff" stroke="#ccc"/>
+<text x="150" y="263" text-anchor="end" font-size="21" fill="#223">音楽</text>
+<rect x="200" y="233" width="50" height="40" rx="8" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="270" y="233" width="50" height="40" rx="8" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="340" y="233" width="50" height="40" rx="8" fill="#fff" stroke="#ccc"/>
+<rect x="410" y="233" width="50" height="40" rx="8" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="480" y="233" width="50" height="40" rx="8" fill="#fff" stroke="#ccc"/>
+<text x="150" y="311" text-anchor="end" font-size="21" fill="#223">料理</text>
+<rect x="200" y="281" width="50" height="40" rx="8" fill="#fff" stroke="#ccc"/>
+<rect x="270" y="281" width="50" height="40" rx="8" fill="#fff" stroke="#ccc"/>
+<rect x="340" y="281" width="50" height="40" rx="8" fill="#999" stroke="#ccc"/>
+<rect x="410" y="281" width="50" height="40" rx="8" fill="#fff" stroke="#ccc"/>
+<rect x="480" y="281" width="50" height="40" rx="8" fill="#999" stroke="#ccc"/>
+<text x="590" y="225" font-size="21" fill="#223">散歩の日は3日、音楽の日も3日。</text>
+<text x="590" y="258" font-size="21" fill="#c0392b" font-weight="bold">3日とも、同じ日。</text>
+<text x="590" y="296" font-size="19" fill="#556">「すごく強いつながり？」</text>
+<line x1="40" y1="352" x2="960" y2="352" stroke="#ddd"/>
+<text x="40" y="392" font-size="23" fill="#246" font-weight="bold">② 偶然でも、こんなに重なる？ を調べる</text>
+<text x="40" y="428" font-size="20" fill="#223">音楽の3日を、5日のどこかに、でたらめに置いてみる → 置き方は10通り</text>
+<rect x="40" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="71" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="102" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="133" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="164" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="217" y="444" width="176" height="50" rx="10" fill="#fdecea" stroke="#c0392b" stroke-width="2"/>
+<rect x="225" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="256" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="287" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="318" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="349" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="410" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="441" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="472" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="503" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="534" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="595" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="626" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="657" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="688" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="719" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="780" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="811" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="842" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="873" y="450" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="904" y="450" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="40" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="71" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="102" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="133" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="164" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="225" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="256" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="287" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="318" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="349" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="410" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="441" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="472" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="503" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="534" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="595" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="626" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="657" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="688" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="719" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="780" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="811" y="508" width="26" height="36" rx="5" fill="#fff" stroke="#ccc"/>
+<rect x="842" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="873" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<rect x="904" y="508" width="26" height="36" rx="5" fill="#4a8fd0" stroke="#ccc"/>
+<text x="40" y="582" font-size="19" fill="#556">（散歩は 月・火・木 の3日で固定）</text>
+<text x="40" y="622" font-size="22" fill="#223">散歩と同じ3日になるのは、10通りのうち <tspan fill="#c0392b" font-weight="bold">1通り</tspan>（赤い枠）</text>
+<text x="40" y="660" font-size="22" fill="#223">→ 偶然でも起きる確率は <tspan fill="#c0392b" font-weight="bold">10%</tspan></text>
+<rect x="40" y="680" width="920" height="46" rx="10" fill="#f1efe9"/>
+<text x="500" y="711" text-anchor="middle" font-size="21" fill="#223">ふつうは1%より小さくないと線にしない → <tspan font-weight="bold">5日では、線にならない</tspan></text>
+<line x1="40" y1="752" x2="960" y2="752" stroke="#ddd"/>
+<text x="40" y="792" font-size="23" fill="#246" font-weight="bold">③ 30日たつと</text>
+<text x="40" y="830" font-size="21" fill="#223">散歩の日 10日、音楽の日 10日、そのうち <tspan font-weight="bold">9日が同じ日</tspan></text>
+<text x="40" y="868" font-size="21" fill="#223">→ 偶然でも起きる確率は <tspan fill="#2e8b57" font-weight="bold">約 0.0007%</tspan>（15万回に1回）</text>
+<rect x="40" y="890" width="920" height="46" rx="10" fill="#e8f5ec"/>
+<text x="500" y="921" text-anchor="middle" font-size="21" fill="#223">1%よりずっと小さい → <tspan font-weight="bold">散歩と音楽の間に、線を引く</tspan></text>
+<text x="500" y="975" text-anchor="middle" font-size="19" fill="#556">星空は、この判定を通った組だけを、つながりの強い順に出す</text>
+</svg>

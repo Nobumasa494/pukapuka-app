@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="880" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="880" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">札は「どの箱に入るか」の番号</text>
+<text x="40" y="100" font-size="22" font-weight="bold" fill="#246">倉庫にしまう1行（言葉1つ分）</text>
+<rect x="40" y="120" width="560" height="250" rx="18" fill="#fff" stroke="#9fb6d4" stroke-width="2.5"/>
+<text x="70" y="170" font-size="18" fill="#556">言葉</text>
+<text x="200" y="170" font-size="20" fill="#223">手作り餃子をみんなで包んだ</text>
+<text x="70" y="240" font-size="18" fill="#556">札</text>
+<rect x="200" y="210" width="80" height="44" rx="10" fill="#e9a23b"/><text x="240" y="240" text-anchor="middle" font-size="22" font-weight="bold" fill="#fff">19</text>
+<text x="70" y="310" font-size="18" fill="#556">意味の位置</text>
+<text x="200" y="310" font-size="16" fill="#556">0.12, -0.03, 0.27 …（768個の数字）</text>
+<text x="70" y="350" font-size="15" fill="#888">意味の位置は、どの箱が近いかを測るのと、近い言葉を探すのに使う</text>
+<text x="660" y="100" font-size="22" font-weight="bold" fill="#246">箱の一覧（45行）</text>
+<rect x="640" y="120" width="320" height="250" rx="18" fill="#fff" stroke="#e9a23b" stroke-width="2.5"/>
+<text x="670" y="165" font-size="18" font-weight="bold" fill="#e9a23b">18</text><text x="715" y="165" font-size="18" fill="#223" >写真を撮る</text>
+<rect x="652" y="189" width="296" height="42" rx="10" fill="#fdf0dc"/>
+<text x="670" y="217" font-size="18" font-weight="bold" fill="#e9a23b">19</text><text x="715" y="217" font-size="18" fill="#223" font-weight="bold">料理・お菓子を作る</text>
+<text x="670" y="269" font-size="18" font-weight="bold" fill="#e9a23b">20</text><text x="715" y="269" font-size="18" fill="#223" >植物を育てる</text>
+<text x="670" y="321" font-size="18" font-weight="bold" fill="#e9a23b">…</text><text x="715" y="321" font-size="18" fill="#223" >…</text>
+<line x1="282" y1="240" x2="652" y2="210" stroke="#e9a23b" stroke-width="3" stroke-dasharray="8 5"/>
+<text x="460" y="205" text-anchor="middle" font-size="16" fill="#e9a23b">番号でつながる</text>
+<text x="40" y="440" font-size="22" font-weight="bold" fill="#246">札があると、できること</text>
+<rect x="40" y="465" width="920" height="100" rx="14" fill="#fff" stroke="#ccc" stroke-width="1.5"/>
+<text x="70" y="505" font-size="20" font-weight="bold" fill="#223">星空・夜明け</text><text x="250" y="505" font-size="18" fill="#223">拾った言葉を、札の番号ごとに数える</text>
+<text x="250" y="540" font-size="16" fill="#e08a1e">例：料理 3日・山 2日…</text>
+<rect x="40" y="585" width="920" height="100" rx="14" fill="#fff" stroke="#ccc" stroke-width="1.5"/>
+<text x="70" y="625" font-size="20" font-weight="bold" fill="#223">夕空</text><text x="250" y="625" font-size="18" fill="#223">札 → 箱 → 区画 とたどって、色を付ける</text>
+<text x="250" y="660" font-size="16" fill="#e08a1e">例：19 → 料理 → 作る・表す（色）</text>
+<rect x="40" y="705" width="920" height="100" rx="14" fill="#fff" stroke="#ccc" stroke-width="1.5"/>
+<text x="70" y="745" font-size="20" font-weight="bold" fill="#223">川</text><text x="250" y="745" font-size="18" fill="#223">札の番号で、自分の箱の言葉を多めに流す</text>
+<text x="250" y="780" font-size="16" fill="#e08a1e">例：よく拾う19番の言葉を多めに</text>
+<text x="500" y="850" text-anchor="middle" font-size="18" fill="#223">札は、意味の位置でいちばん近い箱を探して、その番号を書くだけ</text>
+</svg>

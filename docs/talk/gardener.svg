@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1120" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1120" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">庭師の仕事（週に1回・夜中）</text>
+<rect x="300" y="66" width="22" height="16" rx="4" fill="#4a8fd0"/><text x="328" y="80" font-size="16" fill="#223">プログラム（計算で決める）</text>
+<rect x="560" y="66" width="22" height="16" rx="4" fill="#c0392b"/><text x="588" y="80" font-size="16" fill="#223">AI（言葉を書くだけ）</text>
+<rect x="40" y="110" width="920" height="216" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="3"/>
+<rect x="40" y="110" width="14" height="216" rx="6" fill="#4a8fd0"/>
+<text x="75" y="152" font-size="24" font-weight="bold" fill="#4a8fd0">① 集める</text><text x="330" y="152" font-size="19" fill="#223">言葉ごとの合計の表を読む</text>
+<text x="85" y="192" font-size="17" fill="#445">・ギターを弾いた　流れた300　拾われた45　→ 15%</text>
+<text x="85" y="226" font-size="17" fill="#445">・ピアノを1曲弾いた　流れた250　拾われた30　→ 12%</text>
+<text x="85" y="260" font-size="17" fill="#445">・和太鼓を叩いた　流れた280　拾われた2　→ 0.7%</text>
+<text x="85" y="294" font-size="17" fill="#445">・ウクレレを鳴らしたい　流れた20　→ まだ判断しない</text>
+<text x="500" y="348" text-anchor="middle" font-size="20" fill="#aaa">↓</text>
+<rect x="40" y="354" width="920" height="182" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="3"/>
+<rect x="40" y="354" width="14" height="182" rx="6" fill="#4a8fd0"/>
+<text x="75" y="396" font-size="24" font-weight="bold" fill="#4a8fd0">② 決める</text><text x="330" y="396" font-size="19" fill="#223">割合で、消す言葉と、増やす方向を決める</text>
+<text x="85" y="436" font-size="17" fill="#445">・消す：割合がいちばん低い「和太鼓を叩いた」</text>
+<text x="85" y="470" font-size="17" fill="#445">・増やす方向：割合が高い「ギターを弾いた」など上位5つ</text>
+<text x="85" y="504" font-size="17" fill="#445">・100回未満しか流れていない言葉は、決めない</text>
+<text x="500" y="558" text-anchor="middle" font-size="20" fill="#aaa">↓</text>
+<rect x="40" y="564" width="920" height="182" rx="16" fill="#fff" stroke="#c0392b" stroke-width="3"/>
+<rect x="40" y="564" width="14" height="182" rx="6" fill="#c0392b"/>
+<text x="75" y="606" font-size="24" font-weight="bold" fill="#c0392b">③ 書く</text><text x="330" y="606" font-size="19" fill="#223">AI に1回頼む（箱ごとに1回）</text>
+<text x="85" y="646" font-size="17" fill="#445">・「上位5つの仲間を、10個作って」</text>
+<text x="85" y="680" font-size="17" fill="#445">・渡すもの：上位5つ・消す言葉・箱の説明・棚の一覧</text>
+<text x="85" y="714" font-size="17" fill="#445">・だれの記録かは渡さない</text>
+<text x="500" y="768" text-anchor="middle" font-size="20" fill="#aaa">↓</text>
+<rect x="40" y="774" width="920" height="182" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="3"/>
+<rect x="40" y="774" width="14" height="182" rx="6" fill="#4a8fd0"/>
+<text x="75" y="816" font-size="24" font-weight="bold" fill="#4a8fd0">④ 確かめて入れかえる</text><text x="330" y="816" font-size="19" fill="#223">できた言葉を確かめて、棚に入れる</text>
+<text x="85" y="856" font-size="17" fill="#445">・長さ（10〜14文字）・同じ言葉がないか・箱からはみ出していないか</text>
+<text x="85" y="890" font-size="17" fill="#445">・消す言葉は休ませる（捨てない）</text>
+<text x="85" y="924" font-size="17" fill="#445">・棚は200語のまま</text>
+<rect x="40" y="984" width="920" height="110" rx="16" fill="#f1efe9"/>
+<text x="70" y="1024" font-size="20" font-weight="bold" fill="#223">大事なのは</text>
+<text x="70" y="1059" font-size="18" fill="#223">何を消すか・どっちに増やすかは計算で決める。AI は言葉を書くだけなので、大事な言葉を勝手に消さない。</text>
+<text x="70" y="1084" font-size="16" fill="#556">費用：週に45回（箱ごと1回）× 約0.03円 ＝ 月 約6円</text>
+</svg>

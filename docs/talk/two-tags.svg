@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1180" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1180" fill="#fbf8f2"/>
+<text x="500" y="48" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">いま決めようとしている「言葉の分け方」</text>
+<text x="500" y="84" text-anchor="middle" font-size="19" fill="#556">拾った言葉1つに、2つの札を付ける。それで3つの画面が見える</text>
+<text x="40" y="140" font-size="23" font-weight="bold" fill="#246">① 水辺で、言葉を拾う</text>
+<circle cx="200" cy="230" r="70" fill="#dfe9f5" stroke="#9fb6d4" stroke-width="2"/><text x="200" y="224" text-anchor="middle" font-size="18" fill="#223">夜に1曲だけ</text><text x="200" y="250" text-anchor="middle" font-size="18" fill="#223">弾いてみたい</text>
+<text x="320" y="236" font-size="34" fill="#c0392b">→</text>
+<text x="380" y="140" font-size="23" font-weight="bold" fill="#246">② 札を2つ付ける</text>
+<rect x="380" y="165" width="250" height="56" rx="12" fill="#e9a23b"/><text x="505" y="192" text-anchor="middle" font-size="16" fill="#fff">箱（何に）</text><text x="505" y="213" text-anchor="middle" font-size="20" font-weight="bold" fill="#fff">楽器を弾く</text>
+<rect x="650" y="165" width="300" height="56" rx="12" fill="#2e8b57"/><text x="800" y="192" text-anchor="middle" font-size="16" fill="#fff">段階（どこまで）</text><text x="800" y="213" text-anchor="middle" font-size="20" font-weight="bold" fill="#fff">したい</text>
+<rect x="650" y="240" width="70" height="40" rx="8" fill="#e8f5ec"/><text x="685" y="266" text-anchor="middle" font-size="15" fill="#2e8b57">気になる</text>
+<rect x="726" y="240" width="70" height="40" rx="8" fill="#2e8b57"/><text x="761" y="266" text-anchor="middle" font-size="15" fill="#fff">したい</text>
+<rect x="802" y="240" width="70" height="40" rx="8" fill="#e8f5ec"/><text x="837" y="266" text-anchor="middle" font-size="15" fill="#2e8b57">している</text>
+<rect x="878" y="240" width="70" height="40" rx="8" fill="#e8f5ec"/><text x="913" y="266" text-anchor="middle" font-size="15" fill="#2e8b57">した</text>
+<text x="380" y="262" font-size="15" fill="#556">箱は、国の統計の分け方が土台</text>
+<text x="380" y="300" font-size="15" fill="#556">（楽器・料理・登山・人と過ごす…）</text>
+<text x="650" y="306" font-size="15" fill="#556">行動までの段階</text>
+<line x1="40" y1="340" x2="960" y2="340" stroke="#ddd"/>
+<text x="40" y="385" font-size="23" font-weight="bold" fill="#246">気持ちの言葉は、気持ちの箱に入る（心理学の円環モデル）</text>
+<rect x="40" y="405" width="215" height="56" rx="12" fill="#e67e22"/><text x="147" y="440" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">わくわく・気になる</text>
+<rect x="272" y="405" width="215" height="56" rx="12" fill="#27ae60"/><text x="379" y="440" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">おだやか・ほっと</text>
+<rect x="504" y="405" width="215" height="56" rx="12" fill="#8e44ad"/><text x="611" y="440" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">もやもや・ざわざわ</text>
+<rect x="736" y="405" width="215" height="56" rx="12" fill="#7f8c8d"/><text x="843" y="440" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">しんどい・沈む</text>
+<text x="147" y="485" text-anchor="middle" font-size="15" fill="#e67e22">いちばん大事</text>
+<line x1="40" y1="515" x2="960" y2="515" stroke="#ddd"/>
+<text x="40" y="560" font-size="23" font-weight="bold" fill="#246">③ 札で、3つの画面が見える</text>
+<rect x="40" y="585" width="920" height="155" rx="14" fill="#1b2340"/>
+<text x="70" y="630" font-size="26" font-weight="bold" fill="#ffe7b0">夕空</text><text x="70" y="665" font-size="17" fill="#f3ead2">よく拾う言葉</text>
+<text x="230" y="635" font-size="17" fill="#f3ead2">種類（大きなまとまり）ごとの区画に、拾った言葉を並べる</text>
+<text x="230" y="685" font-size="18" fill="#ffd28a">例：楽器の区画に「夜に1曲だけ弾いてみたい」</text>
+<rect x="40" y="760" width="920" height="155" rx="14" fill="#1b2340"/>
+<text x="70" y="805" font-size="26" font-weight="bold" fill="#ffe7b0">星空</text><text x="70" y="840" font-size="17" fill="#f3ead2">一緒に拾う箱</text>
+<text x="230" y="810" font-size="17" fill="#f3ead2">同じ日に一緒に拾われた箱どうしを線でつなぐ（検定）</text>
+<text x="230" y="860" font-size="18" fill="#ffd28a">例：「楽器を弾く」─「わくわく」</text>
+<rect x="40" y="935" width="920" height="155" rx="14" fill="#1b2340"/>
+<text x="70" y="980" font-size="26" font-weight="bold" fill="#ffe7b0">夜明け</text><text x="70" y="1015" font-size="17" fill="#f3ead2">育っていく</text>
+<text x="230" y="985" font-size="17" fill="#f3ead2">同じ箱が、段階を進んでいく様子を並べる（事実だけ）</text>
+<text x="230" y="1035" font-size="18" fill="#ffd28a">例：楽器：気になる→したい→した</text>
+<text x="500" y="1150" text-anchor="middle" font-size="19" fill="#223">いまやっているのは、②の「箱」と「段階」を、根拠をもって決めること</text>
+</svg>

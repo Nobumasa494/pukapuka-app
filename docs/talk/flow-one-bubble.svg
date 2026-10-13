@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1560" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1560" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">泡を1つ拾ってから、何が起きるか</text>
+<rect x="250" y="66" width="22" height="16" rx="4" fill="#2e8b57"/><text x="278" y="80" font-size="16" fill="#223">決まった</text>
+<rect x="380" y="66" width="22" height="16" rx="4" fill="#e08a1e"/><text x="408" y="80" font-size="16" fill="#223">案（まだ決めていない）</text>
+<rect x="600" y="66" width="22" height="16" rx="4" fill="#8a8a8a"/><text x="628" y="80" font-size="16" fill="#223">これから決める</text>
+<rect x="40" y="110" width="920" height="150" rx="16" fill="#fff" stroke="#2e8b57" stroke-width="3"/>
+<rect x="40" y="110" width="14" height="150" rx="6" fill="#2e8b57"/>
+<text x="75" y="155" font-size="24" font-weight="bold" fill="#2e8b57">① 川に流す</text>
+<text x="75" y="198" font-size="19" fill="#223">その人がよく拾う言葉を多めに（好みの量）／10個に2個はランダム</text>
+<text x="75" y="234" font-size="16" fill="#556">したいこと・していることを30%・泡は必ず2行・10〜14文字</text>
+<text x="500" y="285" text-anchor="middle" font-size="22" fill="#aaa">↓</text>
+<rect x="40" y="295" width="920" height="150" rx="16" fill="#fff" stroke="#2e8b57" stroke-width="3"/>
+<rect x="40" y="295" width="14" height="150" rx="6" fill="#2e8b57"/>
+<text x="75" y="340" font-size="24" font-weight="bold" fill="#2e8b57">② 拾う</text>
+<text x="75" y="383" font-size="19" fill="#223">言葉と日時を記録する</text>
+<text x="75" y="419" font-size="16" fill="#556">記録するのは「拾った」ことだけ（した／したいは区別しない）</text>
+<text x="500" y="470" text-anchor="middle" font-size="22" fill="#aaa">↓</text>
+<rect x="40" y="480" width="920" height="150" rx="16" fill="#fff" stroke="#e08a1e" stroke-width="3"/>
+<rect x="40" y="480" width="14" height="150" rx="6" fill="#e08a1e"/>
+<text x="75" y="525" font-size="24" font-weight="bold" fill="#e08a1e">③ すぐ応える</text>
+<text x="75" y="568" font-size="19" fill="#223">同じ箱の近い言葉が、すぐ流れてくる</text>
+<text x="75" y="604" font-size="16" fill="#556">続きは3つ先まで（同じ日の中だけ）</text>
+<text x="500" y="655" text-anchor="middle" font-size="22" fill="#aaa">↓</text>
+<rect x="40" y="665" width="920" height="150" rx="16" fill="#fff" stroke="#2e8b57" stroke-width="3"/>
+<rect x="40" y="665" width="14" height="150" rx="6" fill="#2e8b57"/>
+<text x="75" y="710" font-size="24" font-weight="bold" fill="#2e8b57">④ 2日拾った？</text>
+<text x="75" y="753" font-size="19" fill="#223">同じ言葉を別の日に2日拾ったら「興味がある」</text>
+<text x="75" y="789" font-size="16" fill="#556">回数ではなく日数で数える</text>
+<text x="500" y="840" text-anchor="middle" font-size="22" fill="#aaa">↓</text>
+<rect x="40" y="850" width="920" height="150" rx="16" fill="#fff" stroke="#2e8b57" stroke-width="3"/>
+<rect x="40" y="850" width="14" height="150" rx="6" fill="#2e8b57"/>
+<text x="75" y="895" font-size="24" font-weight="bold" fill="#2e8b57">⑤ 倉庫を探す</text>
+<text x="75" y="938" font-size="19" fill="#223">みんなで共有する倉庫から、同じ箱の近い言葉を取り寄せる</text>
+<text x="75" y="974" font-size="16" fill="#556">5つ以上あれば AI は呼ばない</text>
+<text x="500" y="1025" text-anchor="middle" font-size="22" fill="#aaa">↓</text>
+<rect x="40" y="1035" width="920" height="150" rx="16" fill="#fff" stroke="#e08a1e" stroke-width="3"/>
+<rect x="40" y="1035" width="14" height="150" rx="6" fill="#e08a1e"/>
+<text x="75" y="1080" font-size="24" font-weight="bold" fill="#e08a1e">⑥ 足りなければ AI で作る</text>
+<text x="75" y="1123" font-size="19" fill="#223">5つ作って倉庫に足す。作った言葉は意味でいちばん近い箱に入れる</text>
+<text x="75" y="1159" font-size="16" fill="#556">箱ごと200語まで（いっぱいなら作らない）・1日200回まで</text>
+<text x="500" y="1210" text-anchor="middle" font-size="22" fill="#aaa">↓</text>
+<rect x="40" y="1220" width="920" height="150" rx="16" fill="#fff" stroke="#2e8b57" stroke-width="3"/>
+<rect x="40" y="1220" width="14" height="150" rx="6" fill="#2e8b57"/>
+<text x="75" y="1265" font-size="24" font-weight="bold" fill="#2e8b57">⑦ 画面で数える</text>
+<text x="75" y="1308" font-size="19" fill="#223">星空・夜明け・夕空は「箱」（45個・固定）で数える</text>
+<text x="75" y="1344" font-size="16" fill="#556">箱の名前は、いちばん多く拾った言葉 → 同じなら最近拾った言葉</text>
+<rect x="40" y="1395" width="920" height="140" rx="16" fill="#f1efe9"/>
+<text x="70" y="1430" font-size="22" font-weight="bold" fill="#8a8a8a">これから決めること</text>
+<text x="70" y="1465" font-size="17" fill="#223">・意味の近さで探す（Gemini の埋め込み）を、いつ足すか</text>
+<text x="70" y="1493" font-size="17" fill="#223">・夕空の6種類の分け方</text>
+<text x="70" y="1521" font-size="17" fill="#223">・45個の箱を、カードソートと記録でいつ確かめるか</text>
+</svg>
