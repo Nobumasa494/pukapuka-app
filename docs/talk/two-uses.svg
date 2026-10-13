@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="900" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="900" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">記録は1つ、使い方は2つ</text>
+<rect x="60" y="80" width="260" height="110" rx="16" fill="#fff" stroke="#e9a23b" stroke-width="3"/>
+<text x="190" y="118" text-anchor="middle" font-size="21" font-weight="bold" fill="#e9a23b">Aさんのスマホ</text>
+<text x="190" y="150" text-anchor="middle" font-size="15" fill="#556">「ギターを弾いた」</text><text x="190" y="175" text-anchor="middle" font-size="15" fill="#223">流れた30・拾った4</text>
+<line x1="190" y1="190" x2="500" y2="250" stroke="#bbb" stroke-width="2"/>
+<rect x="370" y="80" width="260" height="110" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="3"/>
+<text x="500" y="118" text-anchor="middle" font-size="21" font-weight="bold" fill="#4a8fd0">Bさんのスマホ</text>
+<text x="500" y="150" text-anchor="middle" font-size="15" fill="#556">「ギターを弾いた」</text><text x="500" y="175" text-anchor="middle" font-size="15" fill="#223">流れた50・拾った6</text>
+<line x1="500" y1="190" x2="500" y2="250" stroke="#bbb" stroke-width="2"/>
+<rect x="680" y="80" width="260" height="110" rx="16" fill="#fff" stroke="#2e8b57" stroke-width="3"/>
+<text x="810" y="118" text-anchor="middle" font-size="21" font-weight="bold" fill="#2e8b57">Cさんのスマホ</text>
+<text x="810" y="150" text-anchor="middle" font-size="15" fill="#556">「ギターを弾いた」</text><text x="810" y="175" text-anchor="middle" font-size="15" fill="#223">流れた20・拾った0</text>
+<line x1="810" y1="190" x2="500" y2="250" stroke="#bbb" stroke-width="2"/>
+<rect x="250" y="250" width="500" height="70" rx="16" fill="#1b2340"/>
+<text x="500" y="282" text-anchor="middle" font-size="20" fill="#ffe7b0" font-weight="bold">Convex（記録が届く）</text>
+<text x="500" y="308" text-anchor="middle" font-size="15" fill="#f3ead2">流れた記録・拾った記録</text>
+<line x1="400" y1="320" x2="250" y2="390" stroke="#c0392b" stroke-width="3"/><line x1="600" y1="320" x2="750" y2="390" stroke="#4a8fd0" stroke-width="3"/>
+<rect x="40" y="390" width="440" height="400" rx="16" fill="#fff" stroke="#c0392b" stroke-width="3"/>
+<text x="260" y="430" text-anchor="middle" font-size="23" font-weight="bold" fill="#c0392b">使い方1：全員分を足す</text>
+<text x="70" y="475" font-size="17" fill="#223">「ギターを弾いた」</text>
+<text x="70" y="510" font-size="17" fill="#223">流れた　30＋50＋20＝100回</text>
+<text x="70" y="545" font-size="17" fill="#223">拾われた　4＋6＋0＝10回</text>
+<text x="70" y="580" font-size="17" font-weight="bold" fill="#c0392b">→ 拾われた割合 10%</text>
+<text x="70" y="635" font-size="18" font-weight="bold" fill="#223">→ 棚を育てる（庭師）</text>
+<text x="70" y="668" font-size="15" fill="#556">しおれた言葉を休ませ、</text><text x="70" y="690" font-size="15" fill="#556">よく拾われる言葉の仲間を増やす</text>
+<text x="70" y="740" font-size="15" fill="#556">だれの分かは残さない（言葉ごとの数だけ）</text>
+<rect x="520" y="390" width="440" height="400" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="3"/>
+<text x="740" y="430" text-anchor="middle" font-size="23" font-weight="bold" fill="#4a8fd0">使い方2：その人の分だけ</text>
+<text x="550" y="475" font-size="17" fill="#223">Bさんの記録だけを見る</text>
+<text x="550" y="510" font-size="17" fill="#223">楽器の箱 ■■■■■</text>
+<text x="550" y="545" font-size="17" fill="#223">料理の箱 ■</text>
+<text x="550" y="580" font-size="17" fill="#223">山の箱　 ■■■</text>
+<text x="550" y="635" font-size="18" font-weight="bold" fill="#223">→ Bさんの川を決める</text>
+<text x="550" y="668" font-size="15" fill="#556">よく拾う箱の言葉を多めに＋</text><text x="550" y="690" font-size="15" fill="#556">知らない分野・気持ちも混ぜる</text>
+<text x="550" y="740" font-size="15" fill="#556">星空・夜明け・夕空も、その人の分だけ</text>
+<text x="500" y="845" text-anchor="middle" font-size="19" fill="#223">同じ記録を、全員分で足すと「棚」、1人分で見ると「その人の川と画面」になる</text>
+</svg>

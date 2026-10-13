@@ -18,6 +18,7 @@ const SPAWN_MARGIN = 1.18;
 const REFILL_BELOW = 13;
 const REFILL_TRIES = 4;
 const REFILL_BOTTOM = 140;
+const LONG_LEN = 7; // 長いほうの行がこの文字数以上の泡
 // 流れている泡はこれより増やさない。縦に長い画面は奥の川も長く見えるので、上限がないと 412×915 で最大29個になり、
 // 奥の狭いS字で列になって「流れずに詰まる」（ユーザーの実機、2026-10-04。3秒以上止まる泡 2.1 → 4.3個/分）。
 // 15個で 3秒以上止まる泡は 0.1個/分以下（3サイズとも）、SE の見える泡は 10.8個（前の版 8.9個）
@@ -351,6 +352,7 @@ export function spawnFlowing(P: PathData, bs: SimBubble[], id: number, len: numb
   let live = 0;
   for (let k = 0; k < bs.length; k++) if (!bs[k].lifted) live++;
   if (live >= MAX_LIVE) return null;
-  if (live >= REFILL_BELOW) return spawnBubble(P, bs, id, len, SPAWN_S_MAX, Infinity, SPAWN_MARGIN, 1);
+  // 長い言葉（2行の大きな泡）は、混んだ奥には置ける場所がなく、ほとんど流れてこなかった（2026-10-13、スマホで確かめた）。川のどこにでも置けるようにする
+  if (live >= REFILL_BELOW && len < LONG_LEN) return spawnBubble(P, bs, id, len, SPAWN_S_MAX, Infinity, SPAWN_MARGIN, 1);
   return spawnBubble(P, bs, id, len, P.length, P.height - REFILL_BOTTOM, SPAWN_MARGIN, REFILL_TRIES);
 }

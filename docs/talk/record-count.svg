@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1000" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">保存するのは記録だけ。箱は数えるときの札</text>
+<text x="40" y="105" font-size="23" font-weight="bold" fill="#246">① 保存するもの：自分の拾った記録（言葉と日時）</text>
+<rect x="40" y="125" width="620" height="290" rx="14" fill="#fff" stroke="#bbb" stroke-width="2"/>
+<text x="60" y="165" font-size="16" fill="#888">10月1日 20時</text><text x="200" y="165" font-size="18" fill="#223">夕暮れの河原でギターを弾いた</text>
+<rect x="690" y="143" width="110" height="32" rx="16" fill="#e9a23b"/><text x="745" y="165" text-anchor="middle" font-size="15" fill="#fff">楽器</text>
+<line x1="660" y1="159" x2="688" y2="159" stroke="#ccc" stroke-dasharray="4 3"/>
+<text x="60" y="217" font-size="16" fill="#888">10月1日 20時</text><text x="200" y="217" font-size="18" fill="#223">わくわく</text>
+<rect x="690" y="195" width="110" height="32" rx="16" fill="#e67e22"/><text x="745" y="217" text-anchor="middle" font-size="15" fill="#fff">わくわく</text>
+<line x1="660" y1="211" x2="688" y2="211" stroke="#ccc" stroke-dasharray="4 3"/>
+<text x="60" y="269" font-size="16" fill="#888">10月3日 8時</text><text x="200" y="269" font-size="18" fill="#223">夕暮れの河原でギターを弾いた</text>
+<rect x="690" y="247" width="110" height="32" rx="16" fill="#e9a23b"/><text x="745" y="269" text-anchor="middle" font-size="15" fill="#fff">楽器</text>
+<line x1="660" y1="263" x2="688" y2="263" stroke="#ccc" stroke-dasharray="4 3"/>
+<text x="60" y="321" font-size="16" fill="#888">10月3日 9時</text><text x="200" y="321" font-size="18" fill="#223">ピアノを1曲弾いてみたい</text>
+<rect x="690" y="299" width="110" height="32" rx="16" fill="#e9a23b"/><text x="745" y="321" text-anchor="middle" font-size="15" fill="#fff">楽器</text>
+<line x1="660" y1="315" x2="688" y2="315" stroke="#ccc" stroke-dasharray="4 3"/>
+<text x="60" y="373" font-size="16" fill="#888">10月3日 9時</text><text x="200" y="373" font-size="18" fill="#223">山頂でコーヒーを飲みたい</text>
+<rect x="690" y="351" width="110" height="32" rx="16" fill="#2e8b57"/><text x="745" y="373" text-anchor="middle" font-size="15" fill="#fff">山</text>
+<line x1="660" y1="367" x2="688" y2="367" stroke="#ccc" stroke-dasharray="4 3"/>
+<text x="820" y="200" font-size="15" fill="#556">← 棚で決まっている</text><text x="820" y="222" font-size="15" fill="#556">　箱の札（保存しない）</text>
+<text x="500" y="470" text-anchor="middle" font-size="22" fill="#c0392b">↓ 画面を開くたびに、記録を札ごとに数える（計算）</text>
+<text x="40" y="530" font-size="23" font-weight="bold" fill="#246">② 計算で出すもの：箱ごとの日数と、箱の名前</text>
+<rect x="40" y="555" width="920" height="64" rx="12" fill="#fff" stroke="#e9a23b" stroke-width="2.5"/>
+<text x="70" y="595" font-size="21" font-weight="bold" fill="#e9a23b">楽器</text><text x="230" y="595" font-size="20" fill="#223">2日</text><text x="330" y="595" font-size="17" fill="#556">名前：夕暮れの河原でギターを弾いた（2回）</text>
+<rect x="40" y="635" width="920" height="64" rx="12" fill="#fff" stroke="#e67e22" stroke-width="2.5"/>
+<text x="70" y="675" font-size="21" font-weight="bold" fill="#e67e22">わくわく</text><text x="230" y="675" font-size="20" fill="#223">1日</text><text x="330" y="675" font-size="17" fill="#556">名前：わくわく</text>
+<rect x="40" y="715" width="920" height="64" rx="12" fill="#fff" stroke="#2e8b57" stroke-width="2.5"/>
+<text x="70" y="755" font-size="21" font-weight="bold" fill="#2e8b57">山</text><text x="230" y="755" font-size="20" fill="#223">1日</text><text x="330" y="755" font-size="17" fill="#556">名前：山頂でコーヒーを飲みたい</text>
+<text x="500" y="830" text-anchor="middle" font-size="18" fill="#223">楽器の名前は、いちばん多く拾った「夕暮れの河原でギターを弾いた」</text>
+<rect x="40" y="860" width="920" height="110" rx="14" fill="#1b2340"/>
+<text x="500" y="903" text-anchor="middle" font-size="20" fill="#ffe7b0">③ 星空・夜明け・夕空は、②の数え方で出す</text>
+<text x="500" y="940" text-anchor="middle" font-size="17" fill="#f3ead2">箱の中身を保存する必要はない。記録さえあれば、いつでも数え直せる</text>
+</svg>

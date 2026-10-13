@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1120" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1120" fill="#fbf8f2"/>
+<text x="500" y="48" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">名札が育っていく様子（3週間）</text>
+<text x="500" y="84" text-anchor="middle" font-size="19" fill="#556">名札は箱。箱の中に言葉が入る。箱の中に箱は作らない（いつも横に並ぶ）</text>
+<text x="40" y="140" font-size="24" font-weight="bold" fill="#246">1週目</text><text x="140" y="140" font-size="18" fill="#223">はじめは、決まった名札（散歩）の箱に、全部入る</text>
+<rect x="60" y="160" width="320" height="150" rx="14" fill="#fff" stroke="#e9a23b" stroke-width="2.5"/>
+<rect x="60" y="160" width="320" height="40" rx="14" fill="#e9a23b"/><rect x="60" y="186" width="320" height="14" fill="#e9a23b"/>
+<text x="220.0" y="187" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">散歩</text>
+<text x="76" y="230" font-size="16" fill="#334" >夜の散歩</text>
+<text x="76" y="260" font-size="16" fill="#c0392b" font-weight="bold">川沿いを歩きたい（火）</text>
+<text x="76" y="290" font-size="16" fill="#c0392b" font-weight="bold">夕方の土手を歩きたい（木）</text>
+<text x="790" y="230" font-size="15" fill="#556">川沿い・土手は、ほぼ同じ</text><text x="790" y="252" font-size="15" fill="#556">意味。別の日に2日拾った</text><text x="790" y="274" font-size="15" fill="#556"></text>
+<text x="40" y="470" font-size="24" font-weight="bold" fill="#246">2週目</text><text x="140" y="470" font-size="18" fill="#223">ほぼ同じ意味の2つが、箱から出て、新しい箱になる</text>
+<rect x="60" y="490" width="320" height="150" rx="14" fill="#fff" stroke="#e9a23b" stroke-width="2.5"/>
+<rect x="60" y="490" width="320" height="40" rx="14" fill="#e9a23b"/><rect x="60" y="516" width="320" height="14" fill="#e9a23b"/>
+<text x="220.0" y="517" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">散歩</text>
+<text x="76" y="560" font-size="16" fill="#334" >夜の散歩</text>
+<rect x="420" y="490" width="320" height="150" rx="14" fill="#fff" stroke="#c0392b" stroke-width="2.5"/>
+<rect x="420" y="490" width="320" height="40" rx="14" fill="#c0392b"/><rect x="420" y="516" width="320" height="14" fill="#c0392b"/>
+<text x="580.0" y="517" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">夕方の土手を歩きたい</text>
+<text x="436" y="560" font-size="16" fill="#334" >川沿いを歩きたい</text>
+<text x="436" y="590" font-size="16" fill="#334" >夕方の土手を歩きたい</text>
+<text x="790" y="560" font-size="15" fill="#556">名前は、最近拾った言葉（</text><text x="790" y="582" font-size="15" fill="#556">土手は木曜で新しい）</text><text x="790" y="604" font-size="15" fill="#556"></text>
+<text x="40" y="800" font-size="24" font-weight="bold" fill="#246">3週目</text><text x="140" y="800" font-size="18" fill="#223">新しく流れてきた言葉は、意味がいちばん近い箱に入る</text>
+<rect x="60" y="820" width="320" height="150" rx="14" fill="#fff" stroke="#e9a23b" stroke-width="2.5"/>
+<rect x="60" y="820" width="320" height="40" rx="14" fill="#e9a23b"/><rect x="60" y="846" width="320" height="14" fill="#e9a23b"/>
+<text x="220.0" y="847" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">散歩</text>
+<text x="76" y="890" font-size="16" fill="#334" >夜の散歩</text>
+<text x="76" y="920" font-size="16" fill="#334" >朝の散歩</text>
+<rect x="420" y="820" width="320" height="150" rx="14" fill="#fff" stroke="#c0392b" stroke-width="2.5"/>
+<rect x="420" y="820" width="320" height="40" rx="14" fill="#c0392b"/><rect x="420" y="846" width="320" height="14" fill="#c0392b"/>
+<text x="580.0" y="847" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">夕方の土手を歩きたい</text>
+<text x="436" y="890" font-size="16" fill="#334" >川沿いを歩きたい</text>
+<text x="436" y="920" font-size="16" fill="#334" >夕方の土手を歩きたい</text>
+<text x="436" y="950" font-size="16" fill="#c0392b" font-weight="bold">河原をのんびり歩きたい（新）</text>
+<text x="790" y="890" font-size="15" fill="#556">箱は増えても、いつも横並</text><text x="790" y="912" font-size="15" fill="#556">び。数えるのは箱ごと</text><text x="790" y="934" font-size="15" fill="#556"></text>
+<text x="500" y="1100" text-anchor="middle" font-size="19" fill="#223">箱の名前が、星空・夜明け・夕空に出る。分析は箱ごとに数える</text>
+</svg>

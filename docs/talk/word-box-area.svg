@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="820" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="820" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">言葉に付けるのは「箱」だけ。区画は箱から分かる</text>
+<text x="160" y="110" text-anchor="middle" font-size="24" font-weight="bold" fill="#223">言葉</text><text x="160" y="138" text-anchor="middle" font-size="16" fill="#556">（何千語）</text>
+<text x="500" y="110" text-anchor="middle" font-size="24" font-weight="bold" fill="#223">箱</text><text x="500" y="138" text-anchor="middle" font-size="16" fill="#556">（45個）</text>
+<text x="840" y="110" text-anchor="middle" font-size="24" font-weight="bold" fill="#223">区画</text><text x="840" y="138" text-anchor="middle" font-size="16" fill="#556">（7つ）</text>
+<rect x="20" y="175" width="300" height="56" rx="28" fill="#dfe9f5" stroke="#9fb6d4"/><text x="170" y="210" text-anchor="middle" font-size="16" fill="#223">夕暮れの河原でギターを弾いた</text>
+<rect x="20" y="265" width="300" height="56" rx="28" fill="#dfe9f5" stroke="#9fb6d4"/><text x="170" y="300" text-anchor="middle" font-size="16" fill="#223">夜にピアノを1曲弾いた</text>
+<rect x="20" y="355" width="300" height="56" rx="28" fill="#dfe9f5" stroke="#9fb6d4"/><text x="170" y="390" text-anchor="middle" font-size="16" fill="#223">秋の山頂でコーヒーを淹れたい</text>
+<rect x="20" y="445" width="300" height="56" rx="28" fill="#dfe9f5" stroke="#9fb6d4"/><text x="170" y="480" text-anchor="middle" font-size="16" fill="#223">焚き火を眺めたい</text>
+<rect x="20" y="535" width="300" height="56" rx="28" fill="#dfe9f5" stroke="#9fb6d4"/><text x="170" y="570" text-anchor="middle" font-size="16" fill="#223">休日にドラマを一気見したい</text>
+<rect x="410" y="200" width="200" height="60" rx="12" fill="#e9a23b"/><text x="510" y="237" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">楽器を弾く</text>
+<line x1="320" y1="203" x2="410" y2="230" stroke="#e9a23b" stroke-width="3"/>
+<line x1="320" y1="293" x2="410" y2="230" stroke="#e9a23b" stroke-width="3"/>
+<rect x="410" y="385" width="200" height="60" rx="12" fill="#e9a23b"/><text x="510" y="422" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">山・自然に出る</text>
+<line x1="320" y1="383" x2="410" y2="415" stroke="#e9a23b" stroke-width="3"/>
+<line x1="320" y1="473" x2="410" y2="415" stroke="#e9a23b" stroke-width="3"/>
+<rect x="410" y="560" width="200" height="60" rx="12" fill="#e9a23b"/><text x="510" y="597" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">映画・ドラマを見る</text>
+<line x1="320" y1="563" x2="410" y2="590" stroke="#e9a23b" stroke-width="3"/>
+<rect x="750" y="200" width="210" height="60" rx="12" fill="#2e8b57"/><text x="855" y="237" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">作る・表す</text>
+<line x1="610" y1="230" x2="750" y2="230" stroke="#2e8b57" stroke-width="3" stroke-dasharray="8 5"/>
+<rect x="750" y="385" width="210" height="60" rx="12" fill="#2e8b57"/><text x="855" y="422" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">体を動かす・自然</text>
+<line x1="610" y1="415" x2="750" y2="415" stroke="#2e8b57" stroke-width="3" stroke-dasharray="8 5"/>
+<rect x="750" y="560" width="210" height="60" rx="12" fill="#2e8b57"/><text x="855" y="597" text-anchor="middle" font-size="18" fill="#fff" font-weight="bold">見る・味わう</text>
+<line x1="610" y1="590" x2="750" y2="590" stroke="#2e8b57" stroke-width="3" stroke-dasharray="8 5"/>
+<text x="365" y="660" text-anchor="middle" font-size="16" fill="#e9a23b" font-weight="bold">札（言葉ごとに付ける）</text>
+<text x="680" y="660" text-anchor="middle" font-size="16" fill="#2e8b57" font-weight="bold">箱の表（45行・1回だけ）</text>
+<rect x="40" y="690" width="920" height="105" rx="16" fill="#f1efe9"/>
+<text x="70" y="728" font-size="18" fill="#223">・言葉に付けるのは、箱の札1つだけ。新しい言葉も同じ</text>
+<text x="70" y="758" font-size="18" fill="#223">・区画は、箱の表を見ればたどれる。区画を変えても、言葉は1つも直さない</text>
+<text x="70" y="786" font-size="16" fill="#556">（区画は夕空の見せ方だけ。分析は箱で数える）</text>
+</svg>

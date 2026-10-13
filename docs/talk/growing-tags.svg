@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1080" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1080" fill="#fbf8f2"/>
+<text x="500" y="48" text-anchor="middle" font-size="30" font-weight="bold" fill="#223">育つ名札</text>
+<text x="500" y="84" text-anchor="middle" font-size="19" fill="#556">あなたが拾った言葉から、名札が枝分かれして増えていく</text>
+<text x="40" y="140" font-size="24" font-weight="bold" fill="#246">① はじめ：言葉は、生まれた名札に入る</text>
+<rect x="80" y="160" width="156" height="44" rx="22" fill="#e9a23b"/><text x="158.0" y="189" text-anchor="middle" font-size="20" fill="#fff">散歩（名札）</text>
+<line x1="110" y1="204" x2="110" y2="248" stroke="#bbb" stroke-width="2"/><line x1="110" y1="248" x2="134" y2="248" stroke="#bbb" stroke-width="2"/>
+<text x="140" y="255" font-size="20" fill="#334" >夜の散歩</text>
+<line x1="110" y1="248" x2="110" y2="292" stroke="#bbb" stroke-width="2"/><line x1="110" y1="292" x2="134" y2="292" stroke="#bbb" stroke-width="2"/>
+<text x="140" y="299" font-size="20" fill="#c0392b" font-weight="bold">川沿いを歩きたい</text>
+<line x1="110" y1="292" x2="110" y2="336" stroke="#bbb" stroke-width="2"/><line x1="110" y1="336" x2="134" y2="336" stroke="#bbb" stroke-width="2"/>
+<text x="140" y="343" font-size="20" fill="#334" >朝の公園で深呼吸をしてみたい</text>
+<text x="600" y="215" font-size="19" fill="#556">ここまでは、いまと同じ。</text>
+<text x="600" y="247" font-size="19" fill="#556">星空には「散歩」が出る。</text>
+<line x1="40" y1="380" x2="960" y2="380" stroke="#ddd"/>
+<text x="40" y="425" font-size="24" font-weight="bold" fill="#246">② 「川沿いを歩きたい」を2日拾った → 分かれる</text>
+<text x="102" y="470" text-anchor="middle" font-size="18" fill="#556">月</text>
+<rect x="80" y="480" width="44" height="36" rx="8" fill="#fff" stroke="#ccc"/>
+<text x="166" y="470" text-anchor="middle" font-size="18" fill="#556">火</text>
+<rect x="144" y="480" width="44" height="36" rx="8" fill="#c0392b" stroke="#ccc"/>
+<text x="230" y="470" text-anchor="middle" font-size="18" fill="#556">水</text>
+<rect x="208" y="480" width="44" height="36" rx="8" fill="#fff" stroke="#ccc"/>
+<text x="294" y="470" text-anchor="middle" font-size="18" fill="#556">木</text>
+<rect x="272" y="480" width="44" height="36" rx="8" fill="#c0392b" stroke="#ccc"/>
+<text x="358" y="470" text-anchor="middle" font-size="18" fill="#556">金</text>
+<rect x="336" y="480" width="44" height="36" rx="8" fill="#fff" stroke="#ccc"/>
+<text x="420" y="505" font-size="19" fill="#223">← 火・木に拾った（2日）</text>
+<rect x="80" y="550" width="156" height="44" rx="22" fill="#e9a23b"/><text x="158.0" y="579" text-anchor="middle" font-size="20" fill="#fff">散歩（名札）</text>
+<line x1="110" y1="594" x2="110" y2="638" stroke="#bbb" stroke-width="2"/><line x1="110" y1="638" x2="134" y2="638" stroke="#bbb" stroke-width="2"/>
+<text x="140" y="645" font-size="20" fill="#334" >夜の散歩</text>
+<line x1="110" y1="638" x2="110" y2="682" stroke="#bbb" stroke-width="2"/><line x1="110" y1="682" x2="134" y2="682" stroke="#bbb" stroke-width="2"/>
+<text x="140" y="689" font-size="20" fill="#334" >朝の公園で深呼吸をしてみたい</text>
+<text x="470" y="590" font-size="34" fill="#c0392b">→</text>
+<rect x="540" y="550" width="336" height="44" rx="22" fill="#c0392b"/><text x="708.0" y="579" text-anchor="middle" font-size="20" fill="#fff">川沿いを歩きたい（新しい名札）</text>
+<text x="545" y="630" font-size="18" fill="#556">分かれる前の火・木も、さかのぼって</text>
+<text x="545" y="656" font-size="18" fill="#556">この名札の日として数える（ゼロからためない）</text>
+<line x1="40" y1="730" x2="960" y2="730" stroke="#ddd"/>
+<text x="40" y="775" font-size="24" font-weight="bold" fill="#246">③ 星空には、名札の言葉そのものが出る</text>
+<rect x="80" y="795" width="840" height="200" rx="16" fill="#1b2340"/>
+<line x1="470" y1="850" x2="720" y2="900" stroke="#ffe7b0" stroke-width="2" stroke-dasharray="6 6" opacity="0.6"/>
+<circle cx="220" cy="870" r="6" fill="#fff6d8"/><text x="220" y="900" text-anchor="middle" font-size="18" fill="#f3ead2">散歩</text>
+<circle cx="470" cy="850" r="6" fill="#fff6d8"/><text x="470" y="880" text-anchor="middle" font-size="18" fill="#f3ead2">川沿いを歩きたい</text>
+<circle cx="720" cy="900" r="6" fill="#fff6d8"/><text x="720" y="930" text-anchor="middle" font-size="18" fill="#f3ead2">音楽</text>
+<circle cx="360" cy="950" r="6" fill="#fff6d8"/><text x="360" y="980" text-anchor="middle" font-size="18" fill="#f3ead2">うれしい</text>
+<text x="600" y="840" font-size="15" fill="#c9c2ad">線は、何日か一緒に拾われて</text>
+<text x="600" y="860" font-size="15" fill="#c9c2ad">偶然を超えたら引かれる</text>
+<text x="500" y="1040" text-anchor="middle" font-size="20" fill="#223">分析する名札 ＝ 画面の星の言葉 なので、食い違わない</text>
+</svg>

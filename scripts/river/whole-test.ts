@@ -90,8 +90,30 @@ function live(p: Person, weeks: number, personal: boolean): Cap[] {
   return out;
 }
 
+// 育つ名札（2026-10-13 の案）：ほぼ同じ意味の小さなまとまり（SUB）を、合わせて GROW 日拾ったら、元の名札から分ける。
+// 分けたまとまりの記録は、さかのぼって、元の名札ではなくまとまりとして数える（箱の中に箱は作らない）
+const SUB: Record<string, string[][]> = {
+  散歩: [['夜の散歩', '朝の散歩'], ['知らない道を歩く', '川沿いを歩く']],
+  料理: [['新しいレシピ', '作り置き'], ['誰かに作る']],
+  写真: [['空の写真', '街角の写真'], ['人を撮る']],
+  読書: [['小説', '読みかけ'], ['古本屋をのぞく']],
+  わくわく: [['待ちきれない', '胸が高鳴る', 'そわそわ楽しい']],
+  ほっとした: [['肩の力が抜けた', '帰ってきた感じ']],
+  疲れ: [['ぐったり', '頭がいっぱい']],
+};
+const SUB_OF = new Map<string, string>();
+for (const subs of Object.values(SUB)) for (const g of subs) for (const w of g) SUB_OF.set(w, '◇' + g[0]);
+const GROW = Number(process.env.GROW ?? 0); // 0 なら使わない
+function alignGrow(caps: Cap[]): { caps: Cap[]; grad: Set<string> } {
+  const days = new Map<string, Set<number>>();
+  for (const c of caps) { const g = SUB_OF.get(c.word); if (g) (days.get(g) ?? days.set(g, new Set()).get(g)!).add(Math.floor(c.capturedAt / 86400000)); }
+  const grad = new Set([...days].filter(([, d]) => d.size >= GROW).map(([g]) => g));
+  return { caps: caps.map((c) => { const g = SUB_OF.get(c.word); return g && grad.has(g) ? { word: g, capturedAt: c.capturedAt } : { word: PARENT.get(c.word) ?? c.word, capturedAt: c.capturedAt }; }), grad };
+}
+
 // 3. そろえる：細かい言葉はいつも元の言葉にも数える。GRAD_DAYS 日以上なら自分としても
 function align(caps: Cap[]): { caps: Cap[]; grad: Set<string> } {
+  if (GROW > 0) return alignGrow(caps);
   const days = new Map<string, Set<number>>();
   for (const c of caps) if (PARENT.has(c.word)) (days.get(c.word) ?? days.set(c.word, new Set()).get(c.word)!).add(Math.floor(c.capturedAt / 86400000));
   const grad = new Set([...days].filter(([, d]) => d.size >= GRAD_DAYS).map(([w]) => w));
@@ -109,6 +131,7 @@ const window = (caps: Cap[], endDay: number, days: number) => {
   return caps.filter((c) => { const d = Math.floor((c.capturedAt - start) / 86400000); return d < endDay && d >= endDay - days; });
 };
 const skyLinks = (caps: Cap[]) => significantLinks(caps).filter((l) => PARENT.get(l.a) !== l.b && PARENT.get(l.b) !== l.a);
+const isNight = (w: string) => w === '夜の散歩' || w === '◇夜の散歩';
 
 const N = Number(process.argv[2] ?? 60);
 if (process.env.DBG) { const c = align(live({ fine: true, seed: 42 }, 12, true)).caps; const days = (w: string) => new Set(c.filter((x) => x.word === w).map((x) => Math.floor(x.capturedAt / 864e5))); const W = days("散歩"), K = days("わくわく"); let hit = 0; for (const d of W) if (K.has(d + 1)) hit++; console.log("散歩の日", W.size, "わくわくの日", K.size, "散歩の次の日にわくわく", hit); console.log(genkiSourcesTested(c, 1, 0).slice(0, 5).map((s) => `${s.word}→${s.to} z${s.z.toFixed(1)} w${s.weight}`)); process.exit(0); }
@@ -134,7 +157,7 @@ function many(name: string, fine: boolean, personal: boolean, weeks: number) {
     const caps = live({ fine, seed: 1000 + i }, weeks, personal);
     const dawn = align(window(caps, weeks * 7, 84));
     const s = genkiSourcesTested(dawn.caps).map((x) => x.word);
-    if (s.length) any++; if (s.includes('散歩')) walk++; if (s.includes('夜の散歩')) night++;
+    if (s.length) any++; if (s.includes('散歩')) walk++; if (s.some(isNight)) night++;
     lines += skyLinks(align(window(caps, weeks * 7, 42)).caps).length; grads += dawn.grad.size;
   }
   console.log(`${name.padEnd(26)} | 源が出た ${pct(any).padStart(4)}（散歩 ${pct(walk)}・夜の散歩 ${pct(night)}）| 星空の線 ${(lines / N).toFixed(1)}本 | 自分の言葉で出る ${(grads / N).toFixed(1)}語`);

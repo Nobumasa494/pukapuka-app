@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1060" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="1060" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">どこで「その人向け」になるか</text>
+<text x="500" y="80" text-anchor="middle" font-size="18" fill="#556">言葉の棚はみんな同じ。流す量を、自分の記録で変える</text>
+<rect x="40" y="110" width="400" height="330" rx="16" fill="#fff" stroke="#999" stroke-width="2"/>
+<text x="240" y="148" text-anchor="middle" font-size="22" font-weight="bold" fill="#555">共通の棚（みんな同じ）</text>
+<rect x="60" y="175" width="360" height="50" rx="10" fill="#f3f0ea"/><text x="80" y="207" font-size="19" font-weight="bold" fill="#333">楽器</text><text x="140" y="207" font-size="16" fill="#666">ギターを弾いた・ピアノ…</text>
+<rect x="60" y="237" width="360" height="50" rx="10" fill="#f3f0ea"/><text x="80" y="269" font-size="19" font-weight="bold" fill="#333">料理</text><text x="140" y="269" font-size="16" fill="#666">パンを焼きたい・餃子…</text>
+<rect x="60" y="299" width="360" height="50" rx="10" fill="#f3f0ea"/><text x="80" y="331" font-size="19" font-weight="bold" fill="#333">山</text><text x="140" y="331" font-size="16" fill="#666">山頂でコーヒー・キャンプ…</text>
+<rect x="60" y="361" width="360" height="50" rx="10" fill="#f3f0ea"/><text x="80" y="393" font-size="19" font-weight="bold" fill="#333">本</text><text x="140" y="393" font-size="16" fill="#666">古本屋をのぞく・小説…</text>
+<text x="240" y="430" text-anchor="middle" font-size="15" fill="#888">AI が作った言葉が、箱ごとにしまってある</text>
+<rect x="560" y="110" width="400" height="160" rx="16" fill="#fff" stroke="#e9a23b" stroke-width="2.5"/>
+<text x="760" y="142" text-anchor="middle" font-size="19" font-weight="bold" fill="#e9a23b">Aさんの記録（Aさんだけ）</text>
+<text x="585" y="176" font-size="15" fill="#333">楽器</text>
+<rect x="635" y="163" width="24" height="16" rx="3" fill="#e9a23b"/>
+<rect x="665" y="163" width="24" height="16" rx="3" fill="#e9a23b"/>
+<rect x="695" y="163" width="24" height="16" rx="3" fill="#e9a23b"/>
+<rect x="725" y="163" width="24" height="16" rx="3" fill="#e9a23b"/>
+<rect x="755" y="163" width="24" height="16" rx="3" fill="#e9a23b"/>
+<text x="585" y="202" font-size="15" fill="#333">料理</text>
+<rect x="635" y="189" width="24" height="16" rx="3" fill="#e9a23b"/>
+<text x="585" y="228" font-size="15" fill="#333">山</text>
+<rect x="635" y="215" width="24" height="16" rx="3" fill="#e9a23b"/>
+<rect x="665" y="215" width="24" height="16" rx="3" fill="#e9a23b"/>
+<rect x="695" y="215" width="24" height="16" rx="3" fill="#e9a23b"/>
+<text x="585" y="254" font-size="15" fill="#333">本</text>
+<text x="910" y="260" text-anchor="end" font-size="13" fill="#888">■＝拾った日</text>
+<rect x="560" y="290" width="400" height="160" rx="16" fill="#fff" stroke="#4a8fd0" stroke-width="2.5"/>
+<text x="760" y="322" text-anchor="middle" font-size="19" font-weight="bold" fill="#4a8fd0">Bさんの記録（Bさんだけ）</text>
+<text x="585" y="356" font-size="15" fill="#333">楽器</text>
+<text x="585" y="382" font-size="15" fill="#333">料理</text>
+<rect x="635" y="369" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<rect x="665" y="369" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<rect x="695" y="369" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<rect x="725" y="369" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<rect x="755" y="369" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<text x="585" y="408" font-size="15" fill="#333">山</text>
+<rect x="635" y="395" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<text x="585" y="434" font-size="15" fill="#333">本</text>
+<rect x="635" y="421" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<rect x="665" y="421" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<rect x="695" y="421" width="24" height="16" rx="3" fill="#4a8fd0"/>
+<text x="910" y="440" text-anchor="end" font-size="13" fill="#888">■＝拾った日</text>
+<text x="500" y="520" text-anchor="middle" font-size="22" font-weight="bold" fill="#c0392b">棚 ＋ 自分の記録 → 流す量を決める（ここが「その人向け」）</text>
+<text x="500" y="555" text-anchor="middle" font-size="17" fill="#556">よく拾う箱の言葉を多めに流す。10個に2個だけはランダム</text>
+<rect x="40" y="590" width="450" height="380" rx="16" fill="#2f5f86"/>
+<text x="265" y="630" text-anchor="middle" font-size="22" font-weight="bold" fill="#fff">Aさんの川</text>
+<ellipse cx="160" cy="700" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#e9a23b" stroke-width="2"/><text x="160" y="706" text-anchor="middle" font-size="15" fill="#fff">夕暮れにギターを弾いた</text>
+<ellipse cx="360" cy="755" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#e9a23b" stroke-width="2"/><text x="360" y="761" text-anchor="middle" font-size="15" fill="#fff">山頂でコーヒーを飲みたい</text>
+<ellipse cx="160" cy="810" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#e9a23b" stroke-width="2"/><text x="160" y="816" text-anchor="middle" font-size="15" fill="#fff">ウクレレを鳴らしたい</text>
+<ellipse cx="360" cy="865" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#e9a23b" stroke-width="2"/><text x="360" y="871" text-anchor="middle" font-size="15" fill="#fff">焚き火を眺めたい</text>
+<ellipse cx="160" cy="920" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#e9a23b" stroke-width="2"/><text x="160" y="926" text-anchor="middle" font-size="15" fill="#fff">パンを焼きたい</text>
+<rect x="510" y="590" width="450" height="380" rx="16" fill="#2f5f86"/>
+<text x="735" y="630" text-anchor="middle" font-size="22" font-weight="bold" fill="#fff">Bさんの川</text>
+<ellipse cx="630" cy="700" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#4a8fd0" stroke-width="2"/><text x="630" y="706" text-anchor="middle" font-size="15" fill="#fff">手作り餃子を包んだ</text>
+<ellipse cx="830" cy="755" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#4a8fd0" stroke-width="2"/><text x="830" y="761" text-anchor="middle" font-size="15" fill="#fff">週末にパンを焼きたい</text>
+<ellipse cx="630" cy="810" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#4a8fd0" stroke-width="2"/><text x="630" y="816" text-anchor="middle" font-size="15" fill="#fff">古本屋をのぞきたい</text>
+<ellipse cx="830" cy="865" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#4a8fd0" stroke-width="2"/><text x="830" y="871" text-anchor="middle" font-size="15" fill="#fff">好きな小説を読み返した</text>
+<ellipse cx="630" cy="920" rx="110" ry="26" fill="rgba(255,255,255,0.18)" stroke="#4a8fd0" stroke-width="2"/><text x="630" y="926" text-anchor="middle" font-size="15" fill="#fff">山頂でコーヒーを飲みたい</text>
+<text x="500" y="1010" text-anchor="middle" font-size="19" fill="#223">同じ棚から流れていても、Aさんは楽器と山、Bさんは料理と本の言葉が多い</text>
+</svg>

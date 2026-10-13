@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="760" font-family="Noto Sans CJK JP, sans-serif"><rect width="1000" height="760" fill="#fbf8f2"/>
+<text x="500" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#223">AI を使うのは、言葉を書くときだけ</text>
+<rect x="300" y="66" width="22" height="16" rx="4" fill="#4a8fd0"/><text x="328" y="80" font-size="16" fill="#223">計算（AI なし・無料）</text>
+<rect x="560" y="66" width="22" height="16" rx="4" fill="#c0392b"/><text x="588" y="80" font-size="16" fill="#223">AI（言葉を書く・少しお金）</text>
+<text x="40" y="168" font-size="21" font-weight="bold" fill="#223">最初に1回</text>
+<rect x="230" y="120" width="220" height="90" rx="14" fill="#c0392b"/>
+<text x="340" y="160" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">AI で棚の言葉を作る</text><text x="340" y="188" text-anchor="middle" font-size="14" fill="#fff">箱ごと100語</text>
+<text x="40" y="338" font-size="21" font-weight="bold" fill="#223">毎週1回（庭師）</text>
+<rect x="230" y="290" width="220" height="90" rx="14" fill="#4a8fd0"/>
+<text x="340" y="330" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">全員分を足す</text><text x="340" y="358" text-anchor="middle" font-size="14" fill="#fff">言葉ごとの割合</text>
+<text x="465" y="342" text-anchor="middle" font-size="22" fill="#aaa">→</text>
+<rect x="480" y="290" width="220" height="90" rx="14" fill="#4a8fd0"/>
+<text x="590" y="330" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">消す・増やすを決める</text><text x="590" y="358" text-anchor="middle" font-size="14" fill="#fff">割合で</text>
+<text x="715" y="342" text-anchor="middle" font-size="22" fill="#aaa">→</text>
+<rect x="730" y="290" width="220" height="90" rx="14" fill="#c0392b"/>
+<text x="840" y="330" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">AI で新しい言葉を書く</text><text x="840" y="358" text-anchor="middle" font-size="14" fill="#fff">箱ごとに1回</text>
+<text x="40" y="508" font-size="21" font-weight="bold" fill="#223">いつも（その人）</text>
+<rect x="230" y="460" width="220" height="90" rx="14" fill="#4a8fd0"/>
+<text x="340" y="500" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">その人の記録を見る</text><text x="340" y="528" text-anchor="middle" font-size="14" fill="#fff">よく拾う箱</text>
+<text x="465" y="512" text-anchor="middle" font-size="22" fill="#aaa">→</text>
+<rect x="480" y="460" width="220" height="90" rx="14" fill="#4a8fd0"/>
+<text x="590" y="500" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">川に流す言葉を決める</text><text x="590" y="528" text-anchor="middle" font-size="14" fill="#fff">興味・知らない分野・気持ち</text>
+<text x="715" y="512" text-anchor="middle" font-size="22" fill="#aaa">→</text>
+<rect x="730" y="460" width="220" height="90" rx="14" fill="#4a8fd0"/>
+<text x="840" y="500" text-anchor="middle" font-size="17" font-weight="bold" fill="#fff">星空・夜明け・夕空</text><text x="840" y="528" text-anchor="middle" font-size="14" fill="#fff">箱で数える</text>
+<rect x="40" y="630" width="920" height="110" rx="16" fill="#f1efe9"/>
+<text x="70" y="672" font-size="19" fill="#223">その人の川・画面（いちばん下の段）は、すべて計算。AI は使わない。</text>
+<text x="70" y="710" font-size="17" fill="#556">AI の費用：最初 約30円 ＋ 毎週 約1.4円（月 約6円）。人が何人に増えても同じ。</text>
+</svg>
