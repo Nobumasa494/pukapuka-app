@@ -80,7 +80,8 @@ export function aggregate(captures: { word: string; strength: number }[]): WordS
   const out: WordStat[] = [];
   const grouped = isGrouped();
   for (const [word, { sum, count }] of map) {
-    const category: Cat | undefined = grouped ? groupOf(word) : categoryOf(word);
+    // 倉庫で動いていても、星空の見本（前の決まった言葉）は、前の種類で数える（グループがない言葉は前の種類へ。2026-10-14、見本が見えなくなっていた）
+    const category: Cat | undefined = grouped ? (groupOf(word) ?? categoryOf(word)) : categoryOf(word);
     if (!category) continue;
     out.push({ word, category, count, avgStrength: sum / count });
   }
