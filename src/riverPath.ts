@@ -11,7 +11,7 @@ export type VideoRect = { left: number; top: number; width: number; height: numb
 const q = (name: string) => (typeof window !== 'undefined' && typeof window.location?.search === 'string' ? Number(new RegExp(`[?&]${name}=([\\d.]+)`).exec(window.location.search)?.[1]) : NaN);
 const qz = q('zoom'), qs = q('shift');
 export const VIDEO_ZOOM = Number.isFinite(qz) && qz >= 1 && qz <= 1.5 ? qz : 1.0;
-export const VIDEO_SHIFT = Number.isFinite(qs) && qs >= 0 && qs <= 150 ? qs : 110;
+export const VIDEO_SHIFT = Number.isFinite(qs) && qs >= 0 && qs <= 150 ? qs : 0;
 export const BOTTOM_COLOR = 'rgb(26,82,120)'; // 動画の下の端の水の色（river_bg_poster.jpg の最下段の平均）
 export function coverRect(screenW: number, screenH: number): VideoRect {
   const scale = Math.max(screenW / VIDEO_W, screenH / VIDEO_H) * VIDEO_ZOOM;
