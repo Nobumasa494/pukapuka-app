@@ -41,6 +41,7 @@ def main():
     if pressed is not None:
         out += f'  変わるまで {round((react - pressed) * 1000)}ms 以内'
     out += f'  いちばん長く止まった {stall}ms'
+    out += f'  （録画の{round(react, 2)}秒に変わった。同じ条件の前後で比べる）'
     print(out)
 
 main()

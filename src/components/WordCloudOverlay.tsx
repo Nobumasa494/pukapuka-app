@@ -361,23 +361,23 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       </Text>
 
       {showSample ? (
-        <Pressable style={styles.sampleClose} hitSlop={14} onPress={() => setShowSample(false)} accessibilityLabel="見本をとじる">
+        <Pressable style={({ pressed }) => [styles.sampleClose, pressed && styles.pressed]} hitSlop={14} onPress={() => setShowSample(false)} accessibilityLabel="見本をとじる">
           <Text style={styles.sampleCloseText}>×</Text>
         </Pressable>
       ) : (
-        <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
+        <Pressable style={({ pressed }) => [styles.back, pressed && styles.pressed]} hitSlop={16} onPress={onBack}>
           <Text style={styles.backText}>← 水辺へ</Text>
         </Pressable>
       )}
 
       {!showSample && (
-        <Pressable style={styles.next} hitSlop={16} onPress={() => onOpenArchive()}>
+        <Pressable style={({ pressed }) => [styles.next, pressed && styles.pressed]} hitSlop={16} onPress={() => onOpenArchive()}>
           <Text style={styles.nextText}>星空へ →</Text>
         </Pressable>
       )}
       {/* 見本：言葉が最大（30語）の夕空で、つまむ・なぞるを試せる（倉庫で動いているときだけ） */}
       {!showSample && isGrouped() && (
-        <Pressable style={styles.sampleBtn} hitSlop={12} onPress={() => setShowSample(true)}>
+        <Pressable style={({ pressed }) => [styles.sampleBtn, pressed && styles.pressed]} hitSlop={12} onPress={() => setShowSample(true)}>
           <Text style={styles.sampleBtnText}>見本を見る</Text>
         </Pressable>
       )}
@@ -386,6 +386,8 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
 }
 
 const styles = StyleSheet.create({
+  // 触れた瞬間に、ぎゅっと沈んで暗くなる（離したときに動くので、押した感じを先に返す。2026-10-14、ユーザー「反応が遅い」）
+  pressed: { opacity: 0.5, transform: [{ scale: 0.92 }] },
   sampleBtn: { position: 'absolute', bottom: 28, right: 58, backgroundColor: 'rgba(14,18,48,0.5)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.5)', zIndex: 10 },
   sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,1)', letterSpacing: 1 },
   sampleClose: { position: 'absolute', top: 52, left: 20, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },

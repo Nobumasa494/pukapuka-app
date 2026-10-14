@@ -14,7 +14,7 @@ trap '$A shell settings put system show_touches 0' EXIT
 press() {
   $A shell "screenrecord --time-limit ${8:-5} --size 540x1200 /sdcard/yz.mp4" &
   sleep 1.2
-  if [ "$9" = swipe ]; then $A shell input swipe "$2" "$3" "$2" $(( $3 + 300 )) 500; else tap "$2" "$3"; fi; wait
+  if [ "$9" = swipe ]; then $A shell input swipe "$2" "$3" "$2" $(( $3 + 300 )) 500; else $A shell input swipe "$2" "$3" "$2" "$3" "${HOLD:-120}"; fi; wait  # 本物の指のように、おいて離すまで HOLD ミリ秒（ふつう約120）
   $A pull -q /sdcard/yz.mp4 "$OUT/$1.mp4" >/dev/null
   # 録画は半分の大きさなので、座標も半分にする
   local r; r=$(python3 latency.py "$OUT/$1.mp4" $(( $2/2 )) $(( $3/2 )) $(( $4/2 )) $(( $5/2 )) $(( $6/2 )) $(( $7/2 )))
