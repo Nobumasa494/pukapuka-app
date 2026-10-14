@@ -325,11 +325,12 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       {placed.map((p) => {
         const [r, g, b] = colorOf(p.category);
         return (
-          <Pressable key={p.word} style={{ position: 'absolute', left: p.x, top: p.y }} hitSlop={4} onPress={() => onOpenArchive(p.word)}>
+          // 言葉を押しても、星空へは行かない（決定 2026-10-14、ユーザー「夕空の画面を押したら、星空に行く流れはなくしてほしい」）。星空へは、右上の「星空へ →」から
+          <View key={p.word} style={{ position: 'absolute', left: p.x, top: p.y }}>
             <Text style={[styles.word, { fontSize: p.size, lineHeight: p.size * 1.4, color: `rgba(${r},${g},${b},${p.textOpacity})` }]}>
               {splitBubble(p.word)}
             </Text>
-          </Pressable>
+          </View>
         );
       })}
 
