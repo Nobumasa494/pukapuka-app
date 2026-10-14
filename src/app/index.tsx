@@ -1309,9 +1309,9 @@ export default function Home() {
       {/* 流れの速さ。水辺だけ */}
       <SpeedControl speed={speed} visible={atRiver && !diaryOpen} />
 
-      {/* 音のオン・オフ。どの画面でも右下の同じ場所 */}
+      {/* 音のオン・オフ。水辺は左上（泡が下を流れるため。2026-10-14）、ほかの画面は右下（左上に「← 戻る」があるため） */}
       <Pressable
-        style={styles.soundBtn}
+        style={atRiver ? styles.soundBtnTop : styles.soundBtn}
         hitSlop={12}
         onPress={() => setMuted((m) => !m)}
         accessibilityRole="button"
@@ -1379,6 +1379,7 @@ const styles = StyleSheet.create({
   lookBackMenu: { position: 'absolute', top: 86, right: 12, alignItems: 'flex-end', gap: 4, zIndex: 10 },
   lookBackBtn: { paddingVertical: 8, paddingHorizontal: 10 },
   lookBackItem: { fontSize: 16, color: '#fff8ee', textShadowColor: 'rgba(70,25,45,0.65)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  soundBtnTop: { position: 'absolute', top: 54, left: 16, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundBtn: { position: 'absolute', bottom: 34, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
   soundIconOff: { color: 'rgba(255,246,232,0.35)' },

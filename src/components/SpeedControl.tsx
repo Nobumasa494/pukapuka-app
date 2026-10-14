@@ -1,5 +1,5 @@
 // 流れの速さのバー（2026-10-11 ユーザー「今の川の流れが基準として、もう少し早めることができるバーがほしい」）。
-// 右下の ♪ の上の川の印（3本の波線）を押すと、その左に出て、しばらくさわらないと消える。今の速さ（1倍）〜2倍。選んだ速さは端末に覚える
+// 左上の ♪ の下の川の印（3本の波線）を押すと、その右に出て、しばらくさわらないと消える。今の速さ（1倍）〜2倍。選んだ速さは端末に覚える
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -102,9 +102,10 @@ function Waves({ on }: { on: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  btn: { position: 'absolute', bottom: 70, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  // 左上（♪の下。縦に並べる。ユーザー「左上のマークは縦でいい」）。泡が下を流れるので、下の端から上へ移した（決定 2026-10-14、ユーザー「川の速さや音楽は左上に移動する」）
+  btn: { position: 'absolute', top: 90, left: 16, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   panel: {
-    position: 'absolute', bottom: 66, right: 52, zIndex: 21, flexDirection: 'row', alignItems: 'center', gap: 10,
+    position: 'absolute', top: 86, left: 54, zIndex: 21, flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(20,40,60,0.45)',
   },
   label: { fontSize: 11, color: 'rgba(235,242,248,0.75)', letterSpacing: 1 },
