@@ -339,8 +339,11 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     const fadeIn = Math.min(1, b.age / SURFACE_SEC);
     // 泡の下の方がヒント文に近づいたら消える（中心で判定すると大きな泡が文字に重なる）
     const fadeOut = NO_FADE ? 1 : Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
+    // 空へ昇る（夕空へ移る）とき、画面の端で半分切れている泡は、切れたまま昇らず、すぐ消える（決定 2026-10-14、ユーザー「やめてほしい」）
+    const cut = pl.x - pl.size / 2 < 0 || pl.x + pl.size / 2 > P.width;
+    const riseOut = cut ? Math.max(0, 1 - rise.value * 60) : 1;
     return {
-      opacity: (0.8 + 0.2 * pl.t) * Math.min(fadeIn, fadeOut),
+      opacity: (0.8 + 0.2 * pl.t) * Math.min(fadeIn, fadeOut) * riseOut,
       transform: [{ translateX: pl.x - base / 2 }, { translateY: pl.y - base / 2 }, { scale: pl.size / base }],
     };
   });
