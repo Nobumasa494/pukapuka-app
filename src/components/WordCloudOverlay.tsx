@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { WORD_LIST } from '../words';
 import { useAiWords } from '../aiWords';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { Image, StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -15,7 +15,6 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { colorOf, isGrouped, legend, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, withRates, type Placed, type WordStat } from '../wordCloud';
 import { useCaptures, useShownCounts } from '../useCaptures';
 import { splitBubble } from '../bubbleText';
@@ -26,6 +25,7 @@ import type { Cat } from '../wordCloud';
 // 拾ったことば（ワードクラウド）。川の画面の上に重ねて出す。背景（空のループ動画）は川の画面の1本のプレーヤーが流す
 
 const TWINKLE_MS = 2400;
+const HALO_IMAGE = require('../../assets/glow/halo.png');
 const DEBUG_ZOOM = 1; // 試験用。スマホで、つまめなくても、拡大したときの重さ・なぞりを確かめるときだけ 2 にする（2026-10-14 に 2 で確かめた：コマ落ち 1.3%・CPU 53%）
 
 // カテゴリの色を白へ寄せる（光っている瞬間の文字の色）
@@ -51,25 +51,20 @@ function HaloLayer({ group, clock, placed, width, height }: {
 }) {
   const style = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * twinkle(clock.get() + group / SPARKLE_GROUPS) }));
   const mine = placed.filter((p) => p.group === group && p.haloOpacity > 0);
+  // 光は、白い丸いぼかしの画像1枚に色をつけて置く（前は SVG のぼかしを言葉ごとに作っていて、見本の出し入れで画面が約0.1秒止まった。
+  // 画像にして約0.04秒。形は同じ：中心 → 45% で半分 → 端で0。2026-10-14、/pukapuka-yuzora）
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-      <Svg width={width} height={height}>
-        <Defs>
-          {mine.map((p) => {
-            const [r, g, b] = colorOf(p.category);
-            return (
-              <RadialGradient key={p.word} id={`halo-${group}-${p.word}`} cx="50%" cy="50%" r="50%">
-                <Stop offset="0" stopColor={`rgb(${r},${g},${b})`} stopOpacity={p.haloOpacity} />
-                <Stop offset="0.45" stopColor={`rgb(${r},${g},${b})`} stopOpacity={p.haloOpacity * 0.5} />
-                <Stop offset="1" stopColor={`rgb(${r},${g},${b})`} stopOpacity={0} />
-              </RadialGradient>
-            );
-          })}
-        </Defs>
-        {mine.map((p) => (
-          <Circle key={p.word} cx={p.x + p.w / 2} cy={p.y + p.h / 2} r={p.haloR} fill={`url(#halo-${group}-${p.word})`} />
-        ))}
-      </Svg>
+    <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width, height }, style]} pointerEvents="none">
+      {mine.map((p) => {
+        const [r, g, b] = colorOf(p.category);
+        return (
+          <Image
+            key={p.word}
+            source={HALO_IMAGE}
+            style={{ tintColor: `rgb(${r},${g},${b})`, position: 'absolute', left: p.x + p.w / 2 - p.haloR, top: p.y + p.h / 2 - p.haloR, width: p.haloR * 2, height: p.haloR * 2, opacity: p.haloOpacity }}
+          />
+        );
+      })}
     </Animated.View>
   );
 }
