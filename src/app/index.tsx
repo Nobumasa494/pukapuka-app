@@ -340,7 +340,10 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     // 泡の下の方がヒント文に近づいたら消える（中心で判定すると大きな泡が文字に重なる）
     const fadeOut = NO_FADE ? 1 : Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
     // 空へ昇る（夕空へ移る）とき、画面の端で半分切れている泡は、切れたまま昇らず、すぐ消える（決定 2026-10-14、ユーザー「やめてほしい」）
-    const cut = pl.x - pl.size / 2 < 0 || pl.x + pl.size / 2 > P.width;
+    // ゆらゆら（横に ±SWAY_PX）と、ふちのにじみの分も見込んで、少しでも端にかかっていたら切れているとみなす（最初は端ぴったりで見たので、ちょっと切れた泡が残った）
+    const edgeMargin = SWAY_PX + 8;
+    // 下の端も同じ（泡が下で消えずに流れる形にしたので、下で切れた泡が、そのまま昇ってきた）
+    const cut = pl.x - pl.size / 2 < edgeMargin || pl.x + pl.size / 2 > P.width - edgeMargin || pl.y + pl.size / 2 > P.height - edgeMargin;
     const riseOut = cut ? Math.max(0, 1 - rise.value * 60) : 1;
     return {
       opacity: (0.8 + 0.2 * pl.t) * Math.min(fadeIn, fadeOut) * riseOut,
