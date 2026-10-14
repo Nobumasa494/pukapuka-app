@@ -26,7 +26,7 @@ import SpeedControl from '../components/SpeedControl';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { bubbleLen, splitBubble } from '../bubbleText';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
-import { BOTTOM_COLOR, CLOUD_SHIFT, TOP_COLOR, type VideoRect } from '../riverPath';
+import { BOTTOM_COLOR, type VideoRect } from '../riverPath';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -1211,13 +1211,6 @@ export default function Home() {
   const uiStyle = useAnimatedStyle(() => ({ opacity: riverUi.value }));
   const cloudUiStyle = useAnimatedStyle(() => ({ opacity: cloudUi.value }));
   const atRiver = stage === 'river';
-  // 夕空のときだけ、背景を下にずらす（空の置き場を広げる）。ほかの画面・つなぎの動画では 0 に戻す
-  const bgShift = useSharedValue(0);
-  useEffect(() => {
-    bgShift.set(withTiming(stage === 'cloud' ? CLOUD_SHIFT : 0, { duration: 500 }));
-  }, [stage, bgShift]);
-  const bgShiftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bgShift.value }] }));
-  const topFillStyle = useAnimatedStyle(() => ({ height: bgShift.value + 4 }));
 
   const { rect } = P;
   const fill = { position: 'absolute' as const, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
@@ -1226,15 +1219,11 @@ export default function Home() {
     <View style={styles.container}>
       {/* 動画を上にずらしたときの、空いた下の部分。水の色でのばす（動画の下の端の色） */}
       <LinearGradient colors={[BOTTOM_COLOR, BOTTOM_COLOR]} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: Math.max(0, height - (rect.top + rect.height)) + 4, pointerEvents: 'none' }} />
-      {/* 夕空で背景を下にずらしたときの、空いた上の部分。動画の上の端の色でのばす */}
-      <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, backgroundColor: TOP_COLOR }, topFillStyle]} />
       {/* 背景の動画（1本）。その上に、差し替えの瞬間を隠す静止画2枚 */}
-      <Animated.View style={[StyleSheet.absoluteFill, bgShiftStyle]} pointerEvents="none">
-        <BackgroundVideo player={player} rect={rect} onFirstFrame={onFirstFrame} />
-        <Animated.Image source={RIVER_POSTER} style={[fill, coverRiverStyle]} />
-        <Animated.Image source={CLOUD_BG} style={[fill, coverCloudStyle]} />
-        <Animated.Image source={NIGHT_BG} style={[fill, coverNightStyle]} />
-      </Animated.View>
+      <BackgroundVideo player={player} rect={rect} onFirstFrame={onFirstFrame} />
+      <Animated.Image source={RIVER_POSTER} style={[fill, coverRiverStyle]} />
+      <Animated.Image source={CLOUD_BG} style={[fill, coverCloudStyle]} />
+      <Animated.Image source={NIGHT_BG} style={[fill, coverNightStyle]} />
       {/* 画面下の文字が読めるよう、下端だけ少し暗く */}
       <LinearGradient
         colors={['rgba(14,30,48,0)', 'rgba(14,30,48,0.45)']}
