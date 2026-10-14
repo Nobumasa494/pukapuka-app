@@ -1317,7 +1317,9 @@ export default function Home() {
         accessibilityRole="button"
         accessibilityLabel={muted ? '音を出す' : '音を消す'}
       >
-        <Text style={[styles.soundIcon, muted && styles.soundIconOff]}>♪</Text>
+        {/* 水辺の左上では、うっすら光る丸を後ろに置いて目立たせる（2026-10-14、ユーザー「少し目立つようにして、光らせる」） */}
+        {atRiver && !muted && <View pointerEvents="none" style={styles.iconGlow} />}
+        <Text style={[styles.soundIcon, atRiver && styles.soundIconBright, muted && styles.soundIconOff]}>♪</Text>
         {muted && <View style={styles.soundSlash} />}
       </Pressable>
     </View>
@@ -1382,6 +1384,8 @@ const styles = StyleSheet.create({
   soundBtnTop: { position: 'absolute', top: 54, left: 16, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundBtn: { position: 'absolute', bottom: 34, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
+  soundIconBright: { fontSize: 21, color: 'rgba(255,244,222,0.98)', textShadowColor: 'rgba(255,205,130,0.95)', textShadowRadius: 9 },
+  iconGlow: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,222,160,0.2)', boxShadow: '0 0 14px 4px rgba(255,214,150,0.45)' },
   soundIconOff: { color: 'rgba(255,246,232,0.35)' },
   soundSlash: { position: 'absolute', width: 20, height: 1, backgroundColor: 'rgba(255,246,232,0.5)', transform: [{ rotate: '-45deg' }] },
   // 泡が下を流れるので、泡の上でも読めるよう、うすい影を付ける
