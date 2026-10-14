@@ -7,10 +7,12 @@ import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDecay,
   withRepeat,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { colorOf, isGrouped, legend, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, withRates, type Placed } from '../wordCloud';
 import { useCaptures, useShownCounts } from '../useCaptures';
@@ -143,13 +145,110 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
     [captures, shown, width, height, aiVersion],
   );
 
+  // つまんで拡大・縮小、なぞって動かす（2026-10-14、ユーザー「夕空文字が小さいのがあるから、ズームできたり、上下左右に移動できたりしたい。星空みたいに」）。
+  // 言葉と光は、1枚の大きな面にのせて、その面を拡大・移動する。見える範囲は、見出しの下から、木のてっぺんの手前まで（窓）。
+  // 面の点 p は、画面の (tx + k·p) に来る。窓の外には出さない（k が 1 のときは動かない）。計算は星空（NightOverlay）と同じ考え方
+  const WIN_TOP = 84;
+  const WIN_BOTTOM = Math.round(height * 0.62);
+  const MAX_SCALE = 2.6;
+  const sc = useSharedValue(1);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const s0 = useSharedValue(1);
+  const x0 = useSharedValue(0);
+  const y0 = useSharedValue(0);
+  const cx0 = useSharedValue(0);
+  const cy0 = useSharedValue(0);
+  const loX = (k: number) => { 'worklet'; return width * (1 - k); };
+  const hiX = () => { 'worklet'; return 0; };
+  const loY = (k: number) => { 'worklet'; return WIN_BOTTOM * (1 - k); };
+  const hiY = (k: number) => { 'worklet'; return WIN_TOP * (1 - k); };
+  const clampV = (v: number, lo: number, hi: number) => { 'worklet'; return Math.min(hi, Math.max(lo, v)); };
+  const rubber = (v: number, lo: number, hi: number) => {
+    'worklet';
+    if (v < lo) return lo - (lo - v) * 0.3;
+    if (v > hi) return hi + (v - hi) * 0.3;
+    return v;
+  };
+  const rubberScale = (k: number) => {
+    'worklet';
+    if (k < 1) return Math.pow(k, 0.3);
+    if (k > MAX_SCALE) return MAX_SCALE * Math.pow(k / MAX_SCALE, 0.3);
+    return k;
+  };
+  const SETTLE = { duration: 260, easing: Easing.out(Easing.cubic) };
+  // 言葉が入れかわったら、拡大をもとに戻す
+  useEffect(() => {
+    cancelAnimation(sc); cancelAnimation(tx); cancelAnimation(ty);
+    sc.set(1); tx.set(0); ty.set(0);
+  }, [placed, sc, tx, ty]);
+  const pan = Gesture.Pan()
+    .minDistance(8)
+    .maxPointers(1)
+    .onStart(() => {
+      cancelAnimation(tx); cancelAnimation(ty);
+      x0.set(tx.get()); y0.set(ty.get());
+    })
+    .onUpdate((e) => {
+      const k = sc.get();
+      tx.set(rubber(x0.get() + e.translationX, loX(k), hiX()));
+      ty.set(rubber(y0.get() + e.translationY, loY(k), hiY(k)));
+    })
+    .onEnd((e, success) => {
+      if (!success) return;
+      const k = sc.get();
+      const settle = (v: SharedValue<number>, lo: number, hi: number, velocity: number) => {
+        const now = v.get();
+        if (now < lo || now > hi) v.set(withTiming(clampV(now, lo, hi), SETTLE));
+        else v.set(withDecay({ velocity, deceleration: 0.996, clamp: [lo, hi] }));
+      };
+      settle(tx, loX(k), hiX(), e.velocityX);
+      settle(ty, loY(k), hiY(k), e.velocityY);
+    });
+  const pinch = Gesture.Pinch()
+    .onStart((e) => {
+      cancelAnimation(sc); cancelAnimation(tx); cancelAnimation(ty);
+      s0.set(sc.get() / e.scale);
+      cx0.set((e.focalX - tx.get()) / sc.get());
+      cy0.set((e.focalY - ty.get()) / sc.get());
+      x0.set(e.focalX); y0.set(e.focalY);
+    })
+    .onUpdate((e) => {
+      const k = rubberScale(s0.get() * e.scale);
+      sc.set(k);
+      tx.set(e.focalX - cx0.get() * k);
+      ty.set(e.focalY - cy0.get() * k);
+      x0.set(e.focalX); y0.set(e.focalY);
+    })
+    .onEnd(() => {
+      const k = clampV(sc.get(), 1, MAX_SCALE);
+      sc.set(withTiming(k, SETTLE));
+      tx.set(withTiming(clampV(x0.get() - cx0.get() * k, loX(k), hiX()), SETTLE));
+      ty.set(withTiming(clampV(y0.get() - cy0.get() * k, loY(k), hiY(k)), SETTLE));
+    });
+  const gesture = Gesture.Simultaneous(pan, pinch);
+  const canvasStyle = useAnimatedStyle(() => {
+    const k = sc.get();
+    return {
+      transform: [
+        { translateX: tx.get() - (width / 2) * (1 - k) },
+        { translateY: ty.get() - (height / 2) * (1 - k) },
+        { scale: k },
+      ],
+    };
+  });
+
   return (
+    <GestureDetector gesture={gesture}>
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
         <Text style={styles.title}>夕空</Text>
       </View>
 
+      {/* 言葉と光を、拡大・移動できる1枚の面にのせる。窓（見出しの下〜木のてっぺんの手前）で切る */}
+      <View style={{ position: 'absolute', left: 0, right: 0, top: WIN_TOP, height: WIN_BOTTOM - WIN_TOP, overflow: 'hidden' }} pointerEvents="box-none">
+        <Animated.View style={[{ position: 'absolute', left: 0, top: -WIN_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
       {/* 光は文字の後ろ */}
       {Array.from({ length: SPARKLE_GROUPS }, (_, g) => (
         <HaloLayer key={g} group={g} clock={clock} placed={placed} width={width} height={height} />
@@ -170,6 +269,9 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       {Array.from({ length: SPARKLE_GROUPS }, (_, g) => (
         <GlowLayer key={g} group={g} clock={clock} placed={placed} />
       ))}
+
+        </Animated.View>
+      </View>
 
       <View style={styles.legend} pointerEvents="none">
         {legend(isGrouped()).map(({ category, label, color: [r, g, b] }) => (
@@ -198,6 +300,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
         <Text style={styles.nextText}>星空へ →</Text>
       </Pressable>
     </View>
+    </GestureDetector>
   );
 }
 
