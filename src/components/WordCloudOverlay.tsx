@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { WORD_LIST } from '../words';
 import { useAiWords } from '../aiWords';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
@@ -14,10 +14,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import { colorOf, isGrouped, legend, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, withRates, type Placed } from '../wordCloud';
+import { colorOf, isGrouped, legend, MAX_WORDS, SPARKLE_GROUPS, aggregate, layoutWords, selectWords, withRates, type Placed, type WordStat } from '../wordCloud';
 import { useCaptures, useShownCounts } from '../useCaptures';
 import { splitBubble } from '../bubbleText';
-import { boxCaptures, boxShown, warehouseReady } from '../warehouse';
+import { boxCaptures, boxShown, boxWords, warehouseReady } from '../warehouse';
+import { BOXES } from '../../convex/boxes';
 import type { Cat } from '../wordCloud';
 
 // 拾ったことば（ワードクラウド）。川の画面の上に重ねて出す。背景（空のループ動画）は川の画面の1本のプレーヤーが流す
@@ -116,6 +117,26 @@ type Props = {
 
 const FIXED_WORDS: ReadonlySet<string> = new Set(WORD_LIST);
 
+// 夕空の見本（2026-10-14、ユーザー「最大の文字が夕空になったとき、どうやって移動できるのかを確かめたい」）：
+// 言葉が上限（30語）まで出て、7グループがそろい、いちばん長い言葉（9〜10文字）も入った夕空。拾った記録ではない。倉庫で動いているときだけ（グループが要るため）
+function makeSample(): WordStat[] {
+  const byGroup = new Map<string, number[]>();
+  for (const b of BOXES) byGroup.set(b.group, [...(byGroup.get(b.group) ?? []), b.id]);
+  const picks: { word: string; group: string }[] = [];
+  let round = 0;
+  while (picks.length < MAX_WORDS && round < 20) {
+    for (const [g, ids] of byGroup) {
+      if (picks.length >= MAX_WORDS) break;
+      const box = ids[round % ids.length];
+      const ws = boxWords(box).filter((w) => w.length >= 8 && w.length <= 10);
+      const w = ws[(round * 7 + box) % Math.max(1, ws.length)] ?? boxWords(box)[0];
+      if (w && !picks.some((p) => p.word === w)) picks.push({ word: w, group: g });
+    }
+    round++;
+  }
+  return picks.map((p, i) => ({ word: p.word, category: p.group as Cat, count: Math.max(1, 14 - i), avgStrength: 0.2 + ((i * 37) % 80) / 100, rate: Math.max(0.03, 0.5 - i * 0.015) }));
+}
+
 export default function WordCloudOverlay({ width, height, onBack, onOpenArchive }: Props) {
   const clock = useSharedValue(0);
   useEffect(() => {
@@ -124,6 +145,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   }, [clock]);
 
   // 最近（今日〜今週）の本物の記録。読み込み中は何も置かない
+  const [showSample, setShowSample] = useState(false);
   const aiVersion = useAiWords(); // 読み込めたら再描画（AI の言葉の種類が分かる）
   const captures = useCaptures(7);
   const shown = useShownCounts(7);
@@ -133,6 +155,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   // 小さい画面（高さ750未満）は、言葉を20語までにする（それでも文字が10pxを下回るため）
   const { placed } = useMemo(
     () => {
+      if (showSample) return layoutWords(makeSample(), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 });
       // 流れた記録をとりはじめる前の分は除く（何回流れたか分からないため）。流れた記録がない人（見本・使いはじめ）は回数のまま
       const raw = shown ? (captures ?? []).filter((c) => shown.since === null || c.capturedAt >= shown.since) : [];
       // 倉庫で動くときは箱で数える（箱の名前＝その箱でいちばん多く拾った言葉）。流れた回数も箱ごとに足す（決定 2026-10-14）
@@ -142,7 +165,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       const shownMap = shown && boxed ? boxShown(shown.shown, stats.map((s) => s.word)) : shown?.shown;
       return layoutWords(selectWords(shown?.since != null && shownMap ? withRates(stats, shownMap, boxed ? new Set(stats.map((s) => s.word)) : FIXED_WORDS) : stats, height < 750 ? 20 : MAX_WORDS), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 });
     },
-    [captures, shown, width, height, aiVersion],
+    [captures, shown, width, height, aiVersion, showSample],
   );
 
   // つまんで拡大・縮小、なぞって動かす（2026-10-14、ユーザー「夕空文字が小さいのがあるから、ズームできたり、上下左右に移動できたりしたい。星空みたいに」）。
@@ -243,7 +266,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
-        <Text style={styles.title}>夕空</Text>
+        <Text style={styles.title}>{showSample ? '夕空（見本）' : '夕空'}</Text>
       </View>
 
       {/* 言葉と光を、拡大・移動できる1枚の面にのせる。窓（見出しの下〜木のてっぺんの手前）で切る */}
@@ -292,19 +315,37 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
         文字の大きさ＝流れてきたとき拾う割合　キラキラ・光＝気持ちの強さ
       </Text>
 
-      <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
-        <Text style={styles.backText}>← 水辺へ</Text>
-      </Pressable>
+      {showSample ? (
+        <Pressable style={styles.sampleClose} hitSlop={14} onPress={() => setShowSample(false)} accessibilityLabel="見本をとじる">
+          <Text style={styles.sampleCloseText}>×</Text>
+        </Pressable>
+      ) : (
+        <Pressable style={styles.back} hitSlop={16} onPress={onBack}>
+          <Text style={styles.backText}>← 水辺へ</Text>
+        </Pressable>
+      )}
 
-      <Pressable style={styles.next} hitSlop={16} onPress={() => onOpenArchive()}>
-        <Text style={styles.nextText}>星空へ →</Text>
-      </Pressable>
+      {!showSample && (
+        <Pressable style={styles.next} hitSlop={16} onPress={() => onOpenArchive()}>
+          <Text style={styles.nextText}>星空へ →</Text>
+        </Pressable>
+      )}
+      {/* 見本：言葉が最大（30語）の夕空で、つまむ・なぞるを試せる（倉庫で動いているときだけ） */}
+      {!showSample && isGrouped() && (
+        <Pressable style={styles.sampleBtn} hitSlop={12} onPress={() => setShowSample(true)}>
+          <Text style={styles.sampleBtnText}>見本を見る</Text>
+        </Pressable>
+      )}
     </View>
     </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
+  sampleBtn: { position: 'absolute', top: 84, right: 20, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.5)', zIndex: 10 },
+  sampleBtnText: { fontSize: 12, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
+  sampleClose: { position: 'absolute', top: 52, left: 20, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  sampleCloseText: { fontSize: 18, lineHeight: 20, color: 'rgba(255,246,232,0.85)' },
   back: { position: 'absolute', top: 56, left: 20, zIndex: 10 },
   backText: { fontSize: 14, color: 'rgba(255,246,232,0.7)' },
   titleRow: { position: 'absolute', top: 54, left: 0, right: 0, alignItems: 'center' },
