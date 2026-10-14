@@ -5,6 +5,8 @@ import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDecay,
@@ -24,6 +26,7 @@ import type { Cat } from '../wordCloud';
 // 拾ったことば（ワードクラウド）。川の画面の上に重ねて出す。背景（空のループ動画）は川の画面の1本のプレーヤーが流す
 
 const TWINKLE_MS = 2400;
+const DEBUG_ZOOM = 1; // 試験用。スマホで、つまめなくても、拡大したときの重さ・なぞりを確かめるときだけ 2 にする（2026-10-14 に 2 で確かめた：コマ落ち 1.3%・CPU 53%）
 
 // カテゴリの色を白へ寄せる（光っている瞬間の文字の色）
 function lighten(c: Cat, mix: number) {
@@ -182,6 +185,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   const y0 = useSharedValue(0);
   const cx0 = useSharedValue(0);
   const cy0 = useSharedValue(0);
+  const touching = useSharedValue(0); // 指で触っている間は 1（pan・pinch の中で使うので、これらより前に作る）
   const loX = (k: number) => { 'worklet'; return width * (1 - k); };
   const hiX = () => { 'worklet'; return 0; };
   const loY = (k: number) => { 'worklet'; return WIN_BOTTOM * (1 - k); };
@@ -203,12 +207,13 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   // 言葉が入れかわったら、拡大をもとに戻す
   useEffect(() => {
     cancelAnimation(sc); cancelAnimation(tx); cancelAnimation(ty);
-    sc.set(1); tx.set(0); ty.set(0);
+    sc.set(DEBUG_ZOOM); tx.set(DEBUG_ZOOM > 1 ? width * (1 - DEBUG_ZOOM) / 2 : 0); ty.set(DEBUG_ZOOM > 1 ? ((WIN_TOP + WIN_BOTTOM) / 2) * (1 - DEBUG_ZOOM) : 0);
   }, [placed, sc, tx, ty]);
   const pan = Gesture.Pan()
     .minDistance(8)
     .maxPointers(1)
     .onStart(() => {
+      touching.set(1);
       cancelAnimation(tx); cancelAnimation(ty);
       x0.set(tx.get()); y0.set(ty.get());
     })
@@ -216,6 +221,9 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       const k = sc.get();
       tx.set(rubber(x0.get() + e.translationX, loX(k), hiX()));
       ty.set(rubber(y0.get() + e.translationY, loY(k), hiY(k)));
+    })
+    .onFinalize(() => {
+      touching.set(0);
     })
     .onEnd((e, success) => {
       if (!success) return;
@@ -230,6 +238,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
     });
   const pinch = Gesture.Pinch()
     .onStart((e) => {
+      touching.set(1);
       cancelAnimation(sc); cancelAnimation(tx); cancelAnimation(ty);
       s0.set(sc.get() / e.scale);
       cx0.set((e.focalX - tx.get()) / sc.get());
@@ -243,13 +252,47 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       ty.set(e.focalY - cy0.get() * k);
       x0.set(e.focalX); y0.set(e.focalY);
     })
+    .onFinalize(() => {
+      touching.set(0);
+    })
     .onEnd(() => {
       const k = clampV(sc.get(), 1, MAX_SCALE);
       sc.set(withTiming(k, SETTLE));
       tx.set(withTiming(clampV(x0.get() - cx0.get() * k, loX(k), hiX()), SETTLE));
       ty.set(withTiming(clampV(y0.get() - cy0.get() * k, loY(k), hiY(k)), SETTLE));
     });
-  const gesture = Gesture.Simultaneous(pan, pinch);
+  // 拡大している間・指で動かしている間は、光のまたたきを止める（毎コマ、大きな層を描き直して重くなったため。2026-10-14、ユーザー「重い」）。
+  // 止めている間は、層を画像として覚えて、動かすだけにする（zoomed のとき renderToHardwareTexture）
+  const [zoomed, setZoomed] = useState(false);
+  useAnimatedReaction(
+    () => sc.get() > 1.02 || touching.get() > 0,
+    (still, prev) => {
+      if (still === prev) return;
+      if (still) cancelAnimation(clock);
+      else clock.set(withRepeat(withTiming(1, { duration: TWINKLE_MS, easing: Easing.linear }), -1, false));
+      runOnJS(setZoomed)(still);
+    },
+  );
+  // ダブルタップ：その点を中心に2倍。もう一度で、もとに戻す（つまめない人・指1本のとき用）
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(250)
+    .onEnd((e) => {
+      cancelAnimation(sc); cancelAnimation(tx); cancelAnimation(ty);
+      if (sc.get() > 1.2) {
+        sc.set(withTiming(1, SETTLE));
+        tx.set(withTiming(0, SETTLE));
+        ty.set(withTiming(0, SETTLE));
+        return;
+      }
+      const k = 2;
+      const px = (e.x - tx.get()) / sc.get();
+      const py = (e.y - ty.get()) / sc.get();
+      sc.set(withTiming(k, SETTLE));
+      tx.set(withTiming(clampV(e.x - px * k, loX(k), hiX()), SETTLE));
+      ty.set(withTiming(clampV(e.y - py * k, loY(k), hiY(k)), SETTLE));
+    });
+  const gesture = Gesture.Exclusive(doubleTap, Gesture.Simultaneous(pan, pinch));
   const canvasStyle = useAnimatedStyle(() => {
     const k = sc.get();
     return {
@@ -264,6 +307,8 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   return (
     <GestureDetector gesture={gesture}>
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {/* 画面いっぱいを、つまむ・なぞる操作の受け皿にする（これがないと、言葉のない所でつまめなかった。2026-10-14） */}
+      <View style={StyleSheet.absoluteFill} />
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
         <Text style={styles.title}>{showSample ? '夕空（見本）' : '夕空'}</Text>
@@ -271,7 +316,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
 
       {/* 言葉と光を、拡大・移動できる1枚の面にのせる。窓（見出しの下〜木のてっぺんの手前）で切る */}
       <View style={{ position: 'absolute', left: 0, right: 0, top: WIN_TOP, height: WIN_BOTTOM - WIN_TOP, overflow: 'hidden' }} pointerEvents="box-none">
-        <Animated.View style={[{ position: 'absolute', left: 0, top: -WIN_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
+        <Animated.View renderToHardwareTextureAndroid={zoomed} style={[{ position: 'absolute', left: 0, top: -WIN_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
       {/* 光は文字の後ろ */}
       {Array.from({ length: SPARKLE_GROUPS }, (_, g) => (
         <HaloLayer key={g} group={g} clock={clock} placed={placed} width={width} height={height} />
