@@ -342,8 +342,8 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
 }
 
 const styles = StyleSheet.create({
-  sampleBtn: { position: 'absolute', top: 84, right: 20, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.5)', zIndex: 10 },
-  sampleBtnText: { fontSize: 12, color: 'rgba(255,232,170,0.95)', letterSpacing: 1 },
+  sampleBtn: { position: 'absolute', bottom: 28, right: 58, backgroundColor: 'rgba(14,18,48,0.5)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.5)', zIndex: 10 },
+  sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,1)', letterSpacing: 1 },
   sampleClose: { position: 'absolute', top: 52, left: 20, width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,246,232,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   sampleCloseText: { fontSize: 18, lineHeight: 20, color: 'rgba(255,246,232,0.85)' },
   back: { position: 'absolute', top: 56, left: 20, zIndex: 10 },
@@ -357,11 +357,12 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
     textShadowOffset: { width: 0, height: 0 },
   },
-  legend: { position: 'absolute', bottom: 100, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', columnGap: 12, rowGap: 4, paddingHorizontal: 16 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', columnGap: 4 },
-  legendDot: { width: 7, height: 7, borderRadius: 3.5 },
-  legendText: { fontSize: 10, color: 'rgba(255,246,232,0.65)' },
-  hint: { position: 'absolute', bottom: 76, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,246,232,0.6)', letterSpacing: 1 },
+  // 凡例：木や川の上でも読めるよう、暗い下地の丸い札に、大きめの文字（2026-10-14、ユーザー「判例は見にくいので、見やすくしてほしい」）
+  legend: { position: 'absolute', bottom: 104, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 5, paddingHorizontal: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', columnGap: 4, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(14,18,48,0.55)' },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 11, color: 'rgba(255,248,235,0.97)' },
+  hint: { position: 'absolute', bottom: 74, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,248,235,0.92)', letterSpacing: 0, textShadowColor: 'rgba(10,14,40,0.9)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
   empty: { position: 'absolute', top: '30%', left: 0, right: 0, textAlign: 'center', fontSize: 14, color: 'rgba(255,246,232,0.8)', letterSpacing: 1 },
   // 右上：左上の「← 水辺へ」と対になる、次の画面（星空）への入口
   next: { position: 'absolute', top: 56, right: 20, zIndex: 10 },
