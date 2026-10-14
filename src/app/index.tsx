@@ -210,6 +210,9 @@ const HOLD_FLOW_RATE = 0.12;
 const FLOW_EASE_SEC = 0.35;
 // 画面下のヒント文の手前で泡を消す
 const BOTTOM_UI = 60;
+// 泡は下で透明にならず、画面の下の端まで流れて切れる（決定 2026-10-14、ユーザー「消えないほうにしたい」。ヒント文と♪は泡の上に出す）。
+// web で ?nofade=0 をつけると、前の「下で透明になって消える」形に戻して見比べられる
+const NO_FADE = !(typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]nofade=0\b/.test(window.location.search));
 // 泡はこの大きさで一度だけ描き、UI スレッドで拡大・縮小して正しい大きさにする（流れている泡は描き直さない）。
 // 大きさが変わるたびに描き直すと、その1コマだけ大きさと位置が食い違って泡が跳ねた
 const BASE = 80;
@@ -335,7 +338,7 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     const pl = (b.pl ?? placeBubble(P, b));
     const fadeIn = Math.min(1, b.age / SURFACE_SEC);
     // 泡の下の方がヒント文に近づいたら消える（中心で判定すると大きな泡が文字に重なる）
-    const fadeOut = Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
+    const fadeOut = NO_FADE ? 1 : Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
     return {
       opacity: (0.8 + 0.2 * pl.t) * Math.min(fadeIn, fadeOut),
       transform: [{ translateX: pl.x - base / 2 }, { translateY: pl.y - base / 2 }, { scale: pl.size / base }],
@@ -794,12 +797,17 @@ function CaptureToast({ ref }: { ref: React.Ref<ToastHandle> }) {
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
+  // 画面下の文字（「〇〇」を拾った・気になる言葉をタップしてみてください）はやめた（決定 2026-10-14、ユーザー「いらないと思う」）。
+  // 拾ったことは、泡が昇って消える動き・振動・音で伝わる。はじめの案内は、SPEC 8.「はじめの案内」で、使う人を増やす前に決める。
+  // 戻すときは SHOW_BOTTOM_TEXT を true に
+  if (!SHOW_BOTTOM_TEXT) return null;
   return captured ? (
     <Text style={styles.capturedMsg}>「{captured}」を拾った</Text>
   ) : (
     <Text style={styles.hint}>気になる言葉をタップしてみてください</Text>
   );
 }
+const SHOW_BOTTOM_TEXT = false;
 
 export default function Home() {
   const { width, height } = useWindowDimensions();
@@ -1375,7 +1383,8 @@ const styles = StyleSheet.create({
   soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
   soundIconOff: { color: 'rgba(255,246,232,0.35)' },
   soundSlash: { position: 'absolute', width: 20, height: 1, backgroundColor: 'rgba(255,246,232,0.5)', transform: [{ rotate: '-45deg' }] },
-  hint: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'rgba(235,242,248,0.6)', zIndex: 10 },
+  // 泡が下を流れるので、泡の上でも読めるよう、うすい影を付ける
+  hint: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'rgba(235,242,248,0.85)', zIndex: 10, textShadowColor: 'rgba(10,28,48,0.9)', textShadowRadius: 5, textShadowOffset: { width: 0, height: 0 } },
   capturedMsg: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 16, color: 'rgba(255,248,235,0.95)', zIndex: 10, fontWeight: '500' },
   ripple: {
     position: 'absolute',
