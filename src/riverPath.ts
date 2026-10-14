@@ -19,3 +19,9 @@ export function coverRect(screenW: number, screenH: number): VideoRect {
   const height = VIDEO_H * scale;
   return { left: (screenW - width) / 2, top: (screenH - height) / 2 - VIDEO_SHIFT, width, height };
 }
+
+// 夕空（ワードクラウド）で、背景を下にずらして、空の言葉の置き場を広げる（2026-10-14、ユーザー「夕空狭いから、上にカメラ上げて、空のスペースを上げたい」）。
+// 空いた上は、動画の上の端の空の色（TOP_COLOR）でのばす。web で ?cloudshift=100（0〜200）で見比べられる
+const qc = q('cloudshift');
+export const CLOUD_SHIFT = Number.isFinite(qc) && qc >= 0 && qc <= 200 ? qc : 100; // 100px（決定 2026-10-14、ユーザー「真ん中にして」）
+export const TOP_COLOR = 'rgb(30,38,86)'; // cloud_bg.jpg の上の端の色
