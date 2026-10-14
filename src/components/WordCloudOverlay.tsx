@@ -305,10 +305,12 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   });
 
   return (
-    <GestureDetector gesture={gesture}>
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {/* つまむ・なぞるの受け皿は、言葉の面だけを包む。ボタンまで包むと、スマホでなぞったときにボタンの押しが途中で取り消され、
+          「Ended a touch event which was not counted in trackedTouchCount」の注意が出ていた（2026-10-14） */}
+      <GestureDetector gesture={gesture}>
       {/* 画面いっぱいを、つまむ・なぞる操作の受け皿にする（これがないと、言葉のない所でつまめなかった。2026-10-14） */}
-      <View style={StyleSheet.absoluteFill} />
+      <View style={StyleSheet.absoluteFill}>
       {/* 横幅いっぱいのタイトルはボタンより先に置き、タップを受けない（後に置くとスマホでボタンの上に重なって押せない） */}
       <View style={styles.titleRow} pointerEvents="none">
         <Text style={styles.title}>{showSample ? '夕空（見本）' : '夕空'}</Text>
@@ -341,6 +343,8 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
 
         </Animated.View>
       </View>
+      </View>
+      </GestureDetector>
 
       <View style={styles.legend} pointerEvents="none">
         {legend(isGrouped()).map(({ category, label, color: [r, g, b] }) => (
@@ -383,7 +387,6 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
         </Pressable>
       )}
     </View>
-    </GestureDetector>
   );
 }
 
