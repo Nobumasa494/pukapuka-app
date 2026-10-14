@@ -490,3 +490,7 @@ pukapukaアプリのUI/UX設計・実装を行うためのスキル。デザイ�
 ## 言葉の長さは7〜10文字（決定 2026-10-14。上の「10〜14文字」を置きかえる）
 
 夕空・星空・夜明けで長い言葉が破綻したので短くした。泡は1〜2行。星の名前・夕空の言葉も2行に対応（`src/constellation.ts`・`src/wordCloud.ts`）。見本は `docs/talk/day/short_sheet.png`
+
+## 川を多く見せる（決定 2026-10-14、ユーザー「右にしてほしい」＝110px）
+
+動画（river_bg.mp4・1080×1920）を拡大せず、上に110pxずらして（`src/riverPath.ts` の `VIDEO_SHIFT`）、空いた下は動画の下の端の水の色（`BOTTOM_COLOR`＝rgb(26,82,120)）でのばす。泡の通り道・つなぎの動画も同じ `coverRect` で動くのでずれない。夕日が上に寄り、空は切れる。web で `?shift=0`〜150・`?zoom=1〜1.5` で見比べられる。本当にカメラを下に向けるなら Blender で撮り直し（案B。つなぎの動画3本と river_path.json も作り直し）。見本 `docs/talk/day/shift_sheet.png`

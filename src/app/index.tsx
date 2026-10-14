@@ -26,7 +26,7 @@ import SpeedControl from '../components/SpeedControl';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { bubbleLen, splitBubble } from '../bubbleText';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
-import type { VideoRect } from '../riverPath';
+import { BOTTOM_COLOR, type VideoRect } from '../riverPath';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -1209,6 +1209,8 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
+      {/* 動画を上にずらしたときの、空いた下の部分。水の色でのばす（動画の下の端の色） */}
+      <LinearGradient colors={[BOTTOM_COLOR, BOTTOM_COLOR]} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: Math.max(0, height - (rect.top + rect.height)) + 4, pointerEvents: 'none' }} />
       {/* 背景の動画（1本）。その上に、差し替えの瞬間を隠す静止画2枚 */}
       <BackgroundVideo player={player} rect={rect} onFirstFrame={onFirstFrame} />
       <Animated.Image source={RIVER_POSTER} style={[fill, coverRiverStyle]} />
