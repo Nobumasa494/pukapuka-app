@@ -979,24 +979,36 @@ export default function Home() {
     if (clip === 'toCloud') {
       // カメラが空を見上げるのに合わせて泡は空へ昇って消える
       rise.set(withTiming(1, { duration: TRANS_RISE_MS, easing: Easing.in(Easing.quad) }));
+      // 夕空の言葉は、動画の終わり際からふわっと出す（前は動画が終わって0.8秒待ってから出していて、遅かった。2026-10-15）
+      later(() => handlersRef.current.showCloudUi(), CLIPS.toCloud.ms! - CLOUD_UI_IN_MS);
       later(() => handlersRef.current.onClipEnd('toCloud'), CLIPS.toCloud.ms! + CLIP_END_SLACK_MS);
     } else if (clip === 'toRiver') {
       // カメラが川岸へ下りた後半、泡は元の水面から浮かび上がる
       appear.set(withDelay(BACK_SURFACE_DELAY_MS, withTiming(1, { duration: BACK_SURFACE_MS, easing: Easing.out(Easing.quad) })));
       later(() => handlersRef.current.onClipEnd('toRiver'), CLIPS.toRiver.ms! + CLIP_END_SLACK_MS);
     } else if (clip === 'toNight' || clip === 'nightToCloud') {
+      if (clip === 'nightToCloud') later(() => handlersRef.current.showCloudUi(), CLIPS[clip].ms! - CLOUD_UI_IN_MS);
       later(() => handlersRef.current.onClipEnd(clip), CLIPS[clip].ms! + CLIP_END_SLACK_MS);
     }
+  };
+
+  // 夕空の言葉とボタンを出す（動画の終わり際。押せるのもここから）。画面は動画の間に見えないまま作っておく（下の toCloud）
+  const showCloudUi = () => {
+    if (stageRef.current === 'cloud') return;
+    if (stageRef.current !== 'toCloud' && stageRef.current !== 'nightToCloud') return;
+    goStage('cloud');
+    setCloudUiOn(true);
+    // 泡はもう空へ昇って消えているはず。昇る演出が始まらないまま来たとき（動画の取り違えなど）も、泡を夕空に残さない（2026-10-15、ユーザー「たまに泡の川が夕空に残る」）
+    if (rise.value < 1) rise.set(withTiming(1, { duration: 200 }));
+    cloudUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
   };
 
   // 遷移の動画が終わった: 次のループへ。行きの最後のコマ＝空のループの最初のコマ、帰りの最後のコマ＝川の最初のコマ
   const onClipEnd = (clip: Clip) => {
     if (clipRef.current !== clip) return;
     if (clip === 'toCloud' || clip === 'nightToCloud') {
-      goStage('cloud');
-      setCloudUiOn(true);
+      showCloudUi();
       playClip('cloud');
-      cloudUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
     } else if (clip === 'toRiver') {
       goStage('river');
       playClip('river');
@@ -1027,9 +1039,9 @@ export default function Home() {
     covers[c.last].set(withTiming(1, { duration: PRECOVER_MS }));
   };
 
-  const handlersRef = useRef({ reveal, onClipStarted, onClipEnd, onReturn, precover });
+  const handlersRef = useRef({ reveal, onClipStarted, onClipEnd, onReturn, precover, showCloudUi });
   useEffect(() => {
-    handlersRef.current = { reveal, onClipStarted, onClipEnd, onReturn, precover };
+    handlersRef.current = { reveal, onClipStarted, onClipEnd, onReturn, precover, showCloudUi };
   });
 
   useEffect(() => {
@@ -1053,7 +1065,12 @@ export default function Home() {
         }
         handlersRef.current.precover(t);
       }),
-      player.addListener('playToEnd', () => handlersRef.current.onClipEnd(clipRef.current)),
+      // 差し替え中に、前の動画（ループを外された川など）が終わった合図が来ることがある。それを新しい動画の終わりと取り違えると、
+      // つなぎの動画を飛ばして夕空へ行き、動画が止まり、泡も残った（2026-10-15）。新しい動画が読み込めて、見え始めてからの合図だけ受ける
+      player.addListener('playToEnd', () => {
+        if (!loadedRef.current || !revealedRef.current) return;
+        handlersRef.current.onClipEnd(clipRef.current);
+      }),
     ];
     return () => subs.forEach((s) => s.remove());
   }, [player]);

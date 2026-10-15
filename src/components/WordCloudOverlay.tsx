@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { WORD_LIST } from '../words';
 import { useAiWords } from '../aiWords';
 import { Image, StyleSheet, Text, View, Pressable } from 'react-native';
@@ -106,6 +106,33 @@ function GlowLayer({ group, clock, placed }: { group: number; clock: SharedValue
   );
 }
 
+// 言葉と光の1面（夕空・見本で1つずつ）。memo なので、ボタンを押したり、拡大の印が変わったりしても作り直さない
+const Sky = memo(function Sky({ placed, clock, width, height }: { placed: Placed[]; clock: SharedValue<number>; width: number; height: number }) {
+  return (
+    <>
+      {/* 光は文字の後ろ */}
+      {Array.from({ length: SPARKLE_GROUPS }, (_, g) => (
+        <HaloLayer key={g} group={g} clock={clock} placed={placed} width={width} height={height} />
+      ))}
+      {placed.map((p) => {
+        const [r, g, b] = colorOf(p.category);
+        return (
+          // 言葉を押しても、星空へは行かない（決定 2026-10-14、ユーザー「夕空の画面を押したら、星空に行く流れはなくしてほしい」）。星空へは、右上の「星空へ →」から
+          <View key={p.word} style={{ position: 'absolute', left: p.x, top: p.y }}>
+            <Text style={[styles.word, { fontSize: p.size, lineHeight: p.size * 1.4, color: `rgba(${r},${g},${b},${p.textOpacity})` }]}>
+              {splitBubble(p.word)}
+            </Text>
+          </View>
+        );
+      })}
+      {/* 光る写しは文字の上に重ねる */}
+      {Array.from({ length: SPARKLE_GROUPS }, (_, g) => (
+        <GlowLayer key={g} group={g} clock={clock} placed={placed} />
+      ))}
+    </>
+  );
+});
+
 type Props = {
   width: number;
   height: number;
@@ -151,9 +178,16 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   // 空（画面の上62%。これより下は木にかかる）に置く。位置に意味は持たせず、文字の大きさ＝割合（流れた回数のうち何回拾ったか）・キラキラと周りの光＝強さ・色＝カテゴリ。
   // 2026-10-10：70%に広げたら、下の段の言葉が木に重なって読みにくかったので、木のてっぺん（約63%）の手前まで。
   // 小さい画面（高さ750未満）は、言葉を20語までにする（それでも文字が10pxを下回るため）
-  const { placed } = useMemo(
+  // 見本は、1回目に開いたときに作って、とっておく。夕空と見本は両方とも作ったままにして、見せるほうだけ切りかえる
+  // （前は押すたびに言葉30個と光を作り直し、見本を見る・× の反応が遅かった。2026-10-15）
+  const [sampleMade, setSampleMade] = useState(false);
+  useEffect(() => { if (showSample) setSampleMade(true); }, [showSample]);
+  const samplePlaced = useMemo(
+    () => (sampleMade || showSample ? layoutWords(makeSample(), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 }).placed : null),
+    [sampleMade || showSample, width, height, aiVersion],
+  );
+  const { placed: realPlaced } = useMemo(
     () => {
-      if (showSample) return layoutWords(makeSample(), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 });
       // 流れた記録をとりはじめる前の分は除く（何回流れたか分からないため）。流れた記録がない人（見本・使いはじめ）は回数のまま
       const raw = shown ? (captures ?? []).filter((c) => shown.since === null || c.capturedAt >= shown.since) : [];
       // 倉庫で動くときは箱で数える（箱の名前＝その箱でいちばん多く拾った言葉）。流れた回数も箱ごとに足す（決定 2026-10-14）
@@ -163,8 +197,9 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       const shownMap = shown && boxed ? boxShown(shown.shown, stats.map((s) => s.word)) : shown?.shown;
       return layoutWords(selectWords(shown?.since != null && shownMap ? withRates(stats, shownMap, boxed ? new Set(stats.map((s) => s.word)) : FIXED_WORDS) : stats, height < 750 ? 20 : MAX_WORDS), { x: 20, y: 96, w: width - 40, h: Math.round(height * 0.62) - 96 });
     },
-    [captures, shown, width, height, aiVersion, showSample],
+    [captures, shown, width, height, aiVersion],
   );
+  const placed = showSample && samplePlaced ? samplePlaced : realPlaced;
 
   // つまんで拡大・縮小、なぞって動かす（2026-10-14、ユーザー「夕空文字が小さいのがあるから、ズームできたり、上下左右に移動できたりしたい。星空みたいに」）。
   // 言葉と光は、1枚の大きな面にのせて、その面を拡大・移動する。見える範囲は、見出しの下から、木のてっぺんの手前まで（窓）。
@@ -314,27 +349,15 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       {/* 言葉と光を、拡大・移動できる1枚の面にのせる。窓（見出しの下〜木のてっぺんの手前）で切る */}
       <View style={{ position: 'absolute', left: 0, right: 0, top: WIN_TOP, height: WIN_BOTTOM - WIN_TOP, overflow: 'hidden' }} pointerEvents="box-none">
         <Animated.View renderToHardwareTextureAndroid={zoomed} style={[{ position: 'absolute', left: 0, top: -WIN_TOP, width, height }, canvasStyle]} pointerEvents="box-none">
-      {/* 光は文字の後ろ */}
-      {Array.from({ length: SPARKLE_GROUPS }, (_, g) => (
-        <HaloLayer key={g} group={g} clock={clock} placed={placed} width={width} height={height} />
-      ))}
-
-      {placed.map((p) => {
-        const [r, g, b] = colorOf(p.category);
-        return (
-          // 言葉を押しても、星空へは行かない（決定 2026-10-14、ユーザー「夕空の画面を押したら、星空に行く流れはなくしてほしい」）。星空へは、右上の「星空へ →」から
-          <View key={p.word} style={{ position: 'absolute', left: p.x, top: p.y }}>
-            <Text style={[styles.word, { fontSize: p.size, lineHeight: p.size * 1.4, color: `rgba(${r},${g},${b},${p.textOpacity})` }]}>
-              {splitBubble(p.word)}
-            </Text>
-          </View>
-        );
-      })}
-
-      {/* 光る写しは文字の上に重ねる（タップは下の言葉に通す） */}
-      {Array.from({ length: SPARKLE_GROUPS }, (_, g) => (
-        <GlowLayer key={g} group={g} clock={clock} placed={placed} />
-      ))}
+      {/* 夕空と見本。見せないほうは display: none で、作ったまま隠す */}
+      <View style={[StyleSheet.absoluteFill, showSample && samplePlaced ? styles.hidden : null]} pointerEvents="none">
+        <Sky placed={realPlaced} clock={clock} width={width} height={height} />
+      </View>
+      {samplePlaced && (
+        <View style={[StyleSheet.absoluteFill, showSample ? null : styles.hidden]} pointerEvents="none">
+          <Sky placed={samplePlaced} clock={clock} width={width} height={height} />
+        </View>
+      )}
 
         </Animated.View>
       </View>
@@ -387,6 +410,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
 
 const styles = StyleSheet.create({
   // 触れた瞬間に、ぎゅっと沈んで暗くなる（離したときに動くので、押した感じを先に返す。2026-10-14、ユーザー「反応が遅い」）
+  hidden: { display: 'none' },
   pressed: { opacity: 0.5, transform: [{ scale: 0.92 }] },
   sampleBtn: { position: 'absolute', bottom: 28, right: 58, backgroundColor: 'rgba(14,18,48,0.5)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,215,140,0.5)', zIndex: 10 },
   sampleBtnText: { fontSize: 13, color: 'rgba(255,232,170,1)', letterSpacing: 1 },

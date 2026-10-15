@@ -25,6 +25,23 @@ def main():
     video, tx, ty, cx, cy, cw, ch = sys.argv[1], *map(int, sys.argv[2:8])
     START = 1.0  # 録画を始めてから押すまで、少なくともこれだけ待っている（check.sh の sleep）
     cf = frames(video, cx, cy, cw, ch)
+    if len(sys.argv) > 8 and sys.argv[8] == 'final':
+        # 画面の移り変わり：決めた所が「最後の絵」になったとき（＝出来上がり）。動画で少しずつ変わるので、最初に変わったときではなく、出来上がったときを見る
+        tf = frames(video, max(0, tx - 30), max(0, ty - 30), 60, 60)
+        k = next((i for i in range(1, len(tf)) if diff(tf[i][1], tf[i - 1][1]) > 8), None)
+        last = cf[-1][1]
+        done = next((t for t, px in cf if diff(px, last) < 3 and (k is None or t > tf[k - 1][0])), None)
+        ts = [t for t, _ in cf]
+        stall = round(max((b - a for a, b in zip(ts, ts[1:])), default=0) * 1000)
+        # 押した時刻の代わり：水辺の左上の ♪ が消えはじめたコマ（押すとすぐ消えはじめる。adb の押しが届く時刻はばらつくため）
+        af = frames(video, 10, 60, 80, 80)
+        a0 = af[0][1]
+        start = next((t for t, px in af if diff(px, a0) > 30), None)  # 月のメニューが開くだけ（約6）とまちがえない
+        if start is None or done is None:
+            print(f'測れない（♪ {start}・出来上がり {done}）'); return
+        ts = [t for t, _ in cf if start <= t <= done]
+        stall = round(max((b - a for a, b in zip(ts, ts[1:])), default=0) * 1000)
+        print(f'押してから出来上がりまで {round((done - start) * 1000)}ms  いちばん長く止まった {stall}ms'); return
     base = max((f for f in cf if f[0] <= START), key=lambda f: f[0])[1]
     react = next((t for t, px in cf if t > START and diff(px, base) > 6), None)
     if react is None:
