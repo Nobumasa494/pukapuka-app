@@ -50,13 +50,34 @@ export async function addToPrefs(ctx: MutationCtx, deviceId: string, given: Add[
       .query("prefWords")
       .withIndex("by_deviceId_and_wordId", (q) => q.eq("deviceId", deviceId).eq("wordId", a.wordId))
       .unique();
-    if (row) {
-      const k = decay(row.at, now);
-      await ctx.db.patch(row._id, { shown: round(row.shown * k + a.shown), picked: round(row.picked * k + a.picked), at: now });
-    } else {
-      await ctx.db.insert("prefWords", { deviceId, wordId: a.wordId, text: a.text, shown: round(a.shown), picked: round(a.picked), at: now });
+    // 拾ったことのない言葉は、流れただけではカードを直さない（2026-10-16、ユーザー「B のほうがいい」）。
+    // 川の重みは、拾ったことのない言葉ではどうせ1倍なので、結果は変わらない。流れた回数は、流れた記録（flowWords）に残っている
+    const everPicked = (row?.picked ?? 0) > 0;
+    if (a.picked === 0 && !everPicked) continue;
+    if (!everPicked) {
+      // 初めて拾った：それまでに流れた回数を、流れた記録から1回だけ数えてカードに書く
+      const since = row ? row.at : 0;
+      const base = row ? row.shown * decay(row.at, now) : 0;
+      const shown = base + (await shownSince(ctx, deviceId, a.wordId, since, now)) + a.shown;
+      if (row) await ctx.db.patch(row._id, { shown: round(shown), picked: round(a.picked), at: now });
+      else await ctx.db.insert("prefWords", { deviceId, wordId: a.wordId, text: a.text, shown: round(shown), picked: round(a.picked), at: now });
+      continue;
     }
+    const k = decay(row!.at, now);
+    await ctx.db.patch(row!._id, { shown: round(row!.shown * k + a.shown), picked: round(row!.picked * k + a.picked), at: now });
   }
+}
+
+// その言葉が、since より後の日に何回流れたか（日ごとに古さで軽くして足す）。流れた記録の日は端末の暦の日なので、その日の昼として数える
+async function shownSince(ctx: MutationCtx, deviceId: string, wordId: Id<"words">, since: number, now: number) {
+  let total = 0;
+  for await (const r of ctx.db.query("flowWords").withIndex("by_deviceId_and_wordId", (q) => q.eq("deviceId", deviceId).eq("wordId", wordId))) {
+    const [y, m, d] = r.day.split("-").map(Number);
+    const t = Date.UTC(y, m - 1, d, 3); // 日本の昼ごろ
+    if (t <= since) continue;
+    total += r.n * decay(t, now);
+  }
+  return total;
 }
 const round = (x: number) => Math.round(x * 1000) / 1000;
 

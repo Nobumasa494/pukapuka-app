@@ -69,7 +69,8 @@ export default defineSchema({
     frame: v.string(),
     n: v.number(),
   })
-    .index("by_deviceId_and_day_and_wordId_and_frame", ["deviceId", "day", "wordId", "frame"]),
+    .index("by_deviceId_and_day_and_wordId_and_frame", ["deviceId", "day", "wordId", "frame"])
+    .index("by_deviceId_and_wordId", ["deviceId", "wordId"]), // 初めて拾った言葉の、それまでの流れた回数を数える（prefs.ts）
   // 好みのカード（2026-10-15。prefs の1人1行は約0.45MBに育ち、流れる・拾うたびに丸ごと読み書きして、Convex の無料の読み込み量を使い切った）。
   // 1人×1語で1行。流れた・拾ったときは、その言葉の行だけ直す。古い回数は、直すとき・読むときに at からの時間で軽くする（HALF_LIFE_DAYS）
   prefWords: defineTable({
