@@ -59,6 +59,18 @@ export default defineSchema({
     words: v.array(v.object({ wordId: v.id("words"), text: v.string(), shown: v.number(), picked: v.number() })),
     decayedAt: v.number(), // 最後に軽くした時刻
   }).index("by_deviceId", ["deviceId"]),
+  // 好みのカード（2026-10-15。prefs の1人1行は約0.45MBに育ち、流れる・拾うたびに丸ごと読み書きして、Convex の無料の読み込み量を使い切った）。
+  // 1人×1語で1行。流れた・拾ったときは、その言葉の行だけ直す。古い回数は、直すとき・読むときに at からの時間で軽くする（HALF_LIFE_DAYS）
+  prefWords: defineTable({
+    deviceId: v.string(),
+    wordId: v.id("words"),
+    text: v.string(),
+    shown: v.number(),
+    picked: v.number(),
+    at: v.number(), // この回数がいつの時点の重さか
+  })
+    .index("by_deviceId_and_wordId", ["deviceId", "wordId"])
+    .index("by_deviceId_and_picked", ["deviceId", "picked"]),
   // 日記（SPEC 第1部「日記」・第2部 G.）。自分で書くだけの場所。1日1つ。拾った記録とはつなげない
   diaries: defineTable({
     deviceId: v.string(),

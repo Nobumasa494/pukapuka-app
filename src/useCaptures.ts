@@ -79,7 +79,11 @@ export function useAddCapture() {
 export function useShownCounts(days: number): { shown: Map<string, number>; since: number | null } | undefined {
   const deviceId = useDeviceId();
   const [keys] = useState(() => Array.from({ length: days }, (_, i) => dayKey(Date.now() - i * 86400000)));
-  const rows = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys } : 'skip');
+  // 今日の分と、過去の日の分を別々に読む（2026-10-15）。流れた記録は今日の分が1分ごとに増える。まとめて読むと、そのたびに
+  // 過去の日まで全部読み直して、Convex の無料の読み込み量を使い切った。過去の日は変わらないので、1回読めば読み直さない
+  const today = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys.slice(0, 1) } : 'skip');
+  const past = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys.slice(1) } : 'skip');
+  const rows = today && past ? [...today, ...past] : undefined;
   return useMemo(() => {
     if (isDemo) return { shown: new Map(), since: null };
     if (!rows) return undefined;
@@ -92,5 +96,6 @@ export function useShownCounts(days: number): { shown: Map<string, number>; sinc
       if (since === null || t < since) since = t;
     }
     return { shown: m, since };
-  }, [rows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today, past]);
 }

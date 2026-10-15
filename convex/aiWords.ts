@@ -25,9 +25,9 @@ const DAY = 24 * 60 * 60 * 1000;
 export async function maybeGrow(ctx: MutationCtx, deviceId: string, wordId: Id<"words">) {
   const w = await ctx.db.get(wordId);
   if (!w || w.source !== "ai" || w.owner || w.askedAt) return;
-  // まず好みのメモ（1行）で、何回か拾っているかを見る。拾った記録を毎回読み返さないため
-  const pref = await ctx.db.query("prefs").withIndex("by_deviceId", (q) => q.eq("deviceId", deviceId)).unique();
-  if ((pref?.words.find((x) => x.wordId === wordId)?.picked ?? 0) < GROW_DAYS - 0.5) return;
+  // まず好みのカード（その言葉の1行）で、何回か拾っているかを見る。拾った記録を毎回読み返さないため
+  const card = await ctx.db.query("prefWords").withIndex("by_deviceId_and_wordId", (q) => q.eq("deviceId", deviceId).eq("wordId", wordId)).unique();
+  if ((card?.picked ?? 0) < GROW_DAYS - 0.5) return;
   const kid = await ctx.db.query("words").withIndex("by_parent", (q) => q.eq("parent", wordId)).first();
   if (kid) return;
   const now = Date.now();
