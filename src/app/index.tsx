@@ -185,6 +185,8 @@ const REVEAL_MS = 120;
 const COVER_IN_MS = 180;
 const UI_FADE_MS = 300;
 const CLOUD_UI_IN_MS = 500;
+// 夕空へ向かう動画が流れ出してから、夕空の画面を作り始めるまで（流れ出しと重ねない）
+const CLOUD_PREP_DELAY_MS = 150;
 const TRANS_RISE_MS = 1600;
 const BACK_SURFACE_DELAY_MS = 1300;
 const BACK_SURFACE_MS = 900;
@@ -828,6 +830,10 @@ export default function Home() {
   // 自分の箱：直近4週間に拾った・流れた回数を箱ごとに数える（川の配合の「自分の箱」。決定 2026-10-14）
   const myCaps = useCaptures(28);
   const myShown = useShownCounts(28);
+  // 夕空と同じ問い合わせ（7日分）を、水辺のときから読んでおく。夕空を開いてから読みに行くと、言葉が出るのが遅かった（2026-10-15）。
+  // 同じ問い合わせは Convex が1本にまとめるので、夕空を開いたときはすぐ出る
+  useCaptures(7);
+  useShownCounts(7);
   useEffect(() => {
     if (!myCaps) return;
     const m = new Map<number, { picked: number; shown: number }>();
@@ -906,6 +912,11 @@ export default function Home() {
   // 拾ったことばの画面は、離れるときに消え終わったら外す。外さないと、次の動画が流れている間（2〜3秒）も
   // 見えないキラキラと光のアニメーションが動き続け、動画の読み込みと重なってスマホで重かった（2026-10-05）
   const [cloudUiOn, setCloudUiOn] = useState(true);
+  // 夕空へ向かう動画の間に、夕空の画面を見えないまま作っておく印
+  const [cloudPrep, setCloudPrep] = useState(false);
+  useEffect(() => {
+    if (stage !== 'toCloud' && stage !== 'nightToCloud') setCloudPrep(false);
+  }, [stage]);
   useEffect(() => {
     if (MUSIC_FADE_MS[stage] !== undefined) ambientRef.current?.setScene(SCENE_OF[stage], MUSIC_FADE_MS[stage]);
   }, [stage]);
@@ -979,6 +990,9 @@ export default function Home() {
     if (clip === 'toCloud') {
       // カメラが空を見上げるのに合わせて泡は空へ昇って消える
       rise.set(withTiming(1, { duration: TRANS_RISE_MS, easing: Easing.in(Easing.quad) }));
+      // 夕空の画面は、動画が流れ出してから、見えないまま作っておく（作るのに約1秒。動画が終わってから作ると、空だけの画面が1秒以上続いた。
+      // 動画の始まりに作ると、差し替えが遅れた。2026-10-15）
+      later(() => setCloudPrep(true), CLOUD_PREP_DELAY_MS);
       // 夕空の言葉は、動画の終わり際からふわっと出す（前は動画が終わって0.8秒待ってから出していて、遅かった。2026-10-15）
       later(() => handlersRef.current.showCloudUi(), CLIPS.toCloud.ms! - CLOUD_UI_IN_MS);
       later(() => handlersRef.current.onClipEnd('toCloud'), CLIPS.toCloud.ms! + CLIP_END_SLACK_MS);
@@ -987,7 +1001,10 @@ export default function Home() {
       appear.set(withDelay(BACK_SURFACE_DELAY_MS, withTiming(1, { duration: BACK_SURFACE_MS, easing: Easing.out(Easing.quad) })));
       later(() => handlersRef.current.onClipEnd('toRiver'), CLIPS.toRiver.ms! + CLIP_END_SLACK_MS);
     } else if (clip === 'toNight' || clip === 'nightToCloud') {
-      if (clip === 'nightToCloud') later(() => handlersRef.current.showCloudUi(), CLIPS[clip].ms! - CLOUD_UI_IN_MS);
+      if (clip === 'nightToCloud') {
+        later(() => setCloudPrep(true), CLOUD_PREP_DELAY_MS);
+        later(() => handlersRef.current.showCloudUi(), CLIPS[clip].ms! - CLOUD_UI_IN_MS);
+      }
       later(() => handlersRef.current.onClipEnd(clip), CLIPS[clip].ms! + CLIP_END_SLACK_MS);
     }
   };
@@ -1302,7 +1319,7 @@ export default function Home() {
       </Animated.View>
 
       {/* 拾ったことば。空のループの上に重ねる（画面は切り替えない） */}
-      {(stage === 'cloud' || ((stage === 'toRiver' || stage === 'toNight') && cloudUiOn)) && (
+      {(stage === 'cloud' || ((stage === 'toCloud' || stage === 'nightToCloud') && cloudPrep) || ((stage === 'toRiver' || stage === 'toNight') && cloudUiOn)) && (
         <Animated.View style={[StyleSheet.absoluteFill, cloudUiStyle, { pointerEvents: stage === 'cloud' ? 'box-none' : 'none' }]}>
           <WordCloudOverlay width={width} height={height} onBack={backToRiver} onOpenArchive={goNight} />
         </Animated.View>
