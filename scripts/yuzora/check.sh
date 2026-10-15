@@ -15,7 +15,9 @@ press() {
   $A shell "screenrecord --time-limit ${8:-5} --size 540x1200 /sdcard/yz.mp4" &
   sleep 1.2
   [ "$9" = menu ] && { tap 990 250; sleep 1.2; }   # 水辺の月を押してから、メニューの「夕空」を押す（録画は月を押したあとから）
-  if [ "$9" = swipe ]; then $A shell input swipe "$2" "$3" "$2" $(( $3 + 300 )) 500; else $A shell input swipe "$2" "$3" "$2" "$3" "${HOLD:-120}"; fi; wait  # 本物の指のように、おいて離すまで HOLD ミリ秒（ふつう約120）
+  if [ "$9" = swipe ]; then $A shell input swipe "$2" "$3" "$2" $(( $3 + 300 )) 500;
+  elif [ "$9" = slow ]; then $A shell input swipe "$2" "$3" "$2" $(( $3 + 150 )) 1500;   # 本物の指のように、ゆっくり動かし始める
+  else $A shell input swipe "$2" "$3" "$2" "$3" "${HOLD:-120}"; fi; wait  # 本物の指のように、おいて離すまで HOLD ミリ秒（ふつう約120）
   $A pull -q /sdcard/yz.mp4 "$OUT/$1.mp4" >/dev/null
   # 録画は半分の大きさなので、座標も半分にする
   local r; r=$(python3 latency.py "$OUT/$1.mp4" $(( $2/2 )) $(( $3/2 )) $(( $4/2 )) $(( $5/2 )) $(( $6/2 )) $(( $7/2 )) ${10:-})
@@ -46,6 +48,13 @@ echo "① ボタン（押してから変わるまで）"
 # TRANS=1：水辺 → 夕空 の移り変わり（押してから、見出しと「← 水辺へ」が出来上がるまで）を2回。水辺から始める
 if [ "$TRANS" = 1 ]; then
   for i in 1 2; do press 夕空へ移る 968 395 0 230 1080 120 9 menu final; sleep 1; cloud_river; done
+  exit 0
+fi
+# SLOW=1：夕空を2倍にして、ゆっくりなぞり始めたとき、言葉が動き出すまで（3回）
+if [ "$SLOW" = 1 ]; then
+  $A shell "input tap 540 1000; input tap 540 1000"; sleep 1.5
+  for i in 1 2 3; do press 2倍ゆっくり 250 700 620 300 400 900 4 slow; sleep 1; done
+  $A shell "input tap 540 1000; input tap 540 1000"; sleep 1
   exit 0
 fi
 if [ "$QUICK" = 1 ]; then

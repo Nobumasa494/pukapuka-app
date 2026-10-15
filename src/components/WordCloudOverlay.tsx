@@ -307,6 +307,7 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .maxDuration(250)
+    .maxDistance(12) // 指が12px動いたら、ダブルタップではない（すぐあきらめて、なぞる・つまむの邪魔をしない）
     .onEnd((e) => {
       cancelAnimation(sc); cancelAnimation(tx); cancelAnimation(ty);
       if (sc.get() > 1.2) {
@@ -322,7 +323,9 @@ export default function WordCloudOverlay({ width, height, onBack, onOpenArchive 
       tx.set(withTiming(clampV(e.x - px * k, loX(k), hiX()), SETTLE));
       ty.set(withTiming(clampV(e.y - py * k, loY(k), hiY(k)), SETTLE));
     });
-  const gesture = Gesture.Exclusive(doubleTap, Gesture.Simultaneous(pan, pinch));
+  // なぞる・つまむは、ダブルタップかどうかを待たずに、すぐ動かす（前は Exclusive で、ダブルタップでないと決まるまで、なぞり始めを待たせていた。
+  // 本物の指はゆっくり動き始めるので、拡大してからのなぞりに「引っかかる」違和感があった。2026-10-15、ユーザー「ズームしてからのタッチ操作に違和感・かくつき」）
+  const gesture = Gesture.Simultaneous(pan, pinch, doubleTap);
   const canvasStyle = useAnimatedStyle(() => {
     const k = sc.get();
     return {
