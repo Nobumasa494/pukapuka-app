@@ -39,9 +39,9 @@ const HELP_COLOR = '#8f5f8a';
 
 // 言い方の決まり（スキル /pukapuka-me の 3.）：「〜のあとに」と書く。「〜のせいで」「〜すると」とは書かない
 function heroText(x: SourceItem, n: number): string {
-  if (x.stage === 'sure') return `「${x.word}」の日のあとは、\n「${x.to}」を\n拾うことが多いみたい`;
+  if (x.stage === 'sure') return `「${x.word}」を拾った日のあとは、\n「${x.to}」を\n拾うことが多いみたい`;
   // 確かめ中・見えはじめ：確かさは言わず、数えた事実だけ（2026-10-10 ユーザー「多いかもは曖昧で混乱する」）
-  return `「${x.word}」の日のあとに、\n「${x.to}」を\n拾った日は、\nいま${n}回です`;
+  return `「${x.word}」を拾った日のあとに、\n「${x.to}」を\n拾った日は、\nいま${n}回です`;
 }
 // 比べる期間を、実際の日付で書く（「4週どうし」は何のことか伝わらなかった。2026-10-11 ユーザー）。dayNumber は UTC の日の番号
 const dayText = (day: number, shiftDays = 0) => {
@@ -146,12 +146,17 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
                 <View style={styles.ex}>
                   <Rule label="たとえば" />
                   {numbers.map((e) => (
-                    <View key={e.from} style={styles.exRow}>
-                      <Text style={styles.exDate}>{mdDay(e.from, shiftDays)}</Text>
-                      <Word word={top.word} />
-                      <Text style={styles.arrow}>⟶</Text>
-                      <Text style={styles.exDate}>{mdDay(e.to, shiftDays)}</Text>
-                      <Word word={top.to} />
+                    // 言葉が長い（最大12文字）ので、行きと帰りを2行に分ける（横に並べると切れた。2026-10-14）
+                    <View key={e.from} style={styles.exBlock}>
+                      <View style={styles.exRow}>
+                        <Text style={styles.exDate}>{mdDay(e.from, shiftDays)}</Text>
+                        <Word word={top.word} />
+                      </View>
+                      <View style={styles.exRow}>
+                        <Text style={styles.exDate}>{mdDay(e.to, shiftDays)}</Text>
+                        <Text style={styles.arrow}>⟶</Text>
+                        <Word word={top.to} />
+                      </View>
                     </View>
                   ))}
                 </View>
@@ -310,7 +315,8 @@ export default function MeOverlay({ width, height, onBack }: { width: number; he
 // 言葉：明朝の字だけ（種類の色の丸はやめた。意味がどこにも書いていなかった。矢印の左はいつも「していること」、右は元気・好奇心の言葉で、置き場所で分かる。2026-10-10 ユーザー「A」）
 function Word({ word }: { word: string }) {
   return (
-    <Text style={styles.wordText} numberOfLines={1}>
+    // 言葉が長いときは、切らずに2行まで折り返す（決定 2026-10-14。倉庫の言葉は最大12文字）
+    <Text style={styles.wordText} numberOfLines={2}>
       {word}
     </Text>
   );
@@ -370,7 +376,8 @@ const styles = StyleSheet.create({
   hero: { textAlign: 'center', fontSize: 25, lineHeight: 44, color: INK, fontFamily: SERIF, letterSpacing: 1 },
   heroQuiet: { textAlign: 'center', fontSize: 18, lineHeight: 34, color: SUB, fontFamily: SERIF, letterSpacing: 1 },
   ex: { marginTop: 34, alignSelf: 'stretch', paddingHorizontal: 6 },
-  exRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
+  exBlock: { marginTop: 12 },
+  exRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 2 },
   exDate: { fontSize: 12, color: SUB, fontFamily: SERIF, minWidth: 46, textAlign: 'right' },
   rule: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   ruleLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(43,38,64,0.25)' },

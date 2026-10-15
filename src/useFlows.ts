@@ -6,6 +6,7 @@ import { useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { dayKey } from './period';
 import { isDemo, useDeviceId } from './useCaptures';
+import { addSessionShown, notifySessionShown } from './flowSession';
 
 const FLUSH_MS = 60_000;
 // 日 → 「枠\n言葉」 → 回数。0時をまたいでも、浮かんだ日の分として数える
@@ -13,6 +14,7 @@ let tally = new Map<string, Map<string, number>>();
 
 // 泡が1つ川に浮かんだ（frame：どの枠から。今は均等だけ）
 export function countFlow(word: string, frame = 'even') {
+  addSessionShown(word);
   const day = dayKey(Date.now());
   let m = tally.get(day);
   if (!m) tally.set(day, (m = new Map()));
@@ -49,6 +51,7 @@ export function useFlowFlush() {
         }
       }
       busy.current = false;
+      notifySessionShown(); // 1分に1回、夕空の割合を描き直す合図
     };
     const timer = setInterval(flush, FLUSH_MS);
     const sub = AppState.addEventListener('change', (s) => {

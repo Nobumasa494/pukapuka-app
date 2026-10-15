@@ -1,5 +1,5 @@
 // 流れの速さのバー（2026-10-11 ユーザー「今の川の流れが基準として、もう少し早めることができるバーがほしい」）。
-// 右下の ♪ の上の川の印（3本の波線）を押すと、その左に出て、しばらくさわらないと消える。今の速さ（1倍）〜2倍。選んだ速さは端末に覚える
+// 左上の ♪ の下の川の印（3本の波線）を押すと、その右に出て、しばらくさわらないと消える。今の速さ（1倍）〜2倍。選んだ速さは端末に覚える
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -69,6 +69,7 @@ export default function SpeedControl({ speed, visible }: { speed: SharedValue<nu
         accessibilityRole="button"
         accessibilityLabel="流れの速さ"
       >
+        <View pointerEvents="none" style={styles.glow} />
         <Waves on={value > 1} />
       </Pressable>
       {open && (
@@ -91,22 +92,25 @@ export default function SpeedControl({ speed, visible }: { speed: SharedValue<nu
 // 川の印：3本の波線（2026-10-11 ユーザー「川は３つの波線まーくがいいかも」）。1倍より速いときは明るく
 const WAVE = 'c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0';
 function Waves({ on }: { on: boolean }) {
-  const color = on ? 'rgba(255,236,200,0.95)' : 'rgba(255,246,232,0.6)';
+  // 目立つように、いつも明るく（速いときは、さらに金色）。2026-10-14、ユーザー「少し目立つようにして、光らせる」
+  const color = on ? 'rgba(255,226,160,1)' : 'rgba(255,244,222,0.95)';
   return (
-    <Svg width={22} height={16} viewBox="0 0 22 16">
+    <Svg width={24} height={18} viewBox="0 0 22 16">
       {[3, 8, 13].map((y) => (
-        <Path key={y} d={`M2 ${y}${WAVE}`} stroke={color} strokeWidth={1.4} strokeLinecap="round" fill="none" />
+        <Path key={y} d={`M2 ${y}${WAVE}`} stroke={color} strokeWidth={1.7} strokeLinecap="round" fill="none" />
       ))}
     </Svg>
   );
 }
 
 const styles = StyleSheet.create({
-  btn: { position: 'absolute', bottom: 70, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  // 左上（♪の下。縦に並べる。ユーザー「左上のマークは縦でいい」）。泡が下を流れるので、下の端から上へ移した（決定 2026-10-14、ユーザー「川の速さや音楽は左上に移動する」）
+  btn: { position: 'absolute', top: 90, left: 16, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   panel: {
-    position: 'absolute', bottom: 66, right: 52, zIndex: 21, flexDirection: 'row', alignItems: 'center', gap: 10,
+    position: 'absolute', top: 86, left: 54, zIndex: 21, flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(20,40,60,0.45)',
   },
+  glow: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,222,160,0.2)', boxShadow: '0 0 14px 4px rgba(255,214,150,0.45)' },
   label: { fontSize: 11, color: 'rgba(235,242,248,0.75)', letterSpacing: 1 },
   trackBox: { width: TRACK, height: 28, justifyContent: 'center' },
   track: { position: 'absolute', left: 0, right: 0, height: 2, borderRadius: 1, backgroundColor: 'rgba(235,242,248,0.3)' },

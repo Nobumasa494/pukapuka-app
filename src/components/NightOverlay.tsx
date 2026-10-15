@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAiWords, useTagged } from '../aiWords';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Animated, {
@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { WIDE_CAPS, layoutSky, lineTiers, skeleton, selectConstellation, starBox, type Mag, type StarLink, type Star, type TentativeLink } from '../constellation';
 import { useCaptures } from '../useCaptures';
+import { splitBubble } from '../bubbleText';
 import HelpStar from './HelpStar';
 import { makeDemoCaptures, type DemoDay } from '../demoPersona';
 
@@ -195,7 +196,8 @@ function GlowStar({ star, index, group, clock, dim }: { star: Star; index: numbe
 }
 
 // 星座。期間を変えたら作り直し、星が浮かんでから線が引かれる
-function Constellation({ stars, lines, tentative, selected, onSelect, onClear, width, height, viewW, viewH, home }: {
+// memo：見本を出し入れしても、見えていないほうの夜空は作り直さない（2026-10-15）
+const Constellation = memo(function Constellation({ stars, lines, tentative, selected, onSelect, onClear, width, height, viewW, viewH, home }: {
   stars: Star[];
   lines: StarLink[];
   tentative: TentativeLink[];
@@ -503,12 +505,12 @@ function Constellation({ stars, lines, tentative, selected, onSelect, onClear, w
                   {
                     marginTop: 4 + s.r * 2 + 3,
                     fontSize: s.labelSize,
-                    lineHeight: s.labelH,
+                    lineHeight: Math.ceil(s.labelSize * 1.35),
                     color: s.word === selected ? 'rgba(255,232,170,1)' : `rgba(255,246,232,${on ? MAG_LOOK[s.mag].label : 0.3})`,
                   },
                 ]}
               >
-                {s.word}
+                {splitBubble(s.word)}
               </Text>
             </Pressable>
           );
@@ -535,7 +537,7 @@ function Constellation({ stars, lines, tentative, selected, onSelect, onClear, w
     </View>
     </GestureDetector>
   );
-}
+});
 
 type Props = {
   width: number;
@@ -556,17 +558,26 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
   // 夜空は直近6週間の本物の記録（決定 2026-10-09）。読み込み中は何も置かない
   const aiVersion = useAiWords();
   const real = useTagged(useCaptures(NIGHT_DAYS), aiVersion);
-  const sample = useMemo(() => (showSample ? sampleCaptures() : null), [showSample]);
-  const captures = showSample ? sample : real;
-  const { stars, lines, tentative, canvasW, canvasH, home } = useMemo(() => {
-    const f = showSample ? undefined : focus;
+  // 本物の夜空と見本の夜空は、それぞれ1回だけ計算して、作ったままにする。見本の出し入れでは、見せるほうを切りかえるだけ
+  // （前は押すたびに星と線を選び直し・置き直していて、見本・× の反応が遅かった。2026-10-15）
+  const skyOf = (caps: Parameters<typeof selectConstellation>[0], f: string | undefined) => {
     // 1画面に収まらないほど星があるときは、上限をゆるめて、画面より大きな夜空にする（なぞって動かす）
-    let picked = selectConstellation(captures ?? [], f);
-    if (picked.truncated) picked = selectConstellation(captures ?? [], f, WIDE_CAPS);
+    let picked = selectConstellation(caps, f);
+    if (picked.truncated) picked = selectConstellation(caps, f, WIDE_CAPS);
     const area = { x: 20, y: AREA_TOP, w: width - 40, h: height - AREA_TOP - AREA_BOTTOM };
     const sky = layoutSky(picked.stats, picked.lines, area, f, picked.tentative);
     return { stars: sky.stars, lines: picked.lines, tentative: picked.tentative, canvasW: Math.max(width, sky.extentW), canvasH: Math.max(height - SKY_WINDOW_BOTTOM, sky.extentH), home: sky.home };
-  }, [captures, focus, showSample, width, height]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const realSky = useMemo(() => skyOf(real ?? [], focus), [real, focus, width, height]);
+  const [sampleMade, setSampleMade] = useState(false);
+  useEffect(() => { if (showSample) setSampleMade(true); }, [showSample]);
+  const wantSample = sampleMade || showSample;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sampleSky = useMemo(() => (wantSample ? skyOf(sampleCaptures(), undefined) : null), [wantSample, width, height]);
+  const { stars, lines, tentative } = showSample && sampleSky ? sampleSky : realSky;
+  const onSelect = useCallback((w: string) => setSelected((prev) => (prev === w ? null : w)), []);
+  const onClear = useCallback(() => setSelected(null), []);
 
   const current = selected ? stars.find((s) => s.word === selected) : undefined;
   const degree = current ? lines.filter((l) => l.a === current.word || l.b === current.word).length : 0;
@@ -597,19 +608,39 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Constellation
-        stars={stars}
-        lines={lines}
-        tentative={tentative}
-        selected={current ? current.word : null}
-        onSelect={(w) => setSelected((prev) => (prev === w ? null : w))}
-        onClear={() => setSelected(null)}
-        width={canvasW}
-        height={canvasH}
-        viewW={width}
-        viewH={height}
-        home={home}
-      />
+      {/* 本物と見本の夜空。見せないほうは display: none で、作ったまま隠す */}
+      <View style={[StyleSheet.absoluteFill, showSample && sampleSky ? styles.hidden : null]} pointerEvents="box-none">
+        <Constellation
+          stars={realSky.stars}
+          lines={realSky.lines}
+          tentative={realSky.tentative}
+          selected={!showSample && current ? current.word : null}
+          onSelect={onSelect}
+          onClear={onClear}
+          width={realSky.canvasW}
+          height={realSky.canvasH}
+          viewW={width}
+          viewH={height}
+          home={realSky.home}
+        />
+      </View>
+      {sampleSky && (
+        <View style={[StyleSheet.absoluteFill, showSample ? null : styles.hidden]} pointerEvents="box-none">
+          <Constellation
+            stars={sampleSky.stars}
+            lines={sampleSky.lines}
+            tentative={sampleSky.tentative}
+            selected={showSample && current ? current.word : null}
+            onSelect={onSelect}
+            onClear={onClear}
+            width={sampleSky.canvasW}
+            height={sampleSky.canvasH}
+            viewW={width}
+            viewH={height}
+            home={sampleSky.home}
+          />
+        </View>
+      )}
 
       {isEmpty && (
         <View style={[styles.emptyRow, { top: AREA_TOP + (height - AREA_TOP - AREA_BOTTOM) / 2 + 24 }]} pointerEvents="box-none">
@@ -711,6 +742,7 @@ export default function NightOverlay({ width, height, focus, onBack, onRiver }: 
 }
 
 const styles = StyleSheet.create({
+  hidden: { display: 'none' },
   // 星の層の窓。上は見出しの下から、下は、説明・ボタン・木や山が見える所（下から130px）を空ける。窓の外は切る（画面を、なぞって動かすため）
   shootTail: { position: 'absolute', left: 0, top: 0, width: SHOOT_TAIL, height: 2, borderRadius: 1, overflow: 'hidden' },
   sparkle: { position: 'absolute', left: 0, top: 0, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },

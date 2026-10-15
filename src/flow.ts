@@ -1,4 +1,5 @@
 import { categoryOf } from './aiRegistry';
+import { isGenkiBoxWord } from './warehouse';
 
 // わたしのこと（C3.）の計算：日をまたいだ流れ（矢印）と、育っていること。RN に依存しないので node で検証できる。
 // 同じ回・同じ日の中の順番は使わない（川が順番を決めてしまうため。設計書 D.）
@@ -12,7 +13,8 @@ export const ARROW_WEIGHTS = [1, 0.5, 0.25];
 export const GENKI_WORDS = new Set([
   'わくわく', 'ときめき', '喜び', 'うれしい', '高揚感', '満足', '穏やか', 'ほっとした', '解放感', 'スッキリ', '軽い',
 ]);
-export const isGenki = (w: string) => GENKI_WORDS.has(w) || categoryOf(w) === 'curiosity';
+// 倉庫の言葉は、元気の箱（わくわく・うれしい・おだやか）に入っていれば元気（決定 2026-10-14）
+export const isGenki = (w: string) => GENKI_WORDS.has(w) || isGenkiBoxWord(w) || categoryOf(w) === 'curiosity';
 // つらい気持ち（元気でも、おだやかな気持ちでもない気持ちの言葉）。川で少なめに流す・裏側の言葉を作る（2026-10-11）
 const CALM_WORDS = new Set(['安心', '感謝']);
 export const isHardFeeling = (w: string) => categoryOf(w) === 'emotion' && !isGenki(w) && !CALM_WORDS.has(w);

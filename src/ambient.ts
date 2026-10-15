@@ -99,7 +99,11 @@ export function createAmbient(): Ambient {
       if (v === goal) {
         if (goal === 0 && p.playing) p.pause();
         // 裏から戻ったとき、音量はそのままで止まっていることがある
-        if (goal > 0 && !p.playing) p.play();
+        if (goal > 0 && !p.playing) {
+          p.play();
+          // 読み込みが終わる前の play は無視される（Android。音量だけ上がって鳴らなかった。2026-10-15）。鳴り出すまで見張りつづける
+          moving = true;
+        }
         continue;
       }
       if (goal > 0 && !p.playing) p.play();

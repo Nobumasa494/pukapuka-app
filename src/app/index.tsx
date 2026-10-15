@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useAiWords } from '../aiWords';
-import { Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
+import { Image, Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue, useAnimatedStyle, useAnimatedProps, useAnimatedReaction, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI,
@@ -9,13 +9,16 @@ import Animated, {
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
+import { Asset } from 'expo-asset';
 
 import { useFocusEffect } from 'expo-router';
 import { useAddCapture, useDeviceId } from '../useCaptures';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { countFlow, useDailyGather, useFlowFlush } from '../useFlows';
-import { answerTo, chooseFrame, floated, frameOf, pickRiverWord, setRiverWeights, startGather } from '../riverWords';
+import { answerTo, chooseFrame, floated, frameOf, pickRiverWord, setMyBoxes, setRiverWeights, startGather } from '../riverWords';
+import { boxOf } from '../warehouse';
+import { useCaptures, useShownCounts } from '../useCaptures';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
@@ -24,7 +27,7 @@ import SpeedControl from '../components/SpeedControl';
 import { createAmbient, type Ambient, type Scene } from '../ambient';
 import { bubbleLen, splitBubble } from '../bubbleText';
 import { buildPathData, placeBubble, spawnFlowing, stepBubbles, type PathData, type SimBubble } from '../riverFlow';
-import type { VideoRect } from '../riverPath';
+import { BOTTOM_COLOR, type VideoRect } from '../riverPath';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -179,10 +182,16 @@ const REVEAL_FALLBACK_AT_S = 0.4;
 const PRECOVER_LEFT_S = 0.3;
 const PRECOVER_MS = 250;
 const REVEAL_MS = 120;
+// 静止画を出してから動画を差し替えるまで（2〜3コマ）
+const SWAP_AFTER_COVER_MS = 50;
 // 静止画で覆ってから差し替える（ループ中の波と静止画の波のずれをフェードで隠す）
 const COVER_IN_MS = 180;
 const UI_FADE_MS = 300;
 const CLOUD_UI_IN_MS = 500;
+// 夕空の言葉は、動画が終わる少し前から出し始める（動画の終わりと出始めの間に、空だけの間が0.5秒ほどあった。2026-10-15）
+const CLOUD_UI_EARLY_MS = 300;
+// 夕空へ向かう動画が流れ出してから、夕空の画面を作り始めるまで（流れ出しと重ねない）
+const CLOUD_PREP_DELAY_MS = 150;
 const TRANS_RISE_MS = 1600;
 const BACK_SURFACE_DELAY_MS = 1300;
 const BACK_SURFACE_MS = 900;
@@ -192,6 +201,27 @@ const CLIP_END_SLACK_MS = 800;
 const NIGHT_FADE_MS = 900;
 // 動画が再生できない環境では、この時間待っても始まらなければ静止画のまま進める
 const VIDEO_START_TIMEOUT_MS = 1200;
+
+// 移り変わりの動画を、アプリを開いて少ししたら、スマホに先にダウンロードしておく（2026-10-15）。
+// 開発中は動画が PC からトンネル越しに届くので、1回目の「夕空」で流れ出すまで約2秒かかった。ダウンロード済みのファイルがあれば、それを使う
+const LOCAL_VIDEO = new Map<number, string>();
+const PRELOAD_AFTER_MS = 2500;
+async function preloadVideos(srcs: number[]) {
+  // 動画の上に被せる静止画も、先に読んでおく（1回目の夕空のループへの切りかえで、静止画がまだ読めておらず、青緑の画面が1コマ出た）
+  for (const img of [CLOUD_BG, NIGHT_BG, RIVER_POSTER]) {
+    const uri = Image.resolveAssetSource(img)?.uri;
+    if (uri) await Image.prefetch(uri).catch(() => false);
+  }
+  for (const src of srcs) {
+    try {
+      const a = Asset.fromModule(src);
+      await a.downloadAsync();
+      if (a.localUri) LOCAL_VIDEO.set(src, a.localUri);
+    } catch {
+      // 失敗したら、これまでどおり（保存して使い回す）
+    }
+  }
+}
 
 // プレーヤーの設定はコンポーネントの外で変える（中で代入すると react-hooks/immutability に引っかかる）
 function setLoop(p: VideoPlayer, loop: boolean) {
@@ -208,6 +238,9 @@ const HOLD_FLOW_RATE = 0.12;
 const FLOW_EASE_SEC = 0.35;
 // 画面下のヒント文の手前で泡を消す
 const BOTTOM_UI = 60;
+// 泡は下で透明にならず、画面の下の端まで流れて切れる（決定 2026-10-14、ユーザー「消えないほうにしたい」。ヒント文と♪は泡の上に出す）。
+// web で ?nofade=0 をつけると、前の「下で透明になって消える」形に戻して見比べられる
+const NO_FADE = !(typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]nofade=0\b/.test(window.location.search));
 // 泡はこの大きさで一度だけ描き、UI スレッドで拡大・縮小して正しい大きさにする（流れている泡は描き直さない）。
 // 大きさが変わるたびに描き直すと、その1コマだけ大きさと位置が食い違って泡が跳ねた
 const BASE = 80;
@@ -333,9 +366,15 @@ const Bubble = memo(function Bubble({ id, word, bob, P, sim, time, rise, onCaptu
     const pl = (b.pl ?? placeBubble(P, b));
     const fadeIn = Math.min(1, b.age / SURFACE_SEC);
     // 泡の下の方がヒント文に近づいたら消える（中心で判定すると大きな泡が文字に重なる）
-    const fadeOut = Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
+    const fadeOut = NO_FADE ? 1 : Math.min(1, Math.max(0, (P.height - BOTTOM_UI - (pl.y + pl.size * 0.35)) / 60));
+    // 空へ昇る（夕空へ移る）とき、画面の端で半分切れている泡は、切れたまま昇らず、すぐ消える（決定 2026-10-14、ユーザー「やめてほしい」）
+    // ゆらゆら（横に ±SWAY_PX）と、ふちのにじみの分も見込んで、少しでも端にかかっていたら切れているとみなす（最初は端ぴったりで見たので、ちょっと切れた泡が残った）
+    const edgeMargin = SWAY_PX + 8;
+    // 下の端も同じ（泡が下で消えずに流れる形にしたので、下で切れた泡が、そのまま昇ってきた）
+    const cut = pl.x - pl.size / 2 < edgeMargin || pl.x + pl.size / 2 > P.width - edgeMargin || pl.y + pl.size / 2 > P.height - edgeMargin;
+    const riseOut = cut ? Math.max(0, 1 - rise.value * 60) : 1;
     return {
-      opacity: (0.8 + 0.2 * pl.t) * Math.min(fadeIn, fadeOut),
+      opacity: (0.8 + 0.2 * pl.t) * Math.min(fadeIn, fadeOut) * riseOut,
       transform: [{ translateX: pl.x - base / 2 }, { translateY: pl.y - base / 2 }, { scale: pl.size / base }],
     };
   });
@@ -792,12 +831,17 @@ function CaptureToast({ ref }: { ref: React.Ref<ToastHandle> }) {
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
+  // 画面下の文字（「〇〇」を拾った・気になる言葉をタップしてみてください）はやめた（決定 2026-10-14、ユーザー「いらないと思う」）。
+  // 拾ったことは、泡が昇って消える動き・振動・音で伝わる。はじめの案内は、SPEC 8.「はじめの案内」で、使う人を増やす前に決める。
+  // 戻すときは SHOW_BOTTOM_TEXT を true に
+  if (!SHOW_BOTTOM_TEXT) return null;
   return captured ? (
     <Text style={styles.capturedMsg}>「{captured}」を拾った</Text>
   ) : (
     <Text style={styles.hint}>気になる言葉をタップしてみてください</Text>
   );
 }
+const SHOW_BOTTOM_TEXT = false;
 
 export default function Home() {
   const { width, height } = useWindowDimensions();
@@ -806,9 +850,30 @@ export default function Home() {
   useFlowFlush();
   // その人向けの川：好みの量（Convex が記録から計算。拾うたびに更新される）
   const deviceId = useDeviceId();
-  useAiWords();
+  const aiVersion = useAiWords();
   const riverWeights = useQuery(api.river.weights, deviceId ? { deviceId } : 'skip');
   useEffect(() => setRiverWeights(riverWeights), [riverWeights]);
+  // 自分の箱：直近4週間に拾った・流れた回数を箱ごとに数える（川の配合の「自分の箱」。決定 2026-10-14）
+  const myCaps = useCaptures(28);
+  const myShown = useShownCounts(28);
+  // 夕空と同じ問い合わせ（7日分）を、水辺のときから読んでおく。夕空を開いてから読みに行くと、言葉が出るのが遅かった（2026-10-15）。
+  // 同じ問い合わせは Convex が1本にまとめるので、夕空を開いたときはすぐ出る
+  useCaptures(7);
+  useShownCounts(7);
+  useEffect(() => {
+    if (!myCaps) return;
+    const m = new Map<number, { picked: number; shown: number }>();
+    const get = (b: number) => m.get(b) ?? m.set(b, { picked: 0, shown: 0 }).get(b)!;
+    for (const c of myCaps) {
+      const b = boxOf(c.word);
+      if (b !== undefined) get(b).picked++;
+    }
+    if (myShown) for (const [w, n] of myShown.shown) {
+      const b = boxOf(w);
+      if (b !== undefined) get(b).shown += n;
+    }
+    setMyBoxes(m);
+  }, [myCaps, myShown, aiVersion]);
   useDailyGather(startGather);
 
   const P = useMemo(() => buildPathData(width, height), [width, height]);
@@ -873,6 +938,11 @@ export default function Home() {
   // 拾ったことばの画面は、離れるときに消え終わったら外す。外さないと、次の動画が流れている間（2〜3秒）も
   // 見えないキラキラと光のアニメーションが動き続け、動画の読み込みと重なってスマホで重かった（2026-10-05）
   const [cloudUiOn, setCloudUiOn] = useState(true);
+  // 夕空へ向かう動画の間に、夕空の画面を見えないまま作っておく印
+  const [cloudPrep, setCloudPrep] = useState(false);
+  useEffect(() => {
+    if (stage !== 'toCloud' && stage !== 'nightToCloud') setCloudPrep(false);
+  }, [stage]);
   useEffect(() => {
     if (MUSIC_FADE_MS[stage] !== undefined) ambientRef.current?.setScene(SCENE_OF[stage], MUSIC_FADE_MS[stage]);
   }, [stage]);
@@ -883,6 +953,9 @@ export default function Home() {
   const firstFrameRef = useRef(false);
   const precoveredRef = useRef(false);
   const onFirstFrame = useCallback(() => {
+    // 差し替えの途中で、前の動画の「最初のコマが描けた」合図が来ることがある。それで静止画を外すと、
+    // まだ絵のない画面（Android では緑っぽい）が一瞬見えた（2026-10-15、ユーザー「水辺と夕空の行き来で一瞬緑っぽくなる」）。新しい動画が読み込めてからの合図だけ受ける
+    if (!loadedRef.current) return;
     firstFrameRef.current = true;
   }, []);
   const startedRef = useRef(false);
@@ -909,6 +982,11 @@ export default function Home() {
   useEffect(() => {
     player.play();
   }, [player]);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const id = setTimeout(() => preloadVideos([TRANS_VIDEO, CLOUD_VIDEO, BACK_VIDEO, NIGHT_VIDEO, NIGHT_BACK_VIDEO, RIVER_VIDEO]), PRELOAD_AFTER_MS);
+    return () => clearTimeout(id);
+  }, []);
 
   const goStage = (s: Stage) => {
     stageRef.current = s;
@@ -926,7 +1004,13 @@ export default function Home() {
     precoveredRef.current = false;
     startedRef.current = false;
     setLoop(player, c.loop);
-    player.replaceAsync(c.src).then(() => player.play());
+    // 一度読んだ動画は、スマホに保存して使い回す（開発中は、動画を毎回トンネル越しに PC から読み、流れ出すまで約1.2秒止まって見えた。2026-10-15）
+    const local = LOCAL_VIDEO.get(c.src);
+    // 静止画を出したコマが描かれてから、動画を差し替える。同じコマで差し替えると、動画の面が先に空になり、下の青緑が1コマ見えた（2026-10-15）
+    later(() => {
+      if (clipRef.current !== clip) return;
+      player.replaceAsync(Platform.OS === 'web' ? c.src : local ? { uri: local } : { assetId: c.src, useCaching: true }).then(() => player.play());
+    }, SWAP_AFTER_COVER_MS);
     later(() => handlersRef.current.onClipStarted(clip), VIDEO_START_TIMEOUT_MS);
   };
 
@@ -946,24 +1030,42 @@ export default function Home() {
     if (clip === 'toCloud') {
       // カメラが空を見上げるのに合わせて泡は空へ昇って消える
       rise.set(withTiming(1, { duration: TRANS_RISE_MS, easing: Easing.in(Easing.quad) }));
+      // 夕空の画面は、動画が流れ出してから、見えないまま作っておく（作るのに約1秒。動画が終わってから作ると、空だけの画面が1秒以上続いた。
+      // 動画の始まりに作ると、差し替えが遅れた。2026-10-15）
+      later(() => setCloudPrep(true), CLOUD_PREP_DELAY_MS);
+      // 夕空の言葉は、動画の終わり際からふわっと出す（前は動画が終わって0.8秒待ってから出していて、遅かった。2026-10-15）
+      later(() => handlersRef.current.showCloudUi(), CLIPS.toCloud.ms! - CLOUD_UI_IN_MS - CLOUD_UI_EARLY_MS);
       later(() => handlersRef.current.onClipEnd('toCloud'), CLIPS.toCloud.ms! + CLIP_END_SLACK_MS);
     } else if (clip === 'toRiver') {
       // カメラが川岸へ下りた後半、泡は元の水面から浮かび上がる
       appear.set(withDelay(BACK_SURFACE_DELAY_MS, withTiming(1, { duration: BACK_SURFACE_MS, easing: Easing.out(Easing.quad) })));
       later(() => handlersRef.current.onClipEnd('toRiver'), CLIPS.toRiver.ms! + CLIP_END_SLACK_MS);
     } else if (clip === 'toNight' || clip === 'nightToCloud') {
+      if (clip === 'nightToCloud') {
+        later(() => setCloudPrep(true), CLOUD_PREP_DELAY_MS);
+        later(() => handlersRef.current.showCloudUi(), CLIPS[clip].ms! - CLOUD_UI_IN_MS - CLOUD_UI_EARLY_MS);
+      }
       later(() => handlersRef.current.onClipEnd(clip), CLIPS[clip].ms! + CLIP_END_SLACK_MS);
     }
+  };
+
+  // 夕空の言葉とボタンを出す（動画の終わり際。押せるのもここから）。画面は動画の間に見えないまま作っておく（下の toCloud）
+  const showCloudUi = () => {
+    if (stageRef.current === 'cloud') return;
+    if (stageRef.current !== 'toCloud' && stageRef.current !== 'nightToCloud') return;
+    goStage('cloud');
+    setCloudUiOn(true);
+    // 泡はもう空へ昇って消えているはず。昇る演出が始まらないまま来たとき（動画の取り違えなど）も、泡を夕空に残さない（2026-10-15、ユーザー「たまに泡の川が夕空に残る」）
+    if (rise.value < 1) rise.set(withTiming(1, { duration: 200 }));
+    cloudUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
   };
 
   // 遷移の動画が終わった: 次のループへ。行きの最後のコマ＝空のループの最初のコマ、帰りの最後のコマ＝川の最初のコマ
   const onClipEnd = (clip: Clip) => {
     if (clipRef.current !== clip) return;
     if (clip === 'toCloud' || clip === 'nightToCloud') {
-      goStage('cloud');
-      setCloudUiOn(true);
+      showCloudUi();
       playClip('cloud');
-      cloudUi.set(withTiming(1, { duration: CLOUD_UI_IN_MS }));
     } else if (clip === 'toRiver') {
       goStage('river');
       playClip('river');
@@ -994,9 +1096,9 @@ export default function Home() {
     covers[c.last].set(withTiming(1, { duration: PRECOVER_MS }));
   };
 
-  const handlersRef = useRef({ reveal, onClipStarted, onClipEnd, onReturn, precover });
+  const handlersRef = useRef({ reveal, onClipStarted, onClipEnd, onReturn, precover, showCloudUi });
   useEffect(() => {
-    handlersRef.current = { reveal, onClipStarted, onClipEnd, onReturn, precover };
+    handlersRef.current = { reveal, onClipStarted, onClipEnd, onReturn, precover, showCloudUi };
   });
 
   useEffect(() => {
@@ -1020,7 +1122,12 @@ export default function Home() {
         }
         handlersRef.current.precover(t);
       }),
-      player.addListener('playToEnd', () => handlersRef.current.onClipEnd(clipRef.current)),
+      // 差し替え中に、前の動画（ループを外された川など）が終わった合図が来ることがある。それを新しい動画の終わりと取り違えると、
+      // つなぎの動画を飛ばして夕空へ行き、動画が止まり、泡も残った（2026-10-15）。新しい動画が読み込めて、見え始めてからの合図だけ受ける
+      player.addListener('playToEnd', () => {
+        if (!loadedRef.current || !revealedRef.current) return;
+        handlersRef.current.onClipEnd(clipRef.current);
+      }),
     ];
     return () => subs.forEach((s) => s.remove());
   }, [player]);
@@ -1054,13 +1161,16 @@ export default function Home() {
   const backToRiver = () => {
     if (stageRef.current !== 'cloud') return;
     goStage('toRiver');
-    rise.set(0);
+    // 押した瞬間は、川の層の値に触らない。appear と rise を同時に変えても、別々のコマに入ることがあり、その1コマだけ川の層（泡・水の色）が見えて、
+    // 夕空が一瞬青緑になった（2026-10-15）。静止画で覆い終わってから、まず appear、次に rise を0にする
     appear.set(0);
     cloudUi.set(withTiming(0, { duration: UI_FADE_MS }));
     later(() => setCloudUiOn(false), UI_FADE_MS + 50);
     coverCloud.set(withTiming(1, { duration: COVER_IN_MS }));
     later(() => {
-      if (stageRef.current === 'toRiver') playClip('toRiver');
+      if (stageRef.current !== 'toRiver') return;
+      rise.set(0);
+      playClip('toRiver');
     }, COVER_IN_MS + 20);
   };
 
@@ -1090,8 +1200,8 @@ export default function Home() {
   const nightToRiver = () => {
     if (stageRef.current !== 'night') return;
     goStage('nightToRiver');
+    appear.set(0); // 先に appear（夕空から戻るときと同じ。逆だと1コマだけ川の層が見える）
     rise.set(0);
-    appear.set(0);
     nightUi.set(withTiming(0, { duration: UI_FADE_MS }));
     coverRiver.set(1);
     coverNight.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
@@ -1171,9 +1281,12 @@ export default function Home() {
     ambientRef.current?.setScene('river', DIARY_FADE_MS);
   };
 
-  const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
-  const coverCloudStyle = useAnimatedStyle(() => ({ opacity: coverCloud.value }));
-  const coverNightStyle = useAnimatedStyle(() => ({ opacity: coverNight.value }));
+  // 静止画は、隠している間もごく薄く（0.004）出しておく。完全に0にすると Android は描く準備を捨て、急に1にした瞬間に間に合わず、
+  // 下の背景色（#1e4a60）が一瞬見えた（2026-10-15、ユーザー「水辺と夕空の行き来で一瞬緑っぽくなる」。録画のコマで確かめた）
+  const COVER_FLOOR = 0.004;
+  const coverRiverStyle = useAnimatedStyle(() => ({ opacity: Math.max(COVER_FLOOR, coverRiver.value) }));
+  const coverCloudStyle = useAnimatedStyle(() => ({ opacity: Math.max(COVER_FLOOR, coverCloud.value) }));
+  const coverNightStyle = useAnimatedStyle(() => ({ opacity: Math.max(COVER_FLOOR, coverNight.value) }));
   const nightUiStyle = useAnimatedStyle(() => ({ opacity: nightUi.value }));
   const meUiStyle = useAnimatedStyle(() => ({ opacity: meUi.value }));
   // 行き: カメラが空を見上げるのに合わせて泡は空へ昇って消える。帰り: 水面から少し浮かび上がって現れる
@@ -1190,6 +1303,8 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
+      {/* 動画を上にずらしたときの、空いた下の部分。水の色でのばす（動画の下の端の色） */}
+      <LinearGradient colors={[BOTTOM_COLOR, BOTTOM_COLOR]} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: Math.max(0, height - (rect.top + rect.height)) + 4, pointerEvents: 'none' }} />
       {/* 背景の動画（1本）。その上に、差し替えの瞬間を隠す静止画2枚 */}
       <BackgroundVideo player={player} rect={rect} onFirstFrame={onFirstFrame} />
       <Animated.Image source={RIVER_POSTER} style={[fill, coverRiverStyle]} />
@@ -1208,9 +1323,10 @@ export default function Home() {
       {lookBackOpen && atRiver && <Pressable style={[StyleSheet.absoluteFill, { zIndex: 9 }]} onPress={() => setLookBackOpen(false)} />}
       {/* 振り返る：右上の小さな月と星（文字のボタンは景色から浮いた。ユーザー「ダサい」→ 印だけ「月と星」2026-10-10） */}
       {/* 包みは押させない（切りかえない）。押せるかどうかは中の月と星が決める。web は子の 'auto' で押せ、スマホは 'box-none' で子だけ押せる */}
-      <Animated.View style={[styles.moonSpot, uiStyle, { pointerEvents: Platform.OS === 'web' ? 'none' : 'box-none' }]}>
+      {/* 月と星は水辺だけ（水辺へ戻る途中も含む）。見え方を水辺の透明度だけで決めていたら、移り変わりが重なったときに値が残り、ほかの画面にも出た（2026-10-15） */}
+      {(stage === 'river' || stage === 'toRiver' || stage === 'nightToRiver' || stage === 'meToRiver') && <Animated.View style={[styles.moonSpot, uiStyle, { pointerEvents: Platform.OS === 'web' ? 'none' : 'box-none' }]}>
         <LookBackMoon onPress={() => setLookBackOpen((o) => !o)} disabled={!atRiver} />
-      </Animated.View>
+      </Animated.View>}
       {/* 行き先を選ぶ（決定 2026-10-10。ユーザー「振り返るのボタン、夕空か夜空かを選べるようにしたい」） */}
       {lookBackOpen && atRiver && (
         <View style={styles.lookBackMenu}>
@@ -1250,7 +1366,7 @@ export default function Home() {
       </Animated.View>
 
       {/* 拾ったことば。空のループの上に重ねる（画面は切り替えない） */}
-      {(stage === 'cloud' || ((stage === 'toRiver' || stage === 'toNight') && cloudUiOn)) && (
+      {(stage === 'cloud' || ((stage === 'toCloud' || stage === 'nightToCloud') && cloudPrep) || ((stage === 'toRiver' || stage === 'toNight') && cloudUiOn)) && (
         <Animated.View style={[StyleSheet.absoluteFill, cloudUiStyle, { pointerEvents: stage === 'cloud' ? 'box-none' : 'none' }]}>
           <WordCloudOverlay width={width} height={height} onBack={backToRiver} onOpenArchive={goNight} />
         </Animated.View>
@@ -1280,15 +1396,17 @@ export default function Home() {
       {/* 流れの速さ。水辺だけ */}
       <SpeedControl speed={speed} visible={atRiver && !diaryOpen} />
 
-      {/* 音のオン・オフ。どの画面でも右下の同じ場所 */}
+      {/* 音のオン・オフ。水辺は左上（泡が下を流れるため。2026-10-14）、ほかの画面は右下（左上に「← 戻る」があるため） */}
       <Pressable
-        style={styles.soundBtn}
+        style={atRiver ? styles.soundBtnTop : styles.soundBtn}
         hitSlop={12}
         onPress={() => setMuted((m) => !m)}
         accessibilityRole="button"
         accessibilityLabel={muted ? '音を出す' : '音を消す'}
       >
-        <Text style={[styles.soundIcon, muted && styles.soundIconOff]}>♪</Text>
+        {/* 水辺の左上では、うっすら光る丸を後ろに置いて目立たせる（2026-10-14、ユーザー「少し目立つようにして、光らせる」） */}
+        {atRiver && !muted && <View pointerEvents="none" style={styles.iconGlow} />}
+        <Text style={[styles.soundIcon, atRiver && styles.soundIconBright, muted && styles.soundIconOff]}>♪</Text>
         {muted && <View style={styles.soundSlash} />}
       </Pressable>
     </View>
@@ -1350,11 +1468,15 @@ const styles = StyleSheet.create({
   lookBackMenu: { position: 'absolute', top: 86, right: 12, alignItems: 'flex-end', gap: 4, zIndex: 10 },
   lookBackBtn: { paddingVertical: 8, paddingHorizontal: 10 },
   lookBackItem: { fontSize: 16, color: '#fff8ee', textShadowColor: 'rgba(70,25,45,0.65)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  soundBtnTop: { position: 'absolute', top: 54, left: 16, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundBtn: { position: 'absolute', bottom: 34, right: 18, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   soundIcon: { fontSize: 16, color: 'rgba(255,246,232,0.7)', textShadowColor: 'rgba(10,20,40,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
+  soundIconBright: { fontSize: 21, color: 'rgba(255,244,222,0.98)', textShadowColor: 'rgba(255,205,130,0.95)', textShadowRadius: 9 },
+  iconGlow: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,222,160,0.2)', boxShadow: '0 0 14px 4px rgba(255,214,150,0.45)' },
   soundIconOff: { color: 'rgba(255,246,232,0.35)' },
   soundSlash: { position: 'absolute', width: 20, height: 1, backgroundColor: 'rgba(255,246,232,0.5)', transform: [{ rotate: '-45deg' }] },
-  hint: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'rgba(235,242,248,0.6)', zIndex: 10 },
+  // 泡が下を流れるので、泡の上でも読めるよう、うすい影を付ける
+  hint: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'rgba(235,242,248,0.85)', zIndex: 10, textShadowColor: 'rgba(10,28,48,0.9)', textShadowRadius: 5, textShadowOffset: { width: 0, height: 0 } },
   capturedMsg: { position: 'absolute', bottom: 40, left: 0, right: 0, textAlign: 'center', fontSize: 16, color: 'rgba(255,248,235,0.95)', zIndex: 10, fontWeight: '500' },
   ripple: {
     position: 'absolute',

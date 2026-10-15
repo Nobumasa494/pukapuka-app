@@ -54,6 +54,7 @@ export type PathData = {
   length: number;
   refHalfw: number;
   height: number;
+  width: number; // 画面の幅（画面の端で切れている泡を見つけるため）
 };
 
 export type SimBubble = {
@@ -90,7 +91,7 @@ export function buildPathData(screenW: number, screenH: number): PathData {
   // 手前（画面の高さ85%付近）の川幅を速さの基準にする
   let ref = 0;
   for (let i = 1; i < ys.length; i++) if (Math.abs(ys[i] - screenH * 0.85) < Math.abs(ys[ref] - screenH * 0.85)) ref = i;
-  return { rect, xs, ys, hws, nys, cum, length: cum[cum.length - 1], refHalfw: hws[ref], height: screenH };
+  return { rect, xs, ys, hws, nys, cum, length: cum[cum.length - 1], refHalfw: hws[ref], height: screenH, width: screenW };
 }
 
 export function pathAt(P: PathData, s: number) {

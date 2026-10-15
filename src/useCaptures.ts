@@ -1,7 +1,8 @@
 // 拾った記録（本物）。第1段はログインなしで、端末ごとの仮の ID で Convex に保存する（SPEC 8. の決定）
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMutation, useQuery } from 'convex/react';
+import { useConvex, useMutation, useQuery } from 'convex/react';
+import { getSessionShown, onSessionShown } from './flowSession';
 import { api } from '../convex/_generated/api';
 import type { Capture } from './sampleCaptures';
 import { dayKey } from './period';
@@ -10,8 +11,18 @@ const KEY = 'pukapuka.deviceId';
 let cached: string | null = null;
 
 // 開発用：web で ?demo=1 をつけて開くと、ダミーの人の記録（convex/demo.ts）で動く。この間は、拾っても保存しない
-const DEMO_DEVICE_ID = 'demo-persona-0000000000000001';
-export const isDemo = typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]demo=1\b/.test(window.location.search);
+// ?demo=day1 は、使いはじめ1日目のダミーの人。?until=13 で、今日の13時までに拾った分だけを見せる（1日の変わり方を撮るため。2026-10-13）
+const search = typeof window !== 'undefined' && typeof window.location?.search === 'string' ? window.location.search : '';
+const demoKind = /[?&]demo=day1\b/.test(search) ? 'day1' : /[?&]demo=1\b/.test(search) ? '1' : null;
+const DEMO_DEVICE_ID = demoKind === 'day1' ? 'demo-day1-00000000000000000001' : 'demo-persona-0000000000000001';
+export const isDemo = demoKind !== null;
+const untilHour = isDemo ? Number(/[?&]until=(\d+)/.exec(search)?.[1] ?? NaN) : NaN;
+export function demoUntil(): number | null {
+  if (!Number.isFinite(untilHour)) return null;
+  const d = new Date();
+  d.setHours(untilHour, 0, 0, 0);
+  return d.getTime();
+}
 
 function newId(): string {
   const a = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -50,7 +61,11 @@ export function useDeviceId(): string | null {
 // 直近 days 日の記録。読み込み中は undefined
 export function useCaptures(days: number): Capture[] | undefined {
   const deviceId = useDeviceId();
-  return useQuery(api.captures.listRecent, deviceId ? { deviceId, days } : 'skip');
+  const rows = useQuery(api.captures.listRecent, deviceId ? { deviceId, days } : 'skip');
+  return useMemo(() => {
+    const until = demoUntil();
+    return rows && until !== null ? rows.filter((c) => c.capturedAt <= until) : rows;
+  }, [rows]);
 }
 
 // 拾った言葉を保存する
@@ -65,7 +80,26 @@ export function useAddCapture() {
 export function useShownCounts(days: number): { shown: Map<string, number>; since: number | null } | undefined {
   const deviceId = useDeviceId();
   const [keys] = useState(() => Array.from({ length: days }, (_, i) => dayKey(Date.now() - i * 86400000)));
-  const rows = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys } : 'skip');
+  // 過去の日は変わらないので、ふつうに読む（読み直しは起きない）。今日の分は1分ごとに増えるので、見張らずに、開いたときに1回だけ読み、
+  // そのあとは、この端末で数えた回数（getSessionShown）を足す（2026-10-15。今日の分を見張ると、1分ごとに今日の全部を読み直し、1回 約280KB だった）
+  const past = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys.slice(1) } : 'skip');
+  const convex = useConvex();
+  const [today, setToday] = useState<{ rows: { day: string; counts: { word: string; frame: string; n: number }[] }[]; base: Map<string, number> } | undefined>(undefined);
+  useEffect(() => {
+    if (!deviceId || isDemo) return;
+    let alive = true;
+    const base = new Map(getSessionShown()); // 読み込んだ時点で、この端末が数えた分（すでに今日の記録に入っているかもしれない分）
+    convex
+      .query(api.flows.listDays, { deviceId, days: keys.slice(0, 1) })
+      .then((rows) => alive && setToday({ rows, base }))
+      .catch(() => alive && setToday({ rows: [], base }));
+    return () => {
+      alive = false;
+    };
+  }, [convex, deviceId, keys]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => onSessionShown(() => setTick((t) => t + 1)), []);
+  const rows = today && past ? [...today.rows, ...past] : undefined;
   return useMemo(() => {
     if (isDemo) return { shown: new Map(), since: null };
     if (!rows) return undefined;
@@ -77,6 +111,13 @@ export function useShownCounts(days: number): { shown: Map<string, number>; sinc
       const t = new Date(y, mo - 1, d).getTime();
       if (since === null || t < since) since = t;
     }
+    // 読み込んだあとに、この端末で流れた分を足す
+    for (const [w, n] of getSessionShown()) {
+      const extra = n - (today?.base.get(w) ?? 0);
+      if (extra > 0) m.set(w, (m.get(w) ?? 0) + extra);
+    }
+    if (since === null && getSessionShown().size > 0) since = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
     return { shown: m, since };
-  }, [rows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today, past, tick]);
 }
