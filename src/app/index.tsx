@@ -927,6 +927,9 @@ export default function Home() {
   const firstFrameRef = useRef(false);
   const precoveredRef = useRef(false);
   const onFirstFrame = useCallback(() => {
+    // 差し替えの途中で、前の動画の「最初のコマが描けた」合図が来ることがある。それで静止画を外すと、
+    // まだ絵のない画面（Android では緑っぽい）が一瞬見えた（2026-10-15、ユーザー「水辺と夕空の行き来で一瞬緑っぽくなる」）。新しい動画が読み込めてからの合図だけ受ける
+    if (!loadedRef.current) return;
     firstFrameRef.current = true;
   }, []);
   const startedRef = useRef(false);
@@ -970,7 +973,8 @@ export default function Home() {
     precoveredRef.current = false;
     startedRef.current = false;
     setLoop(player, c.loop);
-    player.replaceAsync(c.src).then(() => player.play());
+    // 一度読んだ動画は、スマホに保存して使い回す（開発中は、動画を毎回トンネル越しに PC から読み、流れ出すまで約1.2秒止まって見えた。2026-10-15）
+    player.replaceAsync(Platform.OS === 'web' ? c.src : { assetId: c.src, useCaching: true }).then(() => player.play());
     later(() => handlersRef.current.onClipStarted(clip), VIDEO_START_TIMEOUT_MS);
   };
 
@@ -1121,8 +1125,9 @@ export default function Home() {
   const backToRiver = () => {
     if (stageRef.current !== 'cloud') return;
     goStage('toRiver');
-    rise.set(0);
+    // 先に appear を0にしてから rise を0に。逆だと、その間の1コマだけ川の層（泡・水の色）が全部見え、夕空が一瞬青緑になった（2026-10-15）
     appear.set(0);
+    rise.set(0);
     cloudUi.set(withTiming(0, { duration: UI_FADE_MS }));
     later(() => setCloudUiOn(false), UI_FADE_MS + 50);
     coverCloud.set(withTiming(1, { duration: COVER_IN_MS }));
@@ -1157,8 +1162,8 @@ export default function Home() {
   const nightToRiver = () => {
     if (stageRef.current !== 'night') return;
     goStage('nightToRiver');
+    appear.set(0); // 先に appear（夕空から戻るときと同じ。逆だと1コマだけ川の層が見える）
     rise.set(0);
-    appear.set(0);
     nightUi.set(withTiming(0, { duration: UI_FADE_MS }));
     coverRiver.set(1);
     coverNight.set(withTiming(0, { duration: NIGHT_FADE_MS, easing: Easing.inOut(Easing.quad) }));
@@ -1238,9 +1243,12 @@ export default function Home() {
     ambientRef.current?.setScene('river', DIARY_FADE_MS);
   };
 
-  const coverRiverStyle = useAnimatedStyle(() => ({ opacity: coverRiver.value }));
-  const coverCloudStyle = useAnimatedStyle(() => ({ opacity: coverCloud.value }));
-  const coverNightStyle = useAnimatedStyle(() => ({ opacity: coverNight.value }));
+  // 静止画は、隠している間もごく薄く（0.004）出しておく。完全に0にすると Android は描く準備を捨て、急に1にした瞬間に間に合わず、
+  // 下の背景色（#1e4a60）が一瞬見えた（2026-10-15、ユーザー「水辺と夕空の行き来で一瞬緑っぽくなる」。録画のコマで確かめた）
+  const COVER_FLOOR = 0.004;
+  const coverRiverStyle = useAnimatedStyle(() => ({ opacity: Math.max(COVER_FLOOR, coverRiver.value) }));
+  const coverCloudStyle = useAnimatedStyle(() => ({ opacity: Math.max(COVER_FLOOR, coverCloud.value) }));
+  const coverNightStyle = useAnimatedStyle(() => ({ opacity: Math.max(COVER_FLOOR, coverNight.value) }));
   const nightUiStyle = useAnimatedStyle(() => ({ opacity: nightUi.value }));
   const meUiStyle = useAnimatedStyle(() => ({ opacity: meUi.value }));
   // 行き: カメラが空を見上げるのに合わせて泡は空へ昇って消える。帰り: 水面から少し浮かび上がって現れる
@@ -1277,9 +1285,10 @@ export default function Home() {
       {lookBackOpen && atRiver && <Pressable style={[StyleSheet.absoluteFill, { zIndex: 9 }]} onPress={() => setLookBackOpen(false)} />}
       {/* 振り返る：右上の小さな月と星（文字のボタンは景色から浮いた。ユーザー「ダサい」→ 印だけ「月と星」2026-10-10） */}
       {/* 包みは押させない（切りかえない）。押せるかどうかは中の月と星が決める。web は子の 'auto' で押せ、スマホは 'box-none' で子だけ押せる */}
-      <Animated.View style={[styles.moonSpot, uiStyle, { pointerEvents: Platform.OS === 'web' ? 'none' : 'box-none' }]}>
+      {/* 月と星は水辺だけ（水辺へ戻る途中も含む）。見え方を水辺の透明度だけで決めていたら、移り変わりが重なったときに値が残り、ほかの画面にも出た（2026-10-15） */}
+      {(stage === 'river' || stage === 'toRiver' || stage === 'nightToRiver' || stage === 'meToRiver') && <Animated.View style={[styles.moonSpot, uiStyle, { pointerEvents: Platform.OS === 'web' ? 'none' : 'box-none' }]}>
         <LookBackMoon onPress={() => setLookBackOpen((o) => !o)} disabled={!atRiver} />
-      </Animated.View>
+      </Animated.View>}
       {/* 行き先を選ぶ（決定 2026-10-10。ユーザー「振り返るのボタン、夕空か夜空かを選べるようにしたい」） */}
       {lookBackOpen && atRiver && (
         <View style={styles.lookBackMenu}>
