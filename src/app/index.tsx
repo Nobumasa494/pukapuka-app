@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useAiWords } from '../aiWords';
-import { Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
+import { Image, Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue, useAnimatedStyle, useAnimatedProps, useAnimatedReaction, useFrameCallback, withTiming, withDelay, runOnJS, runOnUI,
@@ -9,6 +9,7 @@ import Animated, {
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
+import { Asset } from 'expo-asset';
 
 import { useFocusEffect } from 'expo-router';
 import { useAddCapture, useDeviceId } from '../useCaptures';
@@ -181,10 +182,14 @@ const REVEAL_FALLBACK_AT_S = 0.4;
 const PRECOVER_LEFT_S = 0.3;
 const PRECOVER_MS = 250;
 const REVEAL_MS = 120;
+// 静止画を出してから動画を差し替えるまで（2〜3コマ）
+const SWAP_AFTER_COVER_MS = 50;
 // 静止画で覆ってから差し替える（ループ中の波と静止画の波のずれをフェードで隠す）
 const COVER_IN_MS = 180;
 const UI_FADE_MS = 300;
 const CLOUD_UI_IN_MS = 500;
+// 夕空の言葉は、動画が終わる少し前から出し始める（動画の終わりと出始めの間に、空だけの間が0.5秒ほどあった。2026-10-15）
+const CLOUD_UI_EARLY_MS = 300;
 // 夕空へ向かう動画が流れ出してから、夕空の画面を作り始めるまで（流れ出しと重ねない）
 const CLOUD_PREP_DELAY_MS = 150;
 const TRANS_RISE_MS = 1600;
@@ -196,6 +201,27 @@ const CLIP_END_SLACK_MS = 800;
 const NIGHT_FADE_MS = 900;
 // 動画が再生できない環境では、この時間待っても始まらなければ静止画のまま進める
 const VIDEO_START_TIMEOUT_MS = 1200;
+
+// 移り変わりの動画を、アプリを開いて少ししたら、スマホに先にダウンロードしておく（2026-10-15）。
+// 開発中は動画が PC からトンネル越しに届くので、1回目の「夕空」で流れ出すまで約2秒かかった。ダウンロード済みのファイルがあれば、それを使う
+const LOCAL_VIDEO = new Map<number, string>();
+const PRELOAD_AFTER_MS = 2500;
+async function preloadVideos(srcs: number[]) {
+  // 動画の上に被せる静止画も、先に読んでおく（1回目の夕空のループへの切りかえで、静止画がまだ読めておらず、青緑の画面が1コマ出た）
+  for (const img of [CLOUD_BG, NIGHT_BG, RIVER_POSTER]) {
+    const uri = Image.resolveAssetSource(img)?.uri;
+    if (uri) await Image.prefetch(uri).catch(() => false);
+  }
+  for (const src of srcs) {
+    try {
+      const a = Asset.fromModule(src);
+      await a.downloadAsync();
+      if (a.localUri) LOCAL_VIDEO.set(src, a.localUri);
+    } catch {
+      // 失敗したら、これまでどおり（保存して使い回す）
+    }
+  }
+}
 
 // プレーヤーの設定はコンポーネントの外で変える（中で代入すると react-hooks/immutability に引っかかる）
 function setLoop(p: VideoPlayer, loop: boolean) {
@@ -956,6 +982,11 @@ export default function Home() {
   useEffect(() => {
     player.play();
   }, [player]);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const id = setTimeout(() => preloadVideos([TRANS_VIDEO, CLOUD_VIDEO, BACK_VIDEO, NIGHT_VIDEO, NIGHT_BACK_VIDEO, RIVER_VIDEO]), PRELOAD_AFTER_MS);
+    return () => clearTimeout(id);
+  }, []);
 
   const goStage = (s: Stage) => {
     stageRef.current = s;
@@ -974,7 +1005,12 @@ export default function Home() {
     startedRef.current = false;
     setLoop(player, c.loop);
     // 一度読んだ動画は、スマホに保存して使い回す（開発中は、動画を毎回トンネル越しに PC から読み、流れ出すまで約1.2秒止まって見えた。2026-10-15）
-    player.replaceAsync(Platform.OS === 'web' ? c.src : { assetId: c.src, useCaching: true }).then(() => player.play());
+    const local = LOCAL_VIDEO.get(c.src);
+    // 静止画を出したコマが描かれてから、動画を差し替える。同じコマで差し替えると、動画の面が先に空になり、下の青緑が1コマ見えた（2026-10-15）
+    later(() => {
+      if (clipRef.current !== clip) return;
+      player.replaceAsync(Platform.OS === 'web' ? c.src : local ? { uri: local } : { assetId: c.src, useCaching: true }).then(() => player.play());
+    }, SWAP_AFTER_COVER_MS);
     later(() => handlersRef.current.onClipStarted(clip), VIDEO_START_TIMEOUT_MS);
   };
 
@@ -998,7 +1034,7 @@ export default function Home() {
       // 動画の始まりに作ると、差し替えが遅れた。2026-10-15）
       later(() => setCloudPrep(true), CLOUD_PREP_DELAY_MS);
       // 夕空の言葉は、動画の終わり際からふわっと出す（前は動画が終わって0.8秒待ってから出していて、遅かった。2026-10-15）
-      later(() => handlersRef.current.showCloudUi(), CLIPS.toCloud.ms! - CLOUD_UI_IN_MS);
+      later(() => handlersRef.current.showCloudUi(), CLIPS.toCloud.ms! - CLOUD_UI_IN_MS - CLOUD_UI_EARLY_MS);
       later(() => handlersRef.current.onClipEnd('toCloud'), CLIPS.toCloud.ms! + CLIP_END_SLACK_MS);
     } else if (clip === 'toRiver') {
       // カメラが川岸へ下りた後半、泡は元の水面から浮かび上がる
@@ -1007,7 +1043,7 @@ export default function Home() {
     } else if (clip === 'toNight' || clip === 'nightToCloud') {
       if (clip === 'nightToCloud') {
         later(() => setCloudPrep(true), CLOUD_PREP_DELAY_MS);
-        later(() => handlersRef.current.showCloudUi(), CLIPS[clip].ms! - CLOUD_UI_IN_MS);
+        later(() => handlersRef.current.showCloudUi(), CLIPS[clip].ms! - CLOUD_UI_IN_MS - CLOUD_UI_EARLY_MS);
       }
       later(() => handlersRef.current.onClipEnd(clip), CLIPS[clip].ms! + CLIP_END_SLACK_MS);
     }
@@ -1125,14 +1161,16 @@ export default function Home() {
   const backToRiver = () => {
     if (stageRef.current !== 'cloud') return;
     goStage('toRiver');
-    // 先に appear を0にしてから rise を0に。逆だと、その間の1コマだけ川の層（泡・水の色）が全部見え、夕空が一瞬青緑になった（2026-10-15）
+    // 押した瞬間は、川の層の値に触らない。appear と rise を同時に変えても、別々のコマに入ることがあり、その1コマだけ川の層（泡・水の色）が見えて、
+    // 夕空が一瞬青緑になった（2026-10-15）。静止画で覆い終わってから、まず appear、次に rise を0にする
     appear.set(0);
-    rise.set(0);
     cloudUi.set(withTiming(0, { duration: UI_FADE_MS }));
     later(() => setCloudUiOn(false), UI_FADE_MS + 50);
     coverCloud.set(withTiming(1, { duration: COVER_IN_MS }));
     later(() => {
-      if (stageRef.current === 'toRiver') playClip('toRiver');
+      if (stageRef.current !== 'toRiver') return;
+      rise.set(0);
+      playClip('toRiver');
     }, COVER_IN_MS + 20);
   };
 

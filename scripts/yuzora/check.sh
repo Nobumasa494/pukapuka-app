@@ -58,10 +58,10 @@ if [ "$SLOW" = 1 ]; then
   exit 0
 fi
 if [ "$QUICK" = 1 ]; then
-  for i in 1 2 3; do press 見本を見る 765 2226 $TITLE; sleep 1; press × 100 274 $TITLE; sleep 1; done
+  for i in 1 2 3; do press 見本を見る 765 2226 $TITLE 7; sleep 1; press × 100 274 $TITLE; sleep 1; done
   exit 0
 fi
-press 見本を見る 765 2226 $TITLE; sleep 1
+press 見本を見る 765 2226 $TITLE 7; sleep 1   # 1回目の adb は届くのが遅い（3秒以上）ことがあるので、録画を長めに
 press 1倍なぞり始め 250 700 620 300 400 900 4 swipe; sleep 1   # 拡大していないとき（ゴムのように少し動いて戻る）
 jank 見本なぞる
 $A shell "input tap 540 1000; input tap 540 1000"; sleep 1.5   # ダブルタップで2倍
