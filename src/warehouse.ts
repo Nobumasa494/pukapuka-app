@@ -14,6 +14,16 @@ export const READY_PER_BOX = 10; // どの箱にも、最低この数の言葉�
 let ready = false;
 export const warehouseReady = () => ready;
 
+// 倉庫で動かせるだけ言葉がそろっているか（読み込んだ一覧だけで決まる。setWarehouse の前でも使える）
+export function isWarehouseReady(list: BoxWord[]): boolean {
+  const forced = typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]warehouse=1\b/.test(window.location.search);
+  if (forced && list.length > 0) return true;
+  if (list.length < READY_WORDS) return false;
+  const n = new Map<number, number>();
+  for (const w of list) n.set(w.box, (n.get(w.box) ?? 0) + 1);
+  return BOXES.every((b) => (n.get(b.id) ?? 0) >= READY_PER_BOX);
+}
+
 export function setWarehouse(list: BoxWord[]) {
   boxOfText.clear();
   wordsOfBox.clear();
@@ -24,8 +34,7 @@ export function setWarehouse(list: BoxWord[]) {
     else wordsOfBox.set(w.box, [w.text]);
   }
   // 開発用：web で ?warehouse=1 をつけると、言葉が少なくても倉庫で動かす（見た目の確認用）
-  const forced = typeof window !== 'undefined' && typeof window.location?.search === 'string' && /[?&]warehouse=1\b/.test(window.location.search);
-  ready = (list.length >= READY_WORDS && BOXES.every((b) => (wordsOfBox.get(b.id)?.length ?? 0) >= READY_PER_BOX)) || (forced && list.length > 0);
+  ready = isWarehouseReady(list);
 }
 
 export const boxOf = (text: string): number | undefined => boxOfText.get(text);
