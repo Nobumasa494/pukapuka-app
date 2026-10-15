@@ -26,6 +26,7 @@ export default defineSchema({
     theme: v.optional(v.string()), // 共通点（AI の解釈。画面にも分析にも使わない）
     askedAt: v.optional(v.number()), // そのつど作る：この言葉から作るよう AI に頼んだ時刻（1つの言葉につき1回だけ・1日の上限を数える）
     box: v.optional(v.number()), // 箱の番号（1〜45。convex/boxes.ts）。倉庫の言葉だけ
+    vec: v.optional(v.boolean()), // 意味の位置（wordVecs）を付け終えたら true。付いているかを調べるたびに、重い wordVecs を読まないため（2026-10-15）
   })
     .index("by_text_and_owner", ["text", "owner"])
     .index("by_owner", ["owner"])
@@ -39,6 +40,9 @@ export default defineSchema({
   // 箱の意味の位置（箱の名前と説明から1回だけ作る。言葉がどの箱にいちばん近いかを測る）
   boxVecs: defineTable({ box: v.number(), embedding: v.array(v.float64()) }).index("by_box", ["box"]),
   // 倉庫づくりで、箱ごとに AI に頼んだ回数（同じ箱で頼み続けないため）
+  // 川に流す倉庫の言葉を、箱ごとに1つの塊にしたもの（2026-10-15）。アプリを開くたびに言葉の表を7千語ぶん読むと、Convex の無料の読み込み量（1GB/月）を使い切るため。
+  // 言葉が増える・休む・箱が変わるときだけ更新する（warehouse.ts の editList・rebuildLists）。言葉の表が正で、これは写し
+  boxLists: defineTable({ box: v.number(), texts: v.array(v.string()) }).index("by_box", ["box"]),
   boxBuild: defineTable({ box: v.number(), tries: v.number() }).index("by_box", ["box"]),
   // 流れた記録（SPEC 第2部 G.「その人向けの川のための記録」。決定 2026-10-11）。1日1行。拾わなかった泡も数える
   // 「流れた回数のうち何回拾ったか」の分母

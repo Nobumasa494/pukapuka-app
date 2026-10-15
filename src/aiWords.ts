@@ -8,8 +8,10 @@ import { boxCaptures, setWarehouse, warehouseReady } from './warehouse';
 
 // アプリを開いたら AI の言葉を読み込む。読み込めたら、版が変わって記録の見え方が更新される
 export function useAiWords(): number {
-  const list = useQuery(api.aiWords.forRiver);
   const box = useQuery(api.warehouse.forRiver); // 倉庫の言葉（決定 2026-10-14）。そろうまでは前の言葉のまま
+  // 倉庫で動くときは、前の言葉を読まない（約1.4MB。開くたびに読むと、Convex の無料の読み込み量を使い切る。2026-10-15）。倉庫の言葉が届くまでも読まない
+  const [boxMode, setBoxMode] = useState(false);
+  const list = useQuery(api.aiWords.forRiver, box === undefined || boxMode ? 'skip' : {});
   const [version, setVersion] = useState(0);
   useEffect(() => {
     if (!list) return;
@@ -20,6 +22,7 @@ export function useAiWords(): number {
   useEffect(() => {
     if (!box) return;
     setWarehouse(box);
+    setBoxMode(warehouseReady());
     setVersion((v) => v + 1);
   }, [box]);
   return version;

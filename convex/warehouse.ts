@@ -1,4 +1,4 @@
-import { internalAction, internalMutation, internalQuery, query, env } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, query, env, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
@@ -136,6 +136,44 @@ export const textExists = internalQuery({
   },
 });
 
+// 川に流す言葉の写し（schema.ts の boxLists）。箱の塊を直す
+async function editList(ctx: MutationCtx, box: number, f: (texts: string[]) => string[]) {
+  const row = await ctx.db.query("boxLists").withIndex("by_box", (q) => q.eq("box", box)).unique();
+  if (row) await ctx.db.patch(row._id, { texts: f(row.texts) });
+  else await ctx.db.insert("boxLists", { box, texts: f([]) });
+}
+const addText = (t: string) => (xs: string[]) => (xs.includes(t) ? xs : [...xs, t]);
+const dropText = (t: string) => (xs: string[]) => xs.filter((x) => x !== t);
+// 言葉の表から、写しを全部作り直す（読むのは言葉の表を1回だけ）
+async function rebuild(ctx: MutationCtx) {
+  const byBox = new Map<number, string[]>();
+  for (const b of BOXES) byBox.set(b.id, []);
+  for (const w of await ctx.db.query("words").withIndex("by_owner", (q) => q.eq("owner", undefined)).collect()) {
+    if (w.source === "box" && w.box !== undefined) byBox.get(w.box)?.push(w.text);
+  }
+  const rows = new Map((await ctx.db.query("boxLists").collect()).map((r) => [r.box, r]));
+  for (const [box, texts] of byBox) {
+    const row = rows.get(box);
+    if (row) await ctx.db.patch(row._id, { texts });
+    else await ctx.db.insert("boxLists", { box, texts });
+  }
+}
+// 使い方: npx convex run warehouse:rebuildLists
+export const rebuildLists = internalMutation({ args: {}, returns: v.null(), handler: async (ctx) => { await rebuild(ctx); return null; } });
+// 意味の位置を付け終えた言葉に、印（vec）を付ける（1回だけ。重い wordVecs を1回読む）。使い方: npx convex run warehouse:markVecs
+export const markVecs = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    let n = 0;
+    for await (const x of ctx.db.query("wordVecs")) {
+      const w = await ctx.db.get(x.wordId);
+      if (w && w.vec !== true) { await ctx.db.patch(w._id, { vec: true }); n++; }
+    }
+    return n;
+  },
+});
+
 export const saveWords = internalMutation({
   args: { box: v.number(), rows: v.array(v.object({ text: v.string(), box: v.number(), embedding: v.optional(v.array(v.float64())) })) },
   returns: v.null(),
@@ -143,8 +181,9 @@ export const saveWords = internalMutation({
     for (const r of args.rows) {
       const dup = await ctx.db.query("words").withIndex("by_text_and_owner", (q) => q.eq("text", r.text).eq("owner", undefined)).first();
       if (dup) continue;
-      const wordId = await ctx.db.insert("words", { text: r.text, category: CATEGORY_OF(r.box), source: "box", box: r.box });
+      const wordId = await ctx.db.insert("words", { text: r.text, category: CATEGORY_OF(r.box), source: "box", box: r.box, vec: r.embedding ? true : undefined });
       if (r.embedding) await ctx.db.insert("wordVecs", { wordId, box: r.box, embedding: r.embedding });
+      await editList(ctx, r.box, addText(r.text));
     }
     const t = await ctx.db.query("boxBuild").withIndex("by_box", (q) => q.eq("box", args.box)).unique();
     if (t) await ctx.db.patch(t._id, { tries: t.tries + 1 });
@@ -260,9 +299,8 @@ export const noVec = internalQuery({
   handler: async (ctx) => {
     const out: { id: Id<"words">; text: string; box: number }[] = [];
     for await (const w of ctx.db.query("words")) {
-      if (w.source !== "box" || w.box === undefined || w.askedAt === 1) continue;
-      const vec = await ctx.db.query("wordVecs").withIndex("by_wordId", (q) => q.eq("wordId", w._id)).first();
-      if (!vec) out.push({ id: w._id, text: w.text, box: w.box });
+      if (w.source !== "box" || w.box === undefined || w.askedAt === 1 || w.vec === true) continue;
+      out.push({ id: w._id, text: w.text, box: w.box });
       if (out.length >= 120) break;
     }
     return out;
@@ -273,12 +311,16 @@ export const applyVecs = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     for (const r of args.rows) {
+      const w = await ctx.db.get(r.id);
+      if (!w) continue;
+      if (w.box !== undefined) await editList(ctx, w.box, dropText(w.text));
       if (!r.keep) {
-        await ctx.db.patch(r.id, { source: "old" });
+        await ctx.db.patch(r.id, { source: "old", vec: true });
         continue;
       }
-      await ctx.db.patch(r.id, { box: r.box });
+      await ctx.db.patch(r.id, { box: r.box, vec: true });
       await ctx.db.insert("wordVecs", { wordId: r.id, box: r.box, embedding: r.embedding });
+      await editList(ctx, r.box, addText(w.text));
     }
     return null;
   },
@@ -325,6 +367,7 @@ export const reset = internalMutation({
       words++;
     }
     for (const t of await ctx.db.query("boxBuild").collect()) await ctx.db.delete(t._id);
+    await rebuild(ctx);
     return { words, vecs };
   },
 });
@@ -347,6 +390,7 @@ export const retireLong = internalMutation({
       }
     }
     for (const t of await ctx.db.query("boxBuild").collect()) await ctx.db.patch(t._id, { tries: 0 });
+    await rebuild(ctx);
     return { retired, kept };
   },
 });
@@ -374,10 +418,9 @@ export const forRiver = query({
   args: {},
   returns: v.array(v.object({ text: v.string(), box: v.number() })),
   handler: async (ctx) => {
+    // 箱ごとの塊（45件）を読むだけ。言葉の表を7千語ぶん読むと、アプリを開くたびに約2.5MB読み、Convex の無料の枠（1GB/月）を使い切った（2026-10-15）
     const out: { text: string; box: number }[] = [];
-    for (const b of BOXES) {
-      for (const w of await ctx.db.query("words").withIndex("by_box", (q) => q.eq("box", b.id)).collect()) if (w.source === "box") out.push({ text: w.text, box: b.id });
-    }
+    for (const row of await ctx.db.query("boxLists").collect()) for (const text of row.texts) out.push({ text, box: row.box });
     return out;
   },
 });
