@@ -13,7 +13,7 @@ import { Asset } from 'expo-asset';
 
 import { useFocusEffect } from 'expo-router';
 import { useAddCapture, useDeviceId } from '../useCaptures';
-import { useQuery } from 'convex/react';
+import { useConvex } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { countFlow, useDailyGather, useFlowFlush } from '../useFlows';
 import { answerTo, chooseFrame, floated, frameOf, pickRiverWord, setMyBoxes, setRiverWeights, startGather } from '../riverWords';
@@ -188,6 +188,7 @@ const SWAP_AFTER_COVER_MS = 50;
 const COVER_IN_MS = 180;
 const UI_FADE_MS = 300;
 const CLOUD_UI_IN_MS = 500;
+const RIVER_WEIGHTS_EVERY_MS = 5 * 60_000; // 川の重みを読み直す間隔
 // 夕空の言葉は、動画が終わる少し前から出し始める（動画の終わりと出始めの間に、空だけの間が0.5秒ほどあった。2026-10-15）
 const CLOUD_UI_EARLY_MS = 300;
 // 夕空へ向かう動画が流れ出してから、夕空の画面を作り始めるまで（流れ出しと重ねない）
@@ -851,8 +852,23 @@ export default function Home() {
   // その人向けの川：好みの量（Convex が記録から計算。拾うたびに更新される）
   const deviceId = useDeviceId();
   const aiVersion = useAiWords();
-  const riverWeights = useQuery(api.river.weights, deviceId ? { deviceId } : 'skip');
-  useEffect(() => setRiverWeights(riverWeights), [riverWeights]);
+  // 見張らずに、開いたときと5分ごとに読む（2026-10-15。見張ると、流れた記録を送るたび（1分ごと）に約80KB 読み直していた。重みはゆっくりしか変わらない）
+  const convex = useConvex();
+  useEffect(() => {
+    if (!deviceId) return;
+    let alive = true;
+    const load = () =>
+      convex
+        .query(api.river.weights, { deviceId })
+        .then((w) => alive && setRiverWeights(w))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, RIVER_WEIGHTS_EVERY_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [convex, deviceId]);
   // 自分の箱：直近4週間に拾った・流れた回数を箱ごとに数える（川の配合の「自分の箱」。決定 2026-10-14）
   const myCaps = useCaptures(28);
   const myShown = useShownCounts(28);
