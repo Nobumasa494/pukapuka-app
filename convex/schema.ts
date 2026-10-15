@@ -59,6 +59,17 @@ export default defineSchema({
     words: v.array(v.object({ wordId: v.id("words"), text: v.string(), shown: v.number(), picked: v.number() })),
     decayedAt: v.number(), // 最後に軽くした時刻
   }).index("by_deviceId", ["deviceId"]),
+  // 流れた記録の行（2026-10-15〜）。1人×1日×1語×枠で1行。1分ごとに、流れた言葉の行だけ足す。
+  // 前の flows（1日1件）は、その日に流れた言葉の数だけ大きくなり、毎分丸ごと書き直していた（1回 約260KB）。前の分は flows に残したまま、読むときに合わせる
+  flowWords: defineTable({
+    deviceId: v.string(),
+    day: v.string(),
+    wordId: v.id("words"),
+    text: v.string(), // 読むたびに言葉の表を引かないよう、文字も持つ
+    frame: v.string(),
+    n: v.number(),
+  })
+    .index("by_deviceId_and_day_and_wordId_and_frame", ["deviceId", "day", "wordId", "frame"]),
   // 好みのカード（2026-10-15。prefs の1人1行は約0.45MBに育ち、流れる・拾うたびに丸ごと読み書きして、Convex の無料の読み込み量を使い切った）。
   // 1人×1語で1行。流れた・拾ったときは、その言葉の行だけ直す。古い回数は、直すとき・読むときに at からの時間で軽くする（HALF_LIFE_DAYS）
   prefWords: defineTable({

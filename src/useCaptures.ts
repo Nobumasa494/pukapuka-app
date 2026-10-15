@@ -1,7 +1,8 @@
 // 拾った記録（本物）。第1段はログインなしで、端末ごとの仮の ID で Convex に保存する（SPEC 8. の決定）
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMutation, useQuery } from 'convex/react';
+import { useConvex, useMutation, useQuery } from 'convex/react';
+import { getSessionShown, onSessionShown } from './flowSession';
 import { api } from '../convex/_generated/api';
 import type { Capture } from './sampleCaptures';
 import { dayKey } from './period';
@@ -79,11 +80,26 @@ export function useAddCapture() {
 export function useShownCounts(days: number): { shown: Map<string, number>; since: number | null } | undefined {
   const deviceId = useDeviceId();
   const [keys] = useState(() => Array.from({ length: days }, (_, i) => dayKey(Date.now() - i * 86400000)));
-  // 今日の分と、過去の日の分を別々に読む（2026-10-15）。流れた記録は今日の分が1分ごとに増える。まとめて読むと、そのたびに
-  // 過去の日まで全部読み直して、Convex の無料の読み込み量を使い切った。過去の日は変わらないので、1回読めば読み直さない
-  const today = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys.slice(0, 1) } : 'skip');
+  // 過去の日は変わらないので、ふつうに読む（読み直しは起きない）。今日の分は1分ごとに増えるので、見張らずに、開いたときに1回だけ読み、
+  // そのあとは、この端末で数えた回数（getSessionShown）を足す（2026-10-15。今日の分を見張ると、1分ごとに今日の全部を読み直し、1回 約280KB だった）
   const past = useQuery(api.flows.listDays, deviceId && !isDemo ? { deviceId, days: keys.slice(1) } : 'skip');
-  const rows = today && past ? [...today, ...past] : undefined;
+  const convex = useConvex();
+  const [today, setToday] = useState<{ rows: { day: string; counts: { word: string; frame: string; n: number }[] }[]; base: Map<string, number> } | undefined>(undefined);
+  useEffect(() => {
+    if (!deviceId || isDemo) return;
+    let alive = true;
+    const base = new Map(getSessionShown()); // 読み込んだ時点で、この端末が数えた分（すでに今日の記録に入っているかもしれない分）
+    convex
+      .query(api.flows.listDays, { deviceId, days: keys.slice(0, 1) })
+      .then((rows) => alive && setToday({ rows, base }))
+      .catch(() => alive && setToday({ rows: [], base }));
+    return () => {
+      alive = false;
+    };
+  }, [convex, deviceId, keys]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => onSessionShown(() => setTick((t) => t + 1)), []);
+  const rows = today && past ? [...today.rows, ...past] : undefined;
   return useMemo(() => {
     if (isDemo) return { shown: new Map(), since: null };
     if (!rows) return undefined;
@@ -95,7 +111,13 @@ export function useShownCounts(days: number): { shown: Map<string, number>; sinc
       const t = new Date(y, mo - 1, d).getTime();
       if (since === null || t < since) since = t;
     }
+    // 読み込んだあとに、この端末で流れた分を足す
+    for (const [w, n] of getSessionShown()) {
+      const extra = n - (today?.base.get(w) ?? 0);
+      if (extra > 0) m.set(w, (m.get(w) ?? 0) + extra);
+    }
+    if (since === null && getSessionShown().size > 0) since = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
     return { shown: m, since };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today, past]);
+  }, [today, past, tick]);
 }
