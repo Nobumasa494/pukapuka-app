@@ -58,7 +58,7 @@ export async function addToPrefs(ctx: MutationCtx, deviceId: string, given: Add[
       // 初めて拾った：それまでに流れた回数を、流れた記録から1回だけ数えてカードに書く
       const since = row ? row.at : 0;
       const base = row ? row.shown * decay(row.at, now) : 0;
-      const shown = base + (await shownSince(ctx, deviceId, a.wordId, since, now)) + a.shown;
+      const shown = base + (await shownSince(ctx, deviceId, a.text, since, now)) + a.shown;
       if (row) await ctx.db.patch(row._id, { shown: round(shown), picked: round(a.picked), at: now });
       else await ctx.db.insert("prefWords", { deviceId, wordId: a.wordId, text: a.text, shown: round(shown), picked: round(a.picked), at: now });
       continue;
@@ -68,10 +68,26 @@ export async function addToPrefs(ctx: MutationCtx, deviceId: string, given: Add[
   }
 }
 
+// 拾ったことのある言葉の「流れた回数」だけ、カードに足す（倉庫で動く端末から。カードは文字で探す。2026-10-16）
+export async function addShownToCards(ctx: MutationCtx, deviceId: string, adds: { text: string; n: number }[]) {
+  const now = Date.now();
+  for (const a of adds) {
+    const row = await ctx.db
+      .query("prefWords")
+      .withIndex("by_deviceId_and_text", (q) => q.eq("deviceId", deviceId).eq("text", a.text))
+      .first();
+    // カードがない・まだ拾っていない：何もしない（初めて拾ったときに、流れた記録から数える）
+    if (!row || row.picked <= 0) continue;
+    const k = decay(row.at, now);
+    await ctx.db.patch(row._id, { shown: round(row.shown * k + a.n), picked: round(row.picked * k), at: now });
+  }
+}
+
 // その言葉が、since より後の日に何回流れたか（日ごとに古さで軽くして足す）。流れた記録の日は端末の暦の日なので、その日の昼として数える
-async function shownSince(ctx: MutationCtx, deviceId: string, wordId: Id<"words">, since: number, now: number) {
+async function shownSince(ctx: MutationCtx, deviceId: string, text: string, since: number, now: number) {
   let total = 0;
-  for await (const r of ctx.db.query("flowWords").withIndex("by_deviceId_and_wordId", (q) => q.eq("deviceId", deviceId).eq("wordId", wordId))) {
+  // 文字で探す（倉庫の言葉の行は、番号を持たないため）
+  for await (const r of ctx.db.query("flowWords").withIndex("by_deviceId_and_text", (q) => q.eq("deviceId", deviceId).eq("text", text))) {
     const [y, m, d] = r.day.split("-").map(Number);
     const t = Date.UTC(y, m - 1, d, 3); // 日本の昼ごろ
     if (t <= since) continue;

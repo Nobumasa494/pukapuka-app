@@ -6,7 +6,8 @@ import { useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { dayKey } from './period';
 import { isDemo, useDeviceId } from './useCaptures';
-import { addSessionShown, notifySessionShown } from './flowSession';
+import { addSessionShown, isPickedWord, notifySessionShown } from './flowSession';
+import { warehouseReady } from './warehouse';
 
 const FLUSH_MS = 60_000;
 // 日 → 「枠\n言葉」 → 回数。0時をまたいでも、浮かんだ日の分として数える
@@ -40,7 +41,8 @@ export function useFlowFlush() {
           return { word, frame, n };
         });
         try {
-          await add({ deviceId, day, counts });
+          // 倉庫で動くときは、拾ったことのある言葉を一緒に送る（サーバーは言葉の表を引かず、その言葉のカードだけ直す）
+          await add(warehouseReady() ? { deviceId, day, counts, picked: counts.filter((c) => isPickedWord(c.word)).map((c) => c.word) } : { deviceId, day, counts });
         } catch {
           for (const c of counts) {
             let back = tally.get(day);

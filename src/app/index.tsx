@@ -19,6 +19,7 @@ import { countFlow, useDailyGather, useFlowFlush } from '../useFlows';
 import { answerTo, chooseFrame, floated, frameOf, pickRiverWord, setMyBoxes, setRiverWeights, startGather } from '../riverWords';
 import { boxOf } from '../warehouse';
 import { useCaptures, useShownCounts } from '../useCaptures';
+import { addPickedWords } from '../flowSession';
 import WordCloudOverlay from '../components/WordCloudOverlay';
 import NightOverlay from '../components/NightOverlay';
 import MeOverlay from '../components/MeOverlay';
@@ -871,6 +872,9 @@ export default function Home() {
   }, [convex, deviceId]);
   // 自分の箱：直近4週間に拾った・流れた回数を箱ごとに数える（川の配合の「自分の箱」。決定 2026-10-14）
   const myCaps = useCaptures(28);
+  useEffect(() => {
+    if (myCaps) addPickedWords(myCaps.map((c) => c.word));
+  }, [myCaps]);
   const myShown = useShownCounts(28);
   // 夕空と同じ問い合わせ（7日分）を、水辺のときから読んでおく。夕空を開いてから読みに行くと、言葉が出るのが遅かった（2026-10-15）。
   // 同じ問い合わせは Convex が1本にまとめるので、夕空を開いたときはすぐ出る
@@ -923,6 +927,7 @@ export default function Home() {
   const handleCapture = useCallback(
     async (word: string, strength: number) => {
       ambientRef.current?.chime(strength);
+      addPickedWords([word]);
       toastRef.current?.show(word);
       answerTo(word);
       try {

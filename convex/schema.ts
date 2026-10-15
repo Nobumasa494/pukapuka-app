@@ -64,13 +64,14 @@ export default defineSchema({
   flowWords: defineTable({
     deviceId: v.string(),
     day: v.string(),
-    wordId: v.id("words"),
-    text: v.string(), // 読むたびに言葉の表を引かないよう、文字も持つ
+    wordId: v.optional(v.id("words")), // 2026-10-16 から、倉庫の言葉は文字だけで数える（番号を探すと、1語ごとに言葉の表を読むため）
+    text: v.string(),
     frame: v.string(),
     n: v.number(),
   })
-    .index("by_deviceId_and_day_and_wordId_and_frame", ["deviceId", "day", "wordId", "frame"])
-    .index("by_deviceId_and_wordId", ["deviceId", "wordId"]), // 初めて拾った言葉の、それまでの流れた回数を数える（prefs.ts）
+    // 索引は2つだけ（索引が多いと、1行直すたびに索引も書き直して、書き込みが増えた。2026-10-16）
+    .index("by_deviceId_and_day_and_text_and_frame", ["deviceId", "day", "text", "frame"])
+    .index("by_deviceId_and_text", ["deviceId", "text"]), // 初めて拾った言葉の、それまでの流れた回数を数える（prefs.ts）
   // 好みのカード（2026-10-15。prefs の1人1行は約0.45MBに育ち、流れる・拾うたびに丸ごと読み書きして、Convex の無料の読み込み量を使い切った）。
   // 1人×1語で1行。流れた・拾ったときは、その言葉の行だけ直す。古い回数は、直すとき・読むときに at からの時間で軽くする（HALF_LIFE_DAYS）
   prefWords: defineTable({
@@ -82,6 +83,7 @@ export default defineSchema({
     at: v.number(), // この回数がいつの時点の重さか
   })
     .index("by_deviceId_and_wordId", ["deviceId", "wordId"])
+    .index("by_deviceId_and_text", ["deviceId", "text"])
     .index("by_deviceId_and_picked", ["deviceId", "picked"]),
   // 日記（SPEC 第1部「日記」・第2部 G.）。自分で書くだけの場所。1日1つ。拾った記録とはつなげない
   diaries: defineTable({
