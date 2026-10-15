@@ -33,6 +33,8 @@ Convex の書き方の決まりは `convex/_generated/ai/guidelines.md`（必ず
 | 何かが変わるたびに読み直す query（購読） | 1回 20KB 以下 | 書き込みのたびに、開いている全員の画面で読み直す |
 | 1分ごと・泡ごとの mutation | 1回 10KB 以下 | 1人が1時間に何十回も呼ぶ |
 
+**web 版**：main にマージすると、Cloudflare の Workers Builds が自動でデプロイする（https://pukapuka.pukapuka-app.workers.dev/）。つなぎ先は開発用 `tacit-pelican-314`。サーバー側（convex/）の直しは `npx convex dev --once` の時点で、家族の web 版にも効く（呼び出し方を変えないこと）
+
 ## 2. 測り方
 
 ```bash
