@@ -61,12 +61,22 @@ export function useDeviceId(): string | null {
 // 直近 days 日の記録。読み込み中は undefined
 export function useCaptures(days: number): Capture[] | undefined {
   const deviceId = useDeviceId();
-  const rows = useQuery(api.captures.listRecent, deviceId ? { deviceId, days } : 'skip');
+  // 過去の日（今日の0時まで）と今日を別々に読む。拾ったときに読み直すのは今日の分だけ（2026-10-15。前は拾うたびに28日分を読み直していた）。
+  // 区切りは開いたときに決める（日をまたいで開いたままでも、今日の分の問い合わせが続きを受ける）
+  const [range] = useState(() => {
+    const now = Date.now();
+    return { from: now - days * DAY_MS, today: new Date(new Date(now).setHours(0, 0, 0, 0)).getTime() };
+  });
+  const past = useQuery(api.captures.listRange, deviceId ? { deviceId, from: range.from, to: range.today } : 'skip');
+  const today = useQuery(api.captures.listRange, deviceId ? { deviceId, from: range.today } : 'skip');
   return useMemo(() => {
+    if (!past || !today) return undefined;
+    const rows = [...today, ...past];
     const until = demoUntil();
-    return rows && until !== null ? rows.filter((c) => c.capturedAt <= until) : rows;
-  }, [rows]);
+    return until !== null ? rows.filter((c) => c.capturedAt <= until) : rows;
+  }, [past, today]);
 }
+const DAY_MS = 86400000;
 
 // 拾った言葉を保存する
 export function useAddCapture() {

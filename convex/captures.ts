@@ -56,6 +56,31 @@ export const listRecent = query({
   },
 });
 
+// 期間を決めて読む（2026-10-15。読み込み量の節約）。from〜to（to は含まない。省略すると今まで）。
+// 過去の日（今日の0時まで）と今日を別々に読むと、拾ったときに読み直すのは今日の分だけになる（listRecent は、拾うたびに28日分を読み直していた）
+export const listRange = query({
+  args: { deviceId: v.string(), from: v.number(), to: v.optional(v.number()) },
+  returns: v.array(v.object({ word: v.string(), strength: v.number(), capturedAt: v.number() })),
+  handler: async (ctx, args) => {
+    if (args.deviceId.length < 16) return [];
+    const rows = await ctx.db
+      .query("captures")
+      .withIndex("by_deviceId_and_capturedAt", (q) => {
+        const r = q.eq("deviceId", args.deviceId).gte("capturedAt", args.from);
+        return args.to === undefined ? r : r.lt("capturedAt", args.to);
+      })
+      .order("desc")
+      .take(5000);
+    const text = wordTexts(ctx);
+    const out = [];
+    for (const r of rows) {
+      const word = await text(r.wordId);
+      if (word) out.push({ word, strength: r.strength, capturedAt: r.capturedAt });
+    }
+    return out;
+  },
+});
+
 // 開発用：まちがって入った1件を消す（アプリからは呼べない。`npx convex run captures:removeOne '{"id":"…"}'`）
 export const removeOne = internalMutation({
   args: { id: v.id("captures") },

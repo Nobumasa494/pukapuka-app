@@ -16,3 +16,11 @@ export function addSessionShown(word: string) {
 export function notifySessionShown() {
   sessionListeners.forEach((fn) => fn());
 }
+
+// この端末が拾ったことのある言葉（直近の拾った記録＋開いてから拾った言葉）。流れた記録を送るときに一緒に送り、
+// サーバーは、この言葉の好みのカードだけ直す（2026-10-16。全部の言葉のカードを確かめると、1分ごとに約60KB 読んでいた）
+const pickedWords = new Set<string>();
+export function addPickedWords(words: Iterable<string>) {
+  for (const w of words) pickedWords.add(w);
+}
+export const isPickedWord = (w: string) => pickedWords.has(w);
